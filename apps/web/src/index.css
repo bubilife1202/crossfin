@@ -1,0 +1,73 @@
+:root {
+  color-scheme: light;
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
+  line-height: 1.45;
+  font-weight: 450;
+
+  --ink: #101828;
+  --muted: #475467;
+  --muted2: #667085;
+  --border: rgba(16, 24, 40, 0.14);
+  --card: rgba(255, 255, 255, 0.72);
+
+  --accent: #0ea5e9;
+  --accent2: #14b8a6;
+
+  --shadow: 0 22px 60px rgba(16, 24, 40, 0.14);
+  --shadow2: 0 10px 24px rgba(16, 24, 40, 0.1);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  color: var(--ink);
+  background:
+    radial-gradient(
+      1000px 600px at 12% 12%,
+      rgba(14, 165, 233, 0.14),
+      transparent 60%
+    ),
+    radial-gradient(
+      900px 540px at 92% 18%,
+      rgba(20, 184, 166, 0.12),
+      transparent 55%
+    ),
+    radial-gradient(
+      900px 700px at 50% 118%,
+      rgba(252, 211, 77, 0.18),
+      transparent 55%
+    ),
+    linear-gradient(180deg, #fbfcff, #f6f2ea);
+}
+
+a {
+  color: inherit;
+}
+
+a:hover {
+  text-decoration-thickness: 2px;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+}
+
+::selection {
+  background: rgba(14, 165, 233, 0.28);
+}
