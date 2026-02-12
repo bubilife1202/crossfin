@@ -1,0 +1,8 @@
+node_modules
+dist
+
+.DS_Store
+*.log
+
+# Local ledger file (default path lives in user home, but keep safe)
+ledger.json
