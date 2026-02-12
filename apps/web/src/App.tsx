@@ -1,4 +1,5 @@
 import './App.css'
+import LedgerDemo from './components/LedgerDemo'
 
 function App() {
   return (
@@ -66,13 +67,10 @@ function App() {
         <section id="demo" className="section">
           <h2>데모</h2>
           <p className="sectionSub">
-            Phase 1: 에이전트 가계부 (지갑/송금/예산/거래내역). 다음 커밋에서
-            UI를 붙인다.
+            Phase 1: 에이전트 가계부 (지갑/송금/예산/거래내역). 로컬 브라우저에만
+            저장되는 미니 프로토타입.
           </p>
-          <div className="demoPlaceholder">
-            <div className="demoTitle">Agent Ledger Demo</div>
-            <div className="demoBody">(WIP)</div>
-          </div>
+          <LedgerDemo />
         </section>
 
         <section id="roadmap" className="section">
