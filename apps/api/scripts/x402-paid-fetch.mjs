@@ -16,7 +16,7 @@ function basescanLink(networkId, txHash) {
   return null
 }
 
-const API_URL = (process.env.API_URL || 'https://crossfin-api.bubilife.workers.dev/api/premium/report').trim()
+const API_URL = (process.env.API_URL || 'https://crossfin-api.bubilife.workers.dev/api/premium/enterprise').trim()
 const EVM_PRIVATE_KEY = requireEnv('EVM_PRIVATE_KEY')
 const REQUEST_TIMEOUT_MS = Math.max(1000, Number(process.env.REQUEST_TIMEOUT_MS || '15000'))
 
@@ -74,11 +74,12 @@ try {
     process.exit(0)
   }
 
-  const txHash = settle.transactionHash || settle.txHash
+  const txHash = settle.transactionHash || settle.txHash || settle.transaction
+  const networkId = settle.networkId || settle.network
   console.log('payment_settled=true')
   console.log(JSON.stringify(settle, null, 2))
 
-  const link = basescanLink(settle.networkId, txHash)
+  const link = basescanLink(networkId, txHash)
   if (link) console.log(`basescan=${link}`)
 } catch (err) {
   console.error(err instanceof Error ? err.message : String(err))

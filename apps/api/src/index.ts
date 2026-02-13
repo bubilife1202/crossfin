@@ -71,6 +71,17 @@ app.use(
           description: 'CrossFin premium report (x402)',
           mimeType: 'application/json',
         },
+        'GET /api/premium/enterprise': {
+          accepts: {
+            scheme: 'exact',
+            price: '$20.00',
+            network,
+            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
+            maxTimeoutSeconds: 300,
+          },
+          description: 'CrossFin enterprise receipt (x402)',
+          mimeType: 'application/json',
+        },
       },
       resourceServer,
     )
@@ -140,6 +151,18 @@ app.get('/api/premium/report', async (c) => {
     },
     recentTransactions,
     at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/enterprise', async (c) => {
+  const now = new Date().toISOString()
+  return c.json({
+    paid: true,
+    tier: 'enterprise',
+    priceUsd: 20,
+    network: requireCaip2(c.env.X402_NETWORK),
+    receiptId: crypto.randomUUID(),
+    at: now,
   })
 })
 

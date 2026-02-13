@@ -7,7 +7,8 @@ Key endpoints:
 - `GET /` health
 - `GET /api/stats` public counters
 - `POST /api/agents` create agent (returns `apiKey`)
-- `GET /api/premium/report` x402-paywalled (USDC) premium endpoint
+- `GET /api/premium/report` x402-paywalled (USDC) micro endpoint
+- `GET /api/premium/enterprise` x402-paywalled (USDC) revenue endpoint ($20)
 
 ## Run locally
 
@@ -38,6 +39,13 @@ npm run x402:wallet
 ```bash
 cd apps/api
 EVM_PRIVATE_KEY="<private_key from step 1>" npm run x402:paid
+```
+
+By default this calls `GET /api/premium/enterprise` (priced at $20). To call the micro endpoint:
+
+```bash
+cd apps/api
+API_URL="https://crossfin-api.bubilife.workers.dev/api/premium/report" EVM_PRIVATE_KEY="<private_key>" npm run x402:paid
 ```
 
 If it succeeds, the script prints a `basescan=` link with the settlement transaction.
