@@ -1,0 +1,59 @@
+import { x402Client, wrapFetchWithPayment, x402HTTPClient } from '@x402/fetch'
+import { registerExactEvmScheme } from '@x402/evm/exact/client'
+import { privateKeyToAccount } from 'viem/accounts'
+
+function requireEnv(name) {
+  const v = process.env[name]
+  if (!v || !v.trim()) throw new Error(`Missing env var: ${name}`)
+  return v.trim()
+}
+
+function basescanLink(networkId, txHash) {
+  if (!txHash) return null
+  if (networkId === 'eip155:84532') return `https://sepolia.basescan.org/tx/${txHash}`
+  if (networkId === 'eip155:8453') return `https://basescan.org/tx/${txHash}`
+  return null
+}
+
+const API_URL = (process.env.API_URL || 'https://crossfin-api.bubilife.workers.dev/api/premium/report').trim()
+const EVM_PRIVATE_KEY = requireEnv('EVM_PRIVATE_KEY')
+
+const signer = privateKeyToAccount(EVM_PRIVATE_KEY)
+const client = new x402Client()
+registerExactEvmScheme(client, { signer })
+
+const paidFetch = wrapFetchWithPayment(fetch, client)
+const httpClient = new x402HTTPClient(client)
+
+console.log(`payer=${signer.address}`)
+console.log(`url=${API_URL}`)
+
+try {
+  const res = await paidFetch(API_URL, { method: 'GET' })
+  console.log(`status=${res.status}`)
+
+  const text = await res.text()
+  try {
+    console.log(JSON.stringify(JSON.parse(text), null, 2))
+  } catch {
+    console.log(text)
+  }
+
+  if (!res.ok) process.exit(1)
+
+  const settle = httpClient.getPaymentSettleResponse((name) => res.headers.get(name))
+  if (!settle) {
+    console.log('payment_settled=unknown')
+    process.exit(0)
+  }
+
+  const txHash = settle.transactionHash || settle.txHash
+  console.log('payment_settled=true')
+  console.log(JSON.stringify(settle, null, 2))
+
+  const link = basescanLink(settle.networkId, txHash)
+  if (link) console.log(`basescan=${link}`)
+} catch (err) {
+  console.error(err instanceof Error ? err.message : String(err))
+  process.exit(1)
+}

@@ -7,13 +7,16 @@
     "dev": "wrangler dev --port 8787",
     "deploy": "wrangler deploy",
     "db:migrate:local": "wrangler d1 migrations apply crossfin-db --local",
-    "db:migrate:remote": "wrangler d1 migrations apply crossfin-db --remote"
+    "db:migrate:remote": "wrangler d1 migrations apply crossfin-db --remote",
+    "x402:paid": "node scripts/x402-paid-fetch.mjs"
   },
   "dependencies": {
     "@x402/core": "^2.3.1",
     "@x402/evm": "^2.3.1",
+    "@x402/fetch": "^2.3.0",
     "@x402/hono": "^2.3.0",
-    "hono": "^4.7.0"
+    "hono": "^4.7.0",
+    "viem": "^2.45.3"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250214.0",
