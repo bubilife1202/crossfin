@@ -10,7 +10,6 @@ const RPC_URL = (process.env.RPC_URL || 'https://sepolia.base.org').trim()
 const USDC = (process.env.USDC_ADDRESS || '0x036CbD53842c5426634e7929541eC2318f3dCF7e').trim()
 const USDC_DECIMALS = Number(process.env.USDC_DECIMALS || '6')
 const MIN_USDC = Number(process.env.MIN_USDC || '20')
-const MIN_ETH = Number(process.env.MIN_ETH || '0.001')
 const POLL_MS = Math.max(2000, Number(process.env.POLL_MS || '12000'))
 const REQUEST_TIMEOUT_MS = Math.max(1000, Number(process.env.REQUEST_TIMEOUT_MS || '15000'))
 
@@ -41,7 +40,7 @@ console.log('note=do_not_share_private_key')
 
 console.log('step=fund_wallet')
 console.log('usdc_faucet=https://faucet.circle.com')
-console.log('eth_faucet=https://portal.cdp.coinbase.com/products/faucet')
+console.log('note=eth_not_required_for_x402_settlement_on_base_sepolia')
 console.log('network=Base Sepolia (chainId 84532)')
 
 const publicClient = createPublicClient({
@@ -75,13 +74,13 @@ async function balances() {
 
 console.log('step=waiting_for_funds')
 console.log(`min_usdc=${MIN_USDC}`)
-console.log(`min_eth=${MIN_ETH}`)
+console.log('min_eth=0 (gas paid by facilitator)')
 
 while (true) {
   const b = await balances()
   console.log(`eth=${b.ethF.toFixed(6)} usdc=${b.usdcF.toFixed(6)}`)
 
-  if (b.usdcF >= MIN_USDC && b.ethF >= MIN_ETH) break
+  if (b.usdcF >= MIN_USDC) break
   await sleep(POLL_MS)
 }
 

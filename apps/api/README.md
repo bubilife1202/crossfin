@@ -34,6 +34,8 @@ npm run x402:wallet
 2) Fund it with **testnet USDC** (free):
 - Circle faucet: https://faucet.circle.com (Token: USDC, Network: Base Sepolia)
 
+Note: For x402 on Base Sepolia, the settlement transaction is submitted by the facilitator, so the payer wallet typically does not need testnet ETH for gas.
+
 3) Run the paid call:
 
 ```bash
