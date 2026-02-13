@@ -1,6 +1,7 @@
 import { x402Client, wrapFetchWithPayment, x402HTTPClient } from '@x402/fetch'
 import { registerExactEvmScheme } from '@x402/evm/exact/client'
 import { privateKeyToAccount } from 'viem/accounts'
+import { decodePaymentRequiredHeader } from '@x402/core/http'
 
 function requireEnv(name) {
   const v = process.env[name]
@@ -17,22 +18,39 @@ function basescanLink(networkId, txHash) {
 
 const API_URL = (process.env.API_URL || 'https://crossfin-api.bubilife.workers.dev/api/premium/report').trim()
 const EVM_PRIVATE_KEY = requireEnv('EVM_PRIVATE_KEY')
+const REQUEST_TIMEOUT_MS = Math.max(1000, Number(process.env.REQUEST_TIMEOUT_MS || '15000'))
+
+function fetchWithTimeout(input, init) {
+  const hasSignal = Boolean(init && typeof init === 'object' && 'signal' in init && init.signal)
+  const signal = hasSignal ? init.signal : AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+  return fetch(input, { ...(init || {}), signal })
+}
 
 const signer = privateKeyToAccount(EVM_PRIVATE_KEY)
 const client = new x402Client()
 registerExactEvmScheme(client, { signer })
 
-const paidFetch = wrapFetchWithPayment(fetch, client)
+const paidFetch = wrapFetchWithPayment(fetchWithTimeout, client)
 const httpClient = new x402HTTPClient(client)
 
 console.log(`payer=${signer.address}`)
 console.log(`url=${API_URL}`)
 
 try {
-  const first = await fetch(API_URL, { method: 'GET' })
+  const first = await fetchWithTimeout(API_URL, { method: 'GET' })
   console.log(`first_status=${first.status}`)
   const paymentRequired = first.headers.get('PAYMENT-REQUIRED') || first.headers.get('payment-required')
   if (paymentRequired) console.log('payment_required_header=true')
+
+  if (paymentRequired) {
+    try {
+      const decoded = decodePaymentRequiredHeader(paymentRequired)
+      console.log('payment_required_decoded=true')
+      console.log(JSON.stringify(decoded, null, 2))
+    } catch {
+      console.log('payment_required_decoded=false')
+    }
+  }
 
   const res = await paidFetch(API_URL, { method: 'GET' })
   console.log(`final_status=${res.status}`)
