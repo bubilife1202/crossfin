@@ -153,6 +153,140 @@
   color: var(--muted);
 }
 
+.sectionH3 {
+  margin: 18px 0 0;
+  font-size: 1.08rem;
+  letter-spacing: -0.02em;
+}
+
+.demoSpacer {
+  height: 18px;
+}
+
+.live {
+  margin-top: 12px;
+}
+
+.liveTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.liveTitle {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.liveMeta {
+  color: var(--muted2);
+  font-size: 0.95rem;
+}
+
+.liveGrid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 900px) {
+  .liveGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.liveCard {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--shadow2);
+  padding: 14px;
+}
+
+.liveCardTitle {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.liveMuted {
+  margin-top: 8px;
+  color: var(--muted2);
+}
+
+.liveError {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: rgba(254, 226, 226, 0.6);
+  color: #7f1d1d;
+  font-weight: 650;
+}
+
+.liveStats {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.liveStat {
+  border: 1px solid rgba(16, 24, 40, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.58);
+  padding: 10px 12px;
+}
+
+.liveK {
+  color: var(--muted);
+  font-weight: 750;
+  font-size: 0.86rem;
+}
+
+.liveV {
+  margin-top: 4px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.livePaywall {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.livePaywallRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(16, 24, 40, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.liveCmd {
+  padding: 10px 12px;
+  border: 1px dashed color-mix(in srgb, var(--border) 90%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--card) 85%, transparent);
+}
+
+.liveCode {
+  margin-top: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 0.9rem;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .grid {
   margin-top: 14px;
   display: grid;

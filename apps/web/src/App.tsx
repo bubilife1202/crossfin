@@ -1,5 +1,6 @@
 import './App.css'
 import LedgerDemo from './components/LedgerDemo'
+import LiveSignals from './components/LiveSignals'
 
 function App() {
   return (
@@ -71,6 +72,15 @@ function App() {
             저장되는 미니 프로토타입.
           </p>
           <LedgerDemo />
+
+          <div className="demoSpacer" aria-hidden />
+
+          <h3 className="sectionH3">Live (Workers + D1 + x402)</h3>
+          <p className="sectionSub">
+            실제 Cloudflare Workers API에서 집계되는 공개 통계 + x402 paywall(402)
+            상태를 보여준다.
+          </p>
+          <LiveSignals />
         </section>
 
         <section id="roadmap" className="section">
