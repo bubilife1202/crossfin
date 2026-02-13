@@ -1,9 +1,16 @@
-import { Hono } from 'hono'
+import { Hono, type MiddlewareHandler } from 'hono'
 import { cors } from 'hono/cors'
 import { HTTPException } from 'hono/http-exception'
 
+import { paymentMiddleware, x402ResourceServer } from '@x402/hono'
+import { ExactEvmScheme } from '@x402/evm/exact/server'
+import { HTTPFacilitatorClient } from '@x402/core/server'
+
 type Bindings = {
   DB: D1Database
+  FACILITATOR_URL: string
+  X402_NETWORK: string
+  PAYMENT_RECEIVER_ADDRESS: string
 }
 
 type Variables = {
@@ -12,12 +19,23 @@ type Variables = {
 
 type Env = { Bindings: Bindings; Variables: Variables }
 
+type Caip2 = `${string}:${string}`
+
+function requireCaip2(value: string): Caip2 {
+  const trimmed = value.trim()
+  if (!trimmed || !trimmed.includes(':')) {
+    throw new HTTPException(500, { message: 'Invalid X402_NETWORK (expected CAIP-2 like eip155:84532)' })
+  }
+  return trimmed as Caip2
+}
+
 const app = new Hono<Env>()
 
 app.use('*', cors({
   origin: ['http://localhost:5173', 'https://crossfin.pages.dev'],
-  allowHeaders: ['Content-Type', 'Authorization', 'X-Agent-Key'],
+  allowHeaders: ['Content-Type', 'Authorization', 'X-Agent-Key', 'PAYMENT-SIGNATURE'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  exposeHeaders: ['PAYMENT-REQUIRED', 'PAYMENT-RESPONSE'],
 }))
 
 app.onError((err, c) => {
@@ -30,26 +48,51 @@ app.onError((err, c) => {
 
 app.get('/', (c) => c.json({ name: 'crossfin-api', version: '0.0.0', status: 'ok' }))
 
-// ── Agent auth middleware (for /api/* routes) ──
+app.use(
+  '/api/premium/*',
+  async (c, next) => {
+    const network = requireCaip2(c.env.X402_NETWORK)
+    const facilitatorClient = new HTTPFacilitatorClient({ url: c.env.FACILITATOR_URL })
+    const resourceServer = new x402ResourceServer(facilitatorClient).register(
+      network,
+      new ExactEvmScheme(),
+    )
 
-function agentAuth() {
-  return async (c: Parameters<Parameters<typeof app.use>[1]>[0], next: () => Promise<void>) => {
-    const apiKey = c.req.header('X-Agent-Key')
-    if (!apiKey) throw new HTTPException(401, { message: 'Missing X-Agent-Key header' })
+    const middleware = paymentMiddleware(
+      {
+        'GET /api/premium/report': {
+          accepts: {
+            scheme: 'exact',
+            price: '$0.001',
+            network,
+            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
+            maxTimeoutSeconds: 300,
+          },
+          description: 'CrossFin premium report (x402)',
+          mimeType: 'application/json',
+        },
+      },
+      resourceServer,
+    )
 
-    const agent = await c.env.DB.prepare(
-      'SELECT id, status FROM agents WHERE api_key = ?'
-    ).bind(apiKey).first<{ id: string; status: string }>()
+    return middleware(c, next)
+  },
+)
 
-    if (!agent) throw new HTTPException(401, { message: 'Invalid API key' })
-    if (agent.status !== 'active') throw new HTTPException(403, { message: 'Agent suspended' })
+const agentAuth: MiddlewareHandler<Env> = async (c, next) => {
+  const apiKey = c.req.header('X-Agent-Key')
+  if (!apiKey) throw new HTTPException(401, { message: 'Missing X-Agent-Key header' })
 
-    c.set('agentId', agent.id)
-    await next()
-  }
+  const agent = await c.env.DB.prepare(
+    'SELECT id, status FROM agents WHERE api_key = ?'
+  ).bind(apiKey).first<{ id: string; status: string }>()
+
+  if (!agent) throw new HTTPException(401, { message: 'Invalid API key' })
+  if (agent.status !== 'active') throw new HTTPException(403, { message: 'Agent suspended' })
+
+  c.set('agentId', agent.id)
+  await next()
 }
-
-// ── Public: register agent ──
 
 app.post('/api/agents', async (c) => {
   const body = await c.req.json<{ name: string }>()
@@ -67,10 +110,41 @@ app.post('/api/agents', async (c) => {
   return c.json({ id, name: body.name.trim(), apiKey }, 201)
 })
 
-// ── Protected routes ──
+app.get('/api/premium/report', async (c) => {
+  const results = await c.env.DB.batch([
+    c.env.DB.prepare("SELECT COUNT(*) as count FROM agents WHERE status = 'active'"),
+    c.env.DB.prepare('SELECT COUNT(*) as count FROM wallets'),
+    c.env.DB.prepare('SELECT COUNT(*) as count FROM transactions'),
+  ])
+
+  const agents = results[0]
+  const wallets = results[1]
+  const txns = results[2]
+
+  const blocked = await c.env.DB.prepare(
+    "SELECT COUNT(*) as count FROM audit_logs WHERE result = 'blocked'"
+  ).first<{ count: number }>()
+
+  const { results: recentTransactions } = await c.env.DB.prepare(
+    'SELECT id, rail, amount_cents, currency, memo, status, created_at FROM transactions ORDER BY created_at DESC LIMIT 10'
+  ).all()
+
+  return c.json({
+    paid: true,
+    network: requireCaip2(c.env.X402_NETWORK),
+    stats: {
+      agents: (agents?.results?.[0] as { count: number } | undefined)?.count ?? 0,
+      wallets: (wallets?.results?.[0] as { count: number } | undefined)?.count ?? 0,
+      transactions: (txns?.results?.[0] as { count: number } | undefined)?.count ?? 0,
+      blocked: blocked?.count ?? 0,
+    },
+    recentTransactions,
+    at: new Date().toISOString(),
+  })
+})
 
 const api = new Hono<Env>()
-api.use('*', agentAuth())
+api.use('*', agentAuth)
 
 api.get('/me', async (c) => {
   const agentId = c.get('agentId')
@@ -79,8 +153,6 @@ api.get('/me', async (c) => {
   ).bind(agentId).first()
   return c.json({ data: agent })
 })
-
-// ── Wallets ──
 
 api.post('/wallets', async (c) => {
   const agentId = c.get('agentId')
@@ -123,8 +195,6 @@ api.get('/wallets/:id/balance', async (c) => {
   return c.json({ data: wallet })
 })
 
-// ── Transfers (with circuit breaker) ──
-
 api.post('/transfers', async (c) => {
   const agentId = c.get('agentId')
   const body = await c.req.json<{
@@ -155,7 +225,6 @@ api.post('/transfers', async (c) => {
   ).bind(body.toWalletId).first()
   if (!to) throw new HTTPException(404, { message: 'Destination wallet not found' })
 
-  // ── CIRCUIT BREAKER: check daily budget ──
   const budget = await c.env.DB.prepare(
     'SELECT daily_limit_cents, monthly_limit_cents FROM budgets WHERE agent_id = ?'
   ).bind(agentId).first<{ daily_limit_cents: number | null; monthly_limit_cents: number | null }>()
@@ -208,8 +277,6 @@ api.post('/transfers', async (c) => {
   }, 201)
 })
 
-// ── Transactions ──
-
 api.get('/transactions', async (c) => {
   const agentId = c.get('agentId')
   const limit = Math.min(200, Math.max(1, Number(c.req.query('limit') ?? '50')))
@@ -230,8 +297,6 @@ api.get('/transactions', async (c) => {
   const { results } = await stmt.bind(...params).all()
   return c.json({ data: results })
 })
-
-// ── Budgets ──
 
 api.post('/budgets', async (c) => {
   const agentId = c.get('agentId')
@@ -259,8 +324,6 @@ api.get('/budgets', async (c) => {
   return c.json({ data: budget ?? { daily_limit_cents: null, monthly_limit_cents: null } })
 })
 
-// ── Audit logs ──
-
 api.get('/audit', async (c) => {
   const agentId = c.get('agentId')
   const limit = Math.min(200, Math.max(1, Number(c.req.query('limit') ?? '50')))
@@ -270,23 +333,25 @@ api.get('/audit', async (c) => {
   return c.json({ data: results })
 })
 
-// ── Public stats (for dashboard) ──
-
 app.get('/api/stats', async (c) => {
-  const [agents, wallets, txns] = await c.env.DB.batch([
+  const results = await c.env.DB.batch([
     c.env.DB.prepare("SELECT COUNT(*) as count FROM agents WHERE status = 'active'"),
     c.env.DB.prepare('SELECT COUNT(*) as count FROM wallets'),
     c.env.DB.prepare('SELECT COUNT(*) as count FROM transactions'),
   ])
+
+  const agents = results[0]
+  const wallets = results[1]
+  const txns = results[2]
 
   const blocked = await c.env.DB.prepare(
     "SELECT COUNT(*) as count FROM audit_logs WHERE result = 'blocked'"
   ).first<{ count: number }>()
 
   return c.json({
-    agents: (agents.results[0] as { count: number })?.count ?? 0,
-    wallets: (wallets.results[0] as { count: number })?.count ?? 0,
-    transactions: (txns.results[0] as { count: number })?.count ?? 0,
+    agents: (agents?.results?.[0] as { count: number } | undefined)?.count ?? 0,
+    wallets: (wallets?.results?.[0] as { count: number } | undefined)?.count ?? 0,
+    transactions: (txns?.results?.[0] as { count: number } | undefined)?.count ?? 0,
     blocked: blocked?.count ?? 0,
   })
 })

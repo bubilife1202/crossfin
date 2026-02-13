@@ -10,6 +10,9 @@
     "db:migrate:remote": "wrangler d1 migrations apply crossfin-db --remote"
   },
   "dependencies": {
+    "@x402/core": "^2.3.1",
+    "@x402/evm": "^2.3.1",
+    "@x402/hono": "^2.3.0",
     "hono": "^4.7.0"
   },
   "devDependencies": {
