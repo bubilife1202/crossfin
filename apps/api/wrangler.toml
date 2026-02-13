@@ -1,0 +1,9 @@
+name = "crossfin-api"
+main = "src/index.ts"
+compatibility_date = "2025-02-13"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "crossfin-db"
+database_id = "45a4ed54-bd2f-45dd-b1e4-d2be5f820f2c"
+migrations_dir = "migrations"

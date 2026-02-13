@@ -1,0 +1,20 @@
+{
+  "name": "@crossfin/api",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8787",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply crossfin-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply crossfin-db --remote"
+  },
+  "dependencies": {
+    "hono": "^4.7.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250214.0",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.0.0"
+  }
+}
