@@ -10,7 +10,8 @@
     "db:migrate:remote": "wrangler d1 migrations apply crossfin-db --remote",
     "x402:paid": "node scripts/x402-paid-fetch.mjs",
     "x402:wallet": "node scripts/x402-gen-wallet.mjs",
-    "x402:balance": "node scripts/x402-usdc-balance.mjs"
+    "x402:balance": "node scripts/x402-usdc-balance.mjs",
+    "x402:funds": "node scripts/x402-funds-check.mjs"
   },
   "dependencies": {
     "@x402/core": "^2.3.1",
