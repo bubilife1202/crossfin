@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { fetchPremiumPaymentRequired, fetchStats, getApiBaseUrl, type PaymentRequired } from '../lib/api'
+import {
+  fetchEnterprisePaymentRequired,
+  fetchPremiumPaymentRequired,
+  fetchStats,
+  getApiBaseUrl,
+  type PaymentRequired,
+} from '../lib/api'
 
 type LoadState<T> =
   | { status: 'idle' }
@@ -25,6 +31,7 @@ export default function LiveSignals() {
     status: 'idle',
   })
   const [premium, setPremium] = useState<LoadState<PaymentRequired | null>>({ status: 'idle' })
+  const [enterprise, setEnterprise] = useState<LoadState<PaymentRequired | null>>({ status: 'idle' })
 
   useEffect(() => {
     const ctrl = new AbortController()
@@ -32,6 +39,7 @@ export default function LiveSignals() {
     async function load() {
       setStats({ status: 'loading' })
       setPremium({ status: 'loading' })
+      setEnterprise({ status: 'loading' })
 
       try {
         const s = await fetchStats(ctrl.signal)
@@ -45,6 +53,13 @@ export default function LiveSignals() {
         setPremium({ status: 'success', data: pr })
       } catch (e) {
         setPremium({ status: 'error', message: e instanceof Error ? e.message : 'premium_failed' })
+      }
+
+      try {
+        const pr = await fetchEnterprisePaymentRequired(ctrl.signal)
+        setEnterprise({ status: 'success', data: pr })
+      } catch (e) {
+        setEnterprise({ status: 'error', message: e instanceof Error ? e.message : 'enterprise_failed' })
       }
     }
 
@@ -91,37 +106,53 @@ export default function LiveSignals() {
         </div>
 
         <div className="liveCard">
-          <div className="liveCardTitle">x402 premium endpoint</div>
-          <div className="liveMuted">GET /api/premium/report</div>
+          <div className="liveCardTitle">x402 paywalls</div>
+          <div className="liveMuted">Testnet USDC (Base Sepolia)</div>
 
-          {premium.status === 'loading' ? <div className="liveMuted">Checking paywall…</div> : null}
-          {premium.status === 'error' ? <div className="liveError">{premium.message}</div> : null}
+          {premium.status === 'loading' || enterprise.status === 'loading' ? (
+            <div className="liveMuted">Checking paywall…</div>
+          ) : null}
+          {premium.status === 'error' ? <div className="liveError">report: {premium.message}</div> : null}
+          {enterprise.status === 'error' ? <div className="liveError">enterprise: {enterprise.message}</div> : null}
 
           {premium.status === 'success' && premium.data ? (
             <div className="livePaywall">
               <div className="livePaywallRow">
-                <div className="liveK">Network</div>
-                <div className="liveV">{premium.data.accepts[0]?.network ?? '-'}</div>
+                <div className="liveK">Micro endpoint</div>
+                <div className="liveV">GET /api/premium/report</div>
               </div>
               <div className="livePaywallRow">
                 <div className="liveK">Amount</div>
-                <div className="liveV">{prettyAmountAtomic(premium.data.accepts[0]?.amount ?? '-') }</div>
-              </div>
-              <div className="livePaywallRow">
-                <div className="liveK">Pay to</div>
-                <div className="liveV">{formatAddr(premium.data.accepts[0]?.payTo ?? '-') }</div>
-              </div>
-              <div className="liveCmd">
-                <div className="liveK">Trigger paid call</div>
-                <div className="liveCode">cd apps/api &amp;&amp; npm run x402:wallet</div>
-                <div className="liveCode">(Get test USDC on Base Sepolia) https://faucet.circle.com</div>
-                <div className="liveCode">EVM_PRIVATE_KEY=&quot;...&quot; npm run x402:paid</div>
+                <div className="liveV">{prettyAmountAtomic(premium.data.accepts[0]?.amount ?? '-')}</div>
               </div>
             </div>
           ) : null}
 
-          {premium.status === 'success' && !premium.data ? (
-            <div className="liveMuted">No 402 detected (endpoint may be returning 200 right now).</div>
+          {enterprise.status === 'success' && enterprise.data ? (
+            <div className="livePaywall">
+              <div className="livePaywallRow">
+                <div className="liveK">Revenue endpoint</div>
+                <div className="liveV">GET /api/premium/enterprise</div>
+              </div>
+              <div className="livePaywallRow">
+                <div className="liveK">Amount</div>
+                <div className="liveV">{prettyAmountAtomic(enterprise.data.accepts[0]?.amount ?? '-')}</div>
+              </div>
+              <div className="livePaywallRow">
+                <div className="liveK">Pay to</div>
+                <div className="liveV">{formatAddr(enterprise.data.accepts[0]?.payTo ?? '-')}</div>
+              </div>
+              <div className="liveCmd">
+                <div className="liveK">Trigger $20+ paid call</div>
+                <div className="liveCode">cd apps/api &amp;&amp; npm run x402:wallet</div>
+                <div className="liveCode">(Get test USDC) https://faucet.circle.com</div>
+                <div className="liveCode">API_URL=&quot;{apiBase}/api/premium/enterprise&quot; EVM_PRIVATE_KEY=&quot;...&quot; npm run x402:paid</div>
+              </div>
+            </div>
+          ) : null}
+
+          {premium.status === 'success' && !premium.data && enterprise.status === 'success' && !enterprise.data ? (
+            <div className="liveMuted">No 402 detected.</div>
           ) : null}
         </div>
       </div>

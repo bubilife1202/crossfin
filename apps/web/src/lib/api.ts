@@ -46,8 +46,9 @@ export async function fetchStats(signal?: AbortSignal): Promise<ApiStats> {
   }
 }
 
-export async function fetchPremiumPaymentRequired(signal?: AbortSignal): Promise<PaymentRequired | null> {
-  const res = await fetch(`${apiBaseUrl()}/api/premium/report`, { method: 'GET', signal })
+export async function fetchPaymentRequired(path: string, signal?: AbortSignal): Promise<PaymentRequired | null> {
+  const p = path.startsWith('/') ? path : `/${path}`
+  const res = await fetch(`${apiBaseUrl()}${p}`, { method: 'GET', signal })
   if (res.status !== 402) return null
 
   const header = res.headers.get('PAYMENT-REQUIRED')
@@ -63,4 +64,12 @@ export async function fetchPremiumPaymentRequired(signal?: AbortSignal): Promise
   } catch {
     return null
   }
+}
+
+export async function fetchPremiumPaymentRequired(signal?: AbortSignal): Promise<PaymentRequired | null> {
+  return fetchPaymentRequired('/api/premium/report', signal)
+}
+
+export async function fetchEnterprisePaymentRequired(signal?: AbortSignal): Promise<PaymentRequired | null> {
+  return fetchPaymentRequired('/api/premium/enterprise', signal)
 }
