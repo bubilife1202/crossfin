@@ -47,6 +47,21 @@ try {
       const decoded = decodePaymentRequiredHeader(paymentRequired)
       console.log('payment_required_decoded=true')
       console.log(JSON.stringify(decoded, null, 2))
+
+      const amt = decoded?.accepts?.[0]?.amount
+      if (typeof amt === 'string') {
+        const atomic = Number(amt)
+        if (Number.isFinite(atomic)) {
+          const usdc = atomic / 1_000_000
+          console.log(`required_usdc=${usdc.toFixed(6)}`)
+
+          if (atomic < 20_000_000) {
+            console.error('revenue_target_not_met=true')
+            console.error('hint=use_enterprise_endpoint_or_set_API_URL')
+            process.exit(2)
+          }
+        }
+      }
     } catch {
       console.log('payment_required_decoded=false')
     }
