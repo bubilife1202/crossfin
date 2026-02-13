@@ -29,8 +29,13 @@ console.log(`payer=${signer.address}`)
 console.log(`url=${API_URL}`)
 
 try {
+  const first = await fetch(API_URL, { method: 'GET' })
+  console.log(`first_status=${first.status}`)
+  const paymentRequired = first.headers.get('PAYMENT-REQUIRED') || first.headers.get('payment-required')
+  if (paymentRequired) console.log('payment_required_header=true')
+
   const res = await paidFetch(API_URL, { method: 'GET' })
-  console.log(`status=${res.status}`)
+  console.log(`final_status=${res.status}`)
 
   const text = await res.text()
   try {
@@ -39,7 +44,11 @@ try {
     console.log(text)
   }
 
-  if (!res.ok) process.exit(1)
+  if (!res.ok) {
+    console.error('paid_request_failed=true')
+    console.error('most_likely_reason=insufficient_testnet_usdc')
+    process.exit(1)
+  }
 
   const settle = httpClient.getPaymentSettleResponse((name) => res.headers.get(name))
   if (!settle) {
