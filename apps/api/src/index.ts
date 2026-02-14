@@ -46,8 +46,185 @@ app.onError((err, c) => {
   return c.json({ error: 'Internal server error' }, 500)
 })
 
-app.get('/', (c) => c.json({ name: 'crossfin-api', version: '0.0.0', status: 'ok' }))
-app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '0.0.0', status: 'ok' }))
+app.get('/', (c) => c.json({ name: 'crossfin-api', version: '1.0.0', status: 'ok' }))
+app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '1.0.0', status: 'ok' }))
+
+// === OpenAPI Spec ===
+
+app.get('/api/openapi.json', (c) => {
+  return c.json({
+    openapi: '3.1.0',
+    info: {
+      title: 'CrossFin — Korean Crypto Arbitrage Data API',
+      version: '1.0.0',
+      description: 'Real-time Korean crypto arbitrage data (Kimchi Premium) for AI agents. Pay-per-request via x402 protocol with USDC on Base mainnet. The only Korean exchange data provider in the x402 ecosystem.',
+      contact: { url: 'https://crossfin.dev' },
+      'x-logo': { url: 'https://crossfin.dev/logos/crossfin.png' },
+    },
+    servers: [{ url: 'https://crossfin.dev', description: 'Production' }],
+    paths: {
+      '/api/health': {
+        get: {
+          operationId: 'healthCheck',
+          summary: 'Health check',
+          tags: ['Free'],
+          responses: { '200': { description: 'API status', content: { 'application/json': { schema: { type: 'object', properties: { name: { type: 'string' }, version: { type: 'string' }, status: { type: 'string' } } } } } } },
+        },
+      },
+      '/api/arbitrage/demo': {
+        get: {
+          operationId: 'arbitrageDemo',
+          summary: 'Free Kimchi Premium preview (top 3 pairs)',
+          description: 'Free preview of the Kimchi Premium index. Shows top 3 pairs by premium percentage. No payment required.',
+          tags: ['Free'],
+          responses: {
+            '200': {
+              description: 'Preview of kimchi premium data',
+              content: { 'application/json': { schema: { type: 'object', properties: {
+                demo: { type: 'boolean' },
+                note: { type: 'string' },
+                paidEndpoint: { type: 'string' },
+                pairsShown: { type: 'integer' },
+                totalPairsAvailable: { type: 'integer' },
+                preview: { type: 'array', items: { type: 'object', properties: { coin: { type: 'string' }, premiumPct: { type: 'number' }, direction: { type: 'string' } } } },
+                avgPremiumPct: { type: 'number' },
+                at: { type: 'string', format: 'date-time' },
+              } } } },
+            },
+          },
+        },
+      },
+      '/api/premium/arbitrage/kimchi': {
+        get: {
+          operationId: 'kimchiPremium',
+          summary: 'Full Kimchi Premium Index — $0.05 USDC',
+          description: 'Real-time price spread between Korean exchange (Bithumb) and global exchanges for 10+ crypto pairs. Includes premium percentage, volume, 24h change for each pair. Payment: $0.05 USDC on Base via x402.',
+          tags: ['Paid — x402'],
+          responses: {
+            '200': {
+              description: 'Full kimchi premium data for all tracked pairs',
+              content: { 'application/json': { schema: { type: 'object', properties: {
+                paid: { type: 'boolean' },
+                service: { type: 'string' },
+                krwUsdRate: { type: 'number' },
+                pairsTracked: { type: 'integer' },
+                avgPremiumPct: { type: 'number' },
+                topPremium: { type: 'object' },
+                premiums: { type: 'array', items: { type: 'object', properties: {
+                  coin: { type: 'string' }, bithumbKrw: { type: 'number' }, bithumbUsd: { type: 'number' },
+                  binanceUsd: { type: 'number' }, premiumPct: { type: 'number' },
+                  volume24hKrw: { type: 'number' }, volume24hUsd: { type: 'number' }, change24hPct: { type: 'number' },
+                } } },
+                at: { type: 'string', format: 'date-time' },
+              } } } },
+            },
+            '402': { description: 'Payment required — $0.05 USDC on Base mainnet' },
+          },
+        },
+      },
+      '/api/premium/arbitrage/opportunities': {
+        get: {
+          operationId: 'arbitrageOpportunities',
+          summary: 'Profitable Arbitrage Routes — $0.10 USDC',
+          description: 'Pre-calculated profitable arbitrage routes between Korean and global crypto exchanges. Includes direction, estimated profit after fees (Bithumb 0.25% + Binance 0.10%), volume, and execution risk score. Payment: $0.10 USDC on Base via x402.',
+          tags: ['Paid — x402'],
+          responses: {
+            '200': {
+              description: 'Arbitrage opportunities sorted by profitability',
+              content: { 'application/json': { schema: { type: 'object', properties: {
+                paid: { type: 'boolean' },
+                service: { type: 'string' },
+                krwUsdRate: { type: 'number' },
+                totalOpportunities: { type: 'integer' },
+                profitableCount: { type: 'integer' },
+                estimatedFeesNote: { type: 'string' },
+                bestOpportunity: { type: 'object' },
+                opportunities: { type: 'array', items: { type: 'object', properties: {
+                  coin: { type: 'string' }, direction: { type: 'string' }, grossPremiumPct: { type: 'number' },
+                  estimatedFeesPct: { type: 'number' }, netProfitPct: { type: 'number' },
+                  profitPer10kUsd: { type: 'number' }, volume24hUsd: { type: 'number' },
+                  riskScore: { type: 'string' }, profitable: { type: 'boolean' },
+                } } },
+                at: { type: 'string', format: 'date-time' },
+              } } } },
+            },
+            '402': { description: 'Payment required — $0.10 USDC on Base mainnet' },
+          },
+        },
+      },
+      '/api/premium/bithumb/orderbook': {
+        get: {
+          operationId: 'bithumbOrderbook',
+          summary: 'Live Bithumb Orderbook — $0.02 USDC',
+          description: 'Live orderbook depth from Bithumb (Korean exchange) for any trading pair. Top 30 bids and asks with spread calculation. Raw data from a market typically inaccessible to non-Korean users. Payment: $0.02 USDC on Base via x402.',
+          tags: ['Paid — x402'],
+          parameters: [{ name: 'pair', in: 'query', description: 'Trading pair symbol (e.g. BTC, ETH, XRP)', schema: { type: 'string', default: 'BTC' } }],
+          responses: {
+            '200': {
+              description: 'Orderbook depth data',
+              content: { 'application/json': { schema: { type: 'object', properties: {
+                paid: { type: 'boolean' },
+                service: { type: 'string' },
+                pair: { type: 'string' },
+                exchange: { type: 'string' },
+                bestBidKrw: { type: 'number' }, bestAskKrw: { type: 'number' },
+                spreadKrw: { type: 'number' }, spreadPct: { type: 'number' },
+                bestBidUsd: { type: 'number' }, bestAskUsd: { type: 'number' },
+                depth: { type: 'object', properties: {
+                  bids: { type: 'array', items: { type: 'object', properties: { price: { type: 'string' }, quantity: { type: 'string' } } } },
+                  asks: { type: 'array', items: { type: 'object', properties: { price: { type: 'string' }, quantity: { type: 'string' } } } },
+                } },
+                at: { type: 'string', format: 'date-time' },
+              } } } },
+            },
+            '402': { description: 'Payment required — $0.02 USDC on Base mainnet' },
+          },
+        },
+      },
+      '/api/premium/market/korea': {
+        get: {
+          operationId: 'koreaMarketSentiment',
+          summary: 'Korean Market Sentiment — $0.03 USDC',
+          description: 'Korean crypto market sentiment from Bithumb. Top gainers, losers, volume leaders, total market volume, and overall market mood (bullish/bearish/neutral). Payment: $0.03 USDC on Base via x402.',
+          tags: ['Paid — x402'],
+          responses: {
+            '200': {
+              description: 'Korean market sentiment data',
+              content: { 'application/json': { schema: { type: 'object', properties: {
+                paid: { type: 'boolean' },
+                service: { type: 'string' },
+                exchange: { type: 'string' },
+                totalCoins: { type: 'integer' },
+                totalVolume24hUsd: { type: 'number' },
+                avgChange24hPct: { type: 'number' },
+                marketMood: { type: 'string', enum: ['bullish', 'bearish', 'neutral'] },
+                topGainers: { type: 'array', items: { type: 'object' } },
+                topLosers: { type: 'array', items: { type: 'object' } },
+                topVolume: { type: 'array', items: { type: 'object' } },
+                krwUsdRate: { type: 'number' },
+                at: { type: 'string', format: 'date-time' },
+              } } } },
+            },
+            '402': { description: 'Payment required — $0.03 USDC on Base mainnet' },
+          },
+        },
+      },
+    },
+    'x-x402': {
+      network: 'eip155:8453',
+      networkName: 'Base',
+      asset: 'USDC',
+      payTo: '0xe4E79Ce6a1377C58f0Bb99D023908858A4DB5779',
+      facilitator: 'https://facilitator.x402endpoints.online',
+      pricing: {
+        '/api/premium/arbitrage/kimchi': '$0.05',
+        '/api/premium/arbitrage/opportunities': '$0.10',
+        '/api/premium/bithumb/orderbook': '$0.02',
+        '/api/premium/market/korea': '$0.03',
+      },
+    },
+  })
+})
 
 app.use(
   '/api/premium/*',
