@@ -9,6 +9,6 @@ database_id = "45a4ed54-bd2f-45dd-b1e4-d2be5f820f2c"
 migrations_dir = "migrations"
 
 [vars]
-FACILITATOR_URL = "https://x402.org/facilitator"
-X402_NETWORK = "eip155:84532"
-PAYMENT_RECEIVER_ADDRESS = "0xC114611319b5Ed62B22838741926621CADd81968"
+FACILITATOR_URL = "https://facilitator.x402endpoints.online"
+X402_NETWORK = "eip155:8453"
+PAYMENT_RECEIVER_ADDRESS = "0xe4E79Ce6a1377C58f0Bb99D023908858A4DB5779"

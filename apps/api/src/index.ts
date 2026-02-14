@@ -82,6 +82,50 @@ app.use(
           description: 'CrossFin enterprise receipt (x402)',
           mimeType: 'application/json',
         },
+        'GET /api/premium/arbitrage/kimchi': {
+          accepts: {
+            scheme: 'exact',
+            price: '$0.05',
+            network,
+            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
+            maxTimeoutSeconds: 300,
+          },
+          description: 'Real-time Kimchi Premium Index — price spread between Korean exchanges (Bithumb) and global exchanges (Binance) for top crypto pairs. Unique Korean market data unavailable anywhere else in x402 ecosystem.',
+          mimeType: 'application/json',
+        },
+        'GET /api/premium/arbitrage/opportunities': {
+          accepts: {
+            scheme: 'exact',
+            price: '$0.10',
+            network,
+            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
+            maxTimeoutSeconds: 300,
+          },
+          description: 'Pre-calculated profitable arbitrage routes between Korean and global crypto exchanges. Includes estimated profit after fees, volume, and execution risk score.',
+          mimeType: 'application/json',
+        },
+        'GET /api/premium/bithumb/orderbook': {
+          accepts: {
+            scheme: 'exact',
+            price: '$0.02',
+            network,
+            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
+            maxTimeoutSeconds: 300,
+          },
+          description: 'Live Bithumb (Korean exchange) orderbook depth for any trading pair. Raw bid/ask data from a market typically inaccessible to non-Korean users.',
+          mimeType: 'application/json',
+        },
+        'GET /api/premium/market/korea': {
+          accepts: {
+            scheme: 'exact',
+            price: '$0.03',
+            network,
+            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
+            maxTimeoutSeconds: 300,
+          },
+          description: 'Korean crypto market sentiment — top movers, volume leaders, 24h gainers/losers on Bithumb. Unique Korean market intelligence for trading agents.',
+          mimeType: 'application/json',
+        },
       },
       resourceServer,
     )
@@ -120,6 +164,283 @@ app.post('/api/agents', async (c) => {
 
   return c.json({ id, name: body.name.trim(), apiKey }, 201)
 })
+
+// === Korean Arbitrage Data Helpers ===
+
+const TRACKED_PAIRS: Record<string, string> = {
+  BTC: 'BTCUSDT', ETH: 'ETHUSDT', XRP: 'XRPUSDT',
+  SOL: 'SOLUSDT', DOGE: 'DOGEUSDT', ADA: 'ADAUSDT',
+  DOT: 'DOTUSDT', LINK: 'LINKUSDT', AVAX: 'AVAXUSDT',
+  EOS: 'EOSUSDT', TRX: 'TRXUSDT', MATIC: 'MATICUSDT',
+}
+
+const BITHUMB_FEES_PCT = 0.25 // Bithumb maker/taker fee
+const BINANCE_FEES_PCT = 0.10 // Binance spot fee
+
+async function fetchKrwRate(): Promise<number> {
+  try {
+    const res = await fetch('https://open.er-api.com/v6/latest/USD')
+    const data = await res.json() as { rates?: Record<string, number> }
+    return data.rates?.KRW ?? 1450
+  } catch {
+    return 1450
+  }
+}
+
+async function fetchBithumbAll(): Promise<Record<string, Record<string, string>>> {
+  const res = await fetch('https://api.bithumb.com/public/ticker/ALL_KRW')
+  const data = await res.json() as { status: string; data: Record<string, unknown> }
+  if (data.status !== '0000') throw new HTTPException(502, { message: 'Bithumb API unavailable' })
+  return data.data as Record<string, Record<string, string>>
+}
+
+async function fetchGlobalPrices(): Promise<Record<string, number>> {
+  const coins = Object.keys(TRACKED_PAIRS).join(',')
+  const res = await fetch(
+    `https://min-api.cryptocompare.com/data/pricemulti?fsyms=${coins}&tsyms=USD`,
+  )
+  if (!res.ok) throw new HTTPException(502, { message: 'Price feed unavailable' })
+  const data = await res.json() as Record<string, { USD?: number }>
+  const prices: Record<string, number> = {}
+  for (const [coin, binanceSymbol] of Object.entries(TRACKED_PAIRS)) {
+    if (data[coin]?.USD) prices[binanceSymbol] = data[coin].USD
+  }
+  return prices
+}
+
+async function fetchBithumbOrderbook(pair: string): Promise<{ bids: unknown[]; asks: unknown[] }> {
+  const res = await fetch(`https://api.bithumb.com/public/orderbook/${pair}_KRW`)
+  const data = await res.json() as { status: string; data: { bids: unknown[]; asks: unknown[] } }
+  if (data.status !== '0000') throw new HTTPException(400, { message: `Invalid pair: ${pair}` })
+  return data.data
+}
+
+function calcPremiums(
+  bithumbData: Record<string, Record<string, string>>,
+  binancePrices: Record<string, number>,
+  krwRate: number,
+) {
+  const premiums = []
+  for (const [coin, binanceSymbol] of Object.entries(TRACKED_PAIRS)) {
+    const bithumb = bithumbData[coin]
+    const binancePrice = binancePrices[binanceSymbol]
+    if (!bithumb?.closing_price || !binancePrice) continue
+
+    const bithumbKrw = parseFloat(bithumb.closing_price)
+    const bithumbUsd = bithumbKrw / krwRate
+    const premiumPct = ((bithumbUsd - binancePrice) / binancePrice) * 100
+    const volume24hKrw = parseFloat(bithumb.acc_trade_value_24H || '0')
+    const change24hPct = parseFloat(bithumb.fluctate_rate_24H || '0')
+
+    premiums.push({
+      coin,
+      bithumbKrw,
+      bithumbUsd: Math.round(bithumbUsd * 100) / 100,
+      binanceUsd: binancePrice,
+      premiumPct: Math.round(premiumPct * 100) / 100,
+      volume24hKrw,
+      volume24hUsd: Math.round(volume24hKrw / krwRate),
+      change24hPct,
+    })
+  }
+  return premiums.sort((a, b) => Math.abs(b.premiumPct) - Math.abs(a.premiumPct))
+}
+
+// === Kimchi Premium (paid $0.05) ===
+
+app.get('/api/premium/arbitrage/kimchi', async (c) => {
+  const [bithumbData, binancePrices, krwRate] = await Promise.all([
+    fetchBithumbAll(),
+    fetchGlobalPrices(),
+    fetchKrwRate(),
+  ])
+
+  const premiums = calcPremiums(bithumbData, binancePrices, krwRate)
+  const avg = premiums.length > 0
+    ? Math.round(premiums.reduce((s, p) => s + p.premiumPct, 0) / premiums.length * 100) / 100
+    : 0
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-kimchi-premium',
+    krwUsdRate: krwRate,
+    pairsTracked: premiums.length,
+    avgPremiumPct: avg,
+    topPremium: premiums[0] ?? null,
+    premiums,
+    at: new Date().toISOString(),
+  })
+})
+
+// === Arbitrage Opportunities (paid $0.10) ===
+
+app.get('/api/premium/arbitrage/opportunities', async (c) => {
+  const [bithumbData, binancePrices, krwRate] = await Promise.all([
+    fetchBithumbAll(),
+    fetchGlobalPrices(),
+    fetchKrwRate(),
+  ])
+
+  const premiums = calcPremiums(bithumbData, binancePrices, krwRate)
+  const totalFeesPct = BITHUMB_FEES_PCT + BINANCE_FEES_PCT
+
+  const opportunities = premiums
+    .map((p) => {
+      const netProfitPct = Math.abs(p.premiumPct) - totalFeesPct
+      const direction = p.premiumPct > 0 ? 'buy-global-sell-korea' : 'buy-korea-sell-global'
+      const riskScore = p.volume24hUsd < 100000 ? 'high' : p.volume24hUsd < 1000000 ? 'medium' : 'low'
+      const profitPer10kUsd = Math.round(netProfitPct * 100) // cents per $10,000 traded
+
+      return {
+        coin: p.coin,
+        direction,
+        grossPremiumPct: p.premiumPct,
+        estimatedFeesPct: totalFeesPct,
+        netProfitPct: Math.round(netProfitPct * 100) / 100,
+        profitPer10kUsd,
+        volume24hUsd: p.volume24hUsd,
+        riskScore,
+        profitable: netProfitPct > 0,
+        bithumbKrw: p.bithumbKrw,
+        binanceUsd: p.binanceUsd,
+      }
+    })
+    .sort((a, b) => b.netProfitPct - a.netProfitPct)
+
+  const profitable = opportunities.filter((o) => o.profitable)
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-arbitrage-opportunities',
+    krwUsdRate: krwRate,
+    totalOpportunities: opportunities.length,
+    profitableCount: profitable.length,
+    estimatedFeesNote: `Bithumb ${BITHUMB_FEES_PCT}% + Binance ${BINANCE_FEES_PCT}% = ${totalFeesPct}% total`,
+    bestOpportunity: profitable[0] ?? null,
+    opportunities,
+    at: new Date().toISOString(),
+  })
+})
+
+// === Bithumb Orderbook (paid $0.02) ===
+
+app.get('/api/premium/bithumb/orderbook', async (c) => {
+  const pair = (c.req.query('pair') ?? 'BTC').toUpperCase()
+  const [orderbook, krwRate] = await Promise.all([
+    fetchBithumbOrderbook(pair),
+    fetchKrwRate(),
+  ])
+
+  const bids = (orderbook.bids as Array<{ price: string; quantity: string }>).slice(0, 30)
+  const asks = (orderbook.asks as Array<{ price: string; quantity: string }>).slice(0, 30)
+
+  const bestBid = bids[0] ? parseFloat(bids[0].price) : 0
+  const bestAsk = asks[0] ? parseFloat(asks[0].price) : 0
+  const spreadKrw = bestAsk - bestBid
+  const spreadPct = bestBid > 0 ? Math.round((spreadKrw / bestBid) * 10000) / 100 : 0
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-bithumb-orderbook',
+    pair: `${pair}/KRW`,
+    exchange: 'Bithumb',
+    bestBidKrw: bestBid,
+    bestAskKrw: bestAsk,
+    spreadKrw,
+    spreadPct,
+    bestBidUsd: Math.round(bestBid / krwRate * 100) / 100,
+    bestAskUsd: Math.round(bestAsk / krwRate * 100) / 100,
+    depth: { bids, asks },
+    at: new Date().toISOString(),
+  })
+})
+
+// === Korea Market Sentiment (paid $0.03) ===
+
+app.get('/api/premium/market/korea', async (c) => {
+  const [bithumbData, krwRate] = await Promise.all([
+    fetchBithumbAll(),
+    fetchKrwRate(),
+  ])
+
+  const coins: Array<{
+    coin: string; priceKrw: number; priceUsd: number;
+    change24hPct: number; volume24hKrw: number; volume24hUsd: number;
+  }> = []
+
+  for (const [coin, data] of Object.entries(bithumbData)) {
+    if (coin === 'date' || typeof data !== 'object' || !data) continue
+    const d = data as Record<string, string>
+    if (!d.closing_price) continue
+
+    const priceKrw = parseFloat(d.closing_price)
+    const volume24hKrw = parseFloat(d.acc_trade_value_24H || '0')
+    coins.push({
+      coin,
+      priceKrw,
+      priceUsd: Math.round(priceKrw / krwRate * 100) / 100,
+      change24hPct: parseFloat(d.fluctate_rate_24H || '0'),
+      volume24hKrw,
+      volume24hUsd: Math.round(volume24hKrw / krwRate),
+    })
+  }
+
+  const topGainers = [...coins].sort((a, b) => b.change24hPct - a.change24hPct).slice(0, 10)
+  const topLosers = [...coins].sort((a, b) => a.change24hPct - b.change24hPct).slice(0, 10)
+  const topVolume = [...coins].sort((a, b) => b.volume24hUsd - a.volume24hUsd).slice(0, 10)
+  const totalVolumeUsd = coins.reduce((s, c) => s + c.volume24hUsd, 0)
+  const avgChange = coins.length > 0
+    ? Math.round(coins.reduce((s, c) => s + c.change24hPct, 0) / coins.length * 100) / 100
+    : 0
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-korea-sentiment',
+    exchange: 'Bithumb',
+    totalCoins: coins.length,
+    totalVolume24hUsd: totalVolumeUsd,
+    avgChange24hPct: avgChange,
+    marketMood: avgChange > 1 ? 'bullish' : avgChange < -1 ? 'bearish' : 'neutral',
+    topGainers,
+    topLosers,
+    topVolume,
+    krwUsdRate: krwRate,
+    at: new Date().toISOString(),
+  })
+})
+
+// === Free Demo — delayed kimchi premium (no paywall) ===
+
+app.get('/api/arbitrage/demo', async (c) => {
+  const [bithumbData, binancePrices, krwRate] = await Promise.all([
+    fetchBithumbAll(),
+    fetchGlobalPrices(),
+    fetchKrwRate(),
+  ])
+
+  const premiums = calcPremiums(bithumbData, binancePrices, krwRate)
+  // Demo: only show top 3, hide detailed numbers
+  const preview = premiums.slice(0, 3).map((p) => ({
+    coin: p.coin,
+    premiumPct: p.premiumPct,
+    direction: p.premiumPct > 0 ? 'Korea premium' : 'Korea discount',
+  }))
+
+  return c.json({
+    demo: true,
+    note: 'Free preview — limited to top 3 pairs. Pay $0.05 USDC via x402 for full real-time data on all pairs.',
+    paidEndpoint: '/api/premium/arbitrage/kimchi',
+    pairsShown: preview.length,
+    totalPairsAvailable: premiums.length,
+    preview,
+    avgPremiumPct: premiums.length > 0
+      ? Math.round(premiums.reduce((s, p) => s + p.premiumPct, 0) / premiums.length * 100) / 100
+      : 0,
+    at: new Date().toISOString(),
+  })
+})
+
+// === Existing Premium Endpoints ===
 
 app.get('/api/premium/report', async (c) => {
   const results = await c.env.DB.batch([
