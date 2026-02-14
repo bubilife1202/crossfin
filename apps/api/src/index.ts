@@ -5,6 +5,7 @@ import { HTTPException } from 'hono/http-exception'
 import { paymentMiddleware, x402ResourceServer } from '@x402/hono'
 import { ExactEvmScheme } from '@x402/evm/exact/server'
 import { HTTPFacilitatorClient } from '@x402/core/server'
+import { bazaarResourceServerExtension, declareDiscoveryExtension } from '@x402/extensions/bazaar'
 
 type Bindings = {
   DB: D1Database
@@ -231,10 +232,9 @@ app.use(
   async (c, next) => {
     const network = requireCaip2(c.env.X402_NETWORK)
     const facilitatorClient = new HTTPFacilitatorClient({ url: c.env.FACILITATOR_URL })
-    const resourceServer = new x402ResourceServer(facilitatorClient).register(
-      network,
-      new ExactEvmScheme(),
-    )
+    const resourceServer = new x402ResourceServer(facilitatorClient)
+      .register(network, new ExactEvmScheme())
+      .registerExtension(bazaarResourceServerExtension)
 
     const middleware = paymentMiddleware(
       {
@@ -270,6 +270,14 @@ app.use(
           },
           description: 'Real-time Kimchi Premium Index — price spread between Korean exchanges (Bithumb) and global exchanges (Binance) for top crypto pairs. Unique Korean market data unavailable anywhere else in x402 ecosystem.',
           mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              output: {
+                example: { paid: true, service: 'crossfin-kimchi-premium', krwUsdRate: 1450, pairsTracked: 10, avgPremiumPct: 2.15, premiums: [{ coin: 'BTC', bithumbKrw: 145000000, bithumbUsd: 100000, binanceUsd: 97850, premiumPct: 2.2, volume24hUsd: 5000000 }] },
+                schema: { properties: { paid: { type: 'boolean' }, pairsTracked: { type: 'number' }, avgPremiumPct: { type: 'number' }, premiums: { type: 'array' } }, required: ['paid', 'pairsTracked', 'avgPremiumPct', 'premiums'] },
+              },
+            }),
+          },
         },
         'GET /api/premium/arbitrage/opportunities': {
           accepts: {
@@ -281,6 +289,14 @@ app.use(
           },
           description: 'Pre-calculated profitable arbitrage routes between Korean and global crypto exchanges. Includes estimated profit after fees, volume, and execution risk score.',
           mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              output: {
+                example: { paid: true, service: 'crossfin-arbitrage-opportunities', totalOpportunities: 10, profitableCount: 3, bestOpportunity: { coin: 'BTC', direction: 'buy-global-sell-korea', netProfitPct: 1.85, riskScore: 'low' }, opportunities: [] },
+                schema: { properties: { paid: { type: 'boolean' }, totalOpportunities: { type: 'number' }, profitableCount: { type: 'number' }, opportunities: { type: 'array' } }, required: ['paid', 'totalOpportunities', 'profitableCount', 'opportunities'] },
+              },
+            }),
+          },
         },
         'GET /api/premium/bithumb/orderbook': {
           accepts: {
@@ -292,6 +308,16 @@ app.use(
           },
           description: 'Live Bithumb (Korean exchange) orderbook depth for any trading pair. Raw bid/ask data from a market typically inaccessible to non-Korean users.',
           mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              input: { pair: 'BTC' },
+              inputSchema: { properties: { pair: { type: 'string', description: 'Trading pair symbol (BTC, ETH, XRP, etc.)' } } },
+              output: {
+                example: { paid: true, service: 'crossfin-bithumb-orderbook', pair: 'BTC/KRW', exchange: 'Bithumb', bestBidKrw: 144900000, bestAskKrw: 145000000, spreadPct: 0.07, depth: { bids: [], asks: [] } },
+                schema: { properties: { paid: { type: 'boolean' }, pair: { type: 'string' }, bestBidKrw: { type: 'number' }, bestAskKrw: { type: 'number' }, spreadPct: { type: 'number' } }, required: ['paid', 'pair', 'bestBidKrw', 'bestAskKrw'] },
+              },
+            }),
+          },
         },
         'GET /api/premium/market/korea': {
           accepts: {
@@ -303,6 +329,14 @@ app.use(
           },
           description: 'Korean crypto market sentiment — top movers, volume leaders, 24h gainers/losers on Bithumb. Unique Korean market intelligence for trading agents.',
           mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              output: {
+                example: { paid: true, service: 'crossfin-korea-sentiment', exchange: 'Bithumb', totalCoins: 200, totalVolume24hUsd: 500000000, marketMood: 'neutral', topGainers: [], topLosers: [], topVolume: [] },
+                schema: { properties: { paid: { type: 'boolean' }, totalCoins: { type: 'number' }, totalVolume24hUsd: { type: 'number' }, marketMood: { type: 'string', enum: ['bullish', 'bearish', 'neutral'] } }, required: ['paid', 'totalCoins', 'marketMood'] },
+              },
+            }),
+          },
         },
       },
       resourceServer,
