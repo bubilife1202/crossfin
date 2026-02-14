@@ -2,12 +2,21 @@ import { x402Client, wrapFetchWithPayment, x402HTTPClient } from '@x402/fetch'
 import { registerExactEvmScheme } from '@x402/evm/exact/client'
 import { decodePaymentRequiredHeader } from '@x402/core/http'
 import { createPublicClient, http, formatEther, formatUnits } from 'viem'
-import { baseSepolia } from 'viem/chains'
+import { base, baseSepolia } from 'viem/chains'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 
+const X402_NETWORK = (process.env.X402_NETWORK || 'eip155:8453').trim()
 const API_URL = (process.env.API_URL || 'https://crossfin.dev/api/premium/enterprise').trim()
-const RPC_URL = (process.env.RPC_URL || 'https://sepolia.base.org').trim()
-const USDC = (process.env.USDC_ADDRESS || '0x036CbD53842c5426634e7929541eC2318f3dCF7e').trim()
+const RPC_URL = (
+  process.env.RPC_URL ||
+  (X402_NETWORK === 'eip155:84532' ? 'https://sepolia.base.org' : 'https://mainnet.base.org')
+).trim()
+const USDC = (
+  process.env.USDC_ADDRESS ||
+  (X402_NETWORK === 'eip155:84532'
+    ? '0x036CbD53842c5426634e7929541eC2318f3dCF7e'
+    : '0x833589fCD6eDb6E08f4c7C32D4f71b54bda02913')
+).trim()
 const USDC_DECIMALS = Number(process.env.USDC_DECIMALS || '6')
 const MIN_USDC = Number(process.env.MIN_USDC || '20')
 const POLL_MS = Math.max(2000, Number(process.env.POLL_MS || '12000'))
@@ -39,12 +48,18 @@ console.log(`private_key=${pk}`)
 console.log('note=do_not_share_private_key')
 
 console.log('step=fund_wallet')
-console.log('usdc_faucet=https://faucet.circle.com')
-console.log('note=eth_not_required_for_x402_settlement_on_base_sepolia')
-console.log('network=Base Sepolia (chainId 84532)')
+console.log(`x402_network=${X402_NETWORK}`)
+if (X402_NETWORK === 'eip155:84532') {
+  console.log('network=Base Sepolia (chainId 84532)')
+  console.log('usdc_faucet=https://faucet.circle.com')
+} else {
+  console.log('network=Base Mainnet (chainId 8453)')
+  console.log('note=fund_wallet_with_usdc_on_base')
+}
+console.log('note=eth_not_required_for_x402_settlement (gas paid by facilitator)')
 
 const publicClient = createPublicClient({
-  chain: baseSepolia,
+  chain: X402_NETWORK === 'eip155:84532' ? baseSepolia : base,
   transport: http(RPC_URL),
 })
 

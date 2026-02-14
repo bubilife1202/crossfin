@@ -47,6 +47,7 @@ app.onError((err, c) => {
 })
 
 app.get('/', (c) => c.json({ name: 'crossfin-api', version: '0.0.0', status: 'ok' }))
+app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '0.0.0', status: 'ok' }))
 
 app.use(
   '/api/premium/*',
