@@ -22,6 +22,23 @@ export type PaymentRequired = {
   accepts: PremiumAccept[]
 }
 
+export type ArbitragePair = {
+  coin: string
+  premiumPct: number
+  direction: string
+}
+
+export type ArbitrageDemoResponse = {
+  demo: boolean
+  note: string
+  paidEndpoint: string
+  pairsShown: number
+  totalPairsAvailable: number
+  preview: ArbitragePair[]
+  avgPremiumPct: number
+  at: string
+}
+
 function apiBaseUrl(): string {
   const raw = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
   if (raw) return raw.replace(/\/$/, '')
@@ -30,6 +47,32 @@ function apiBaseUrl(): string {
 
 export function getApiBaseUrl(): string {
   return apiBaseUrl()
+}
+
+export async function fetchArbitrageDemo(signal?: AbortSignal): Promise<ArbitrageDemoResponse> {
+  const res = await fetch(`${apiBaseUrl()}/api/arbitrage/demo`, { signal })
+  if (!res.ok) throw new Error(`arbitrage_demo_failed:${res.status}`)
+  const data: unknown = await res.json()
+  if (!data || typeof data !== 'object') throw new Error('arbitrage_demo_invalid')
+  const d = data as Record<string, unknown>
+  const preview = Array.isArray(d.preview) ? d.preview : []
+  return {
+    demo: Boolean(d.demo),
+    note: String(d.note ?? ''),
+    paidEndpoint: String(d.paidEndpoint ?? ''),
+    pairsShown: Number(d.pairsShown ?? 0),
+    totalPairsAvailable: Number(d.totalPairsAvailable ?? 0),
+    preview: preview.map((p: unknown) => {
+      const pair = p as Record<string, unknown>
+      return {
+        coin: String(pair.coin ?? ''),
+        premiumPct: Number(pair.premiumPct ?? 0),
+        direction: String(pair.direction ?? ''),
+      }
+    }),
+    avgPremiumPct: Number(d.avgPremiumPct ?? 0),
+    at: String(d.at ?? ''),
+  }
 }
 
 export async function fetchStats(signal?: AbortSignal): Promise<ApiStats> {

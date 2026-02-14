@@ -1,111 +1,239 @@
 import './App.css'
-import LedgerDemo from './components/LedgerDemo'
 import LiveSignals from './components/LiveSignals'
+
+const API_BASE = 'https://crossfin-api.bubilife.workers.dev'
+
+const ENDPOINTS = [
+  {
+    method: 'GET',
+    path: '/api/arbitrage/demo',
+    price: 'Free',
+    priceClass: 'free',
+    description: 'Top 3 kimchi premium pairs (preview). No authentication required.',
+  },
+  {
+    method: 'GET',
+    path: '/api/premium/arbitrage/kimchi',
+    price: '$0.05',
+    priceClass: 'paid',
+    description: 'Full kimchi premium index with 10+ trading pairs, premium percentages, and directional signals.',
+  },
+  {
+    method: 'GET',
+    path: '/api/premium/arbitrage/opportunities',
+    price: '$0.10',
+    priceClass: 'paid',
+    description: 'Profitable arbitrage opportunities with recommended entry/exit points and estimated returns.',
+  },
+  {
+    method: 'GET',
+    path: '/api/premium/bithumb/orderbook?pair=BTC',
+    price: '$0.02',
+    priceClass: 'paid',
+    description: 'Real-time Bithumb orderbook depth. Supports BTC, ETH, XRP, DOGE, and 6+ more pairs.',
+  },
+  {
+    method: 'GET',
+    path: '/api/premium/market/korea',
+    price: '$0.03',
+    priceClass: 'paid',
+    description: 'Korean crypto market sentiment analysis derived from exchange volume and premium trends.',
+  },
+] as const
+
+const STEPS = [
+  {
+    number: '01',
+    title: 'Discover',
+    description: 'Explore endpoints via our free demo API or browse the documentation below. No signup needed.',
+  },
+  {
+    number: '02',
+    title: 'Pay',
+    description: 'Your agent sends USDC on Base via x402 protocol. Standard HTTP 402 flow. No API keys, no OAuth.',
+  },
+  {
+    number: '03',
+    title: 'Get Data',
+    description: 'Receive real-time Korean exchange data as JSON. Parse, analyze, and act on arbitrage signals.',
+  },
+] as const
+
+const FEATURES = [
+  {
+    title: 'Exclusive Korean Data',
+    description: 'Direct Bithumb API integration. Data not available elsewhere in the x402 ecosystem. Unique alpha for your trading agents.',
+  },
+  {
+    title: 'Built for Agents',
+    description: 'x402 native. HTTP 402 paywall. No auth flows, no API keys, no subscriptions. Agents pay and get data in a single request.',
+  },
+  {
+    title: 'Institutional Grade',
+    description: 'Real-time orderbook data, 10+ trading pairs, market sentiment analysis, and actionable arbitrage signals.',
+  },
+] as const
 
 function App() {
   return (
     <div className="page">
       <header className="topbar">
-        <div className="brand">CrossFin</div>
-        <nav className="nav">
-          <a href="#why">Why</a>
-          <a href="#demo">Demo</a>
-          <a href="#roadmap">Roadmap</a>
-        </nav>
+        <div className="topbarInner">
+          <div className="brand">CrossFin</div>
+          <nav className="nav">
+            <a href="#live-data">Live Data</a>
+            <a href="#api">API</a>
+            <a href="#pricing">Pricing</a>
+            <a
+              href="https://github.com/bubilife1202/crossfin"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              GitHub
+            </a>
+          </nav>
+        </div>
       </header>
 
       <main className="content">
+        {/* ── Hero ── */}
         <section className="hero">
-          <div className="heroBadge">Agent-native finance infrastructure</div>
-          <h1>에이전트의 은행</h1>
+          <div className="heroBadge">Korean Crypto Arbitrage Data API</div>
+          <h1>
+            Kimchi Premium Data<br />
+            <span className="heroAccent">for Autonomous Agents</span>
+          </h1>
           <p className="heroSub">
-            에이전트가 카카오페이/토스/Stripe/x402 등 플랫폼을 가로질러 돈을
-            관리하도록 만드는 금융 인프라.
+            AI agents pay per-call with USDC via x402. No API keys. No subscriptions.
+            Real-time Korean exchange data delivered over HTTP.
           </p>
 
           <div className="heroCtas">
-            <a className="button primary" href="#demo">
-              데모 보기
+            <a className="button primary" href="#live-data">
+              View Live Data
             </a>
-            <a className="button" href="#roadmap">
-              로드맵
+            <a className="button" href="#api">
+              API Docs
             </a>
           </div>
 
-          <div className="heroNote">
-            지금은 프로토타입 단계. 이 페이지의 데모는 로컬 브라우저에만
-            저장된다.
+          <div className="heroPills">
+            <span className="pill">Live on Base mainnet</span>
+            <span className="pill">x402 protocol</span>
+            <span className="pill">From $0.02/call</span>
           </div>
         </section>
 
-        <section id="why" className="section">
-          <h2>왜 필요한가</h2>
-          <div className="grid">
-            <article className="card">
-              <h3>고객은 사람 → 에이전트</h3>
-              <p>
-                에이전트는 API를 호출하고, 서비스를 구매하고, 다른 에이전트를
-                고용하고, 돈을 번다.
-              </p>
-            </article>
-            <article className="card">
-              <h3>플랫폼 성벽을 넘는다</h3>
-              <p>
-                결제는 플랫폼별로 파편화되어 있다. 에이전트에게는 최선의
-                선택만 있다.
-              </p>
-            </article>
-            <article className="card">
-              <h3>아시아가 더 어렵고, 더 큼</h3>
-              <p>
-                결제 레일이 더 많고 더 복잡하다. 그래서 "다 연결해주는 놈"의
-                가치가 더 크다.
-              </p>
-            </article>
+        {/* ── Live Data ── */}
+        <section id="live-data" className="section">
+          <div className="sectionHeader">
+            <h2>Live Kimchi Premium Data</h2>
+            <p className="sectionSub">
+              Real-time arbitrage data from our free demo endpoint. This is what your agents will consume.
+            </p>
           </div>
-        </section>
-
-        <section id="demo" className="section">
-          <h2>데모</h2>
-          <p className="sectionSub">
-            Phase 1: 에이전트 가계부 (지갑/송금/예산/거래내역). 로컬 브라우저에만
-            저장되는 미니 프로토타입.
-          </p>
-          <LedgerDemo />
-
-          <div className="demoSpacer" aria-hidden />
-
-          <h3 className="sectionH3">Live (Workers + D1 + x402)</h3>
-          <p className="sectionSub">
-            실제 Cloudflare Workers API에서 집계되는 공개 통계 + x402 paywall(402)
-            상태를 보여준다.
-          </p>
           <LiveSignals />
         </section>
 
-        <section id="roadmap" className="section">
-          <h2>로드맵</h2>
+        {/* ── API Endpoints ── */}
+        <section id="api" className="section">
+          <div className="sectionHeader">
+            <h2>API Endpoints</h2>
+            <p className="sectionSub">
+              Base URL: <code className="inlineCode">{API_BASE}</code>
+            </p>
+          </div>
+
+          <div className="endpointsGrid">
+            {ENDPOINTS.map((ep) => (
+              <div key={ep.path} className="endpointCard">
+                <div className="endpointTop">
+                  <span className="endpointMethod">{ep.method}</span>
+                  <span className={`endpointPrice ${ep.priceClass}`}>{ep.price}</span>
+                </div>
+                <div className="endpointPath">{ep.path}</div>
+                <div className="endpointDesc">{ep.description}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="apiNote">
+            All paid endpoints return HTTP 402 with x402 payment instructions.
+            Your agent completes the USDC payment on Base and re-sends the request with a payment proof header.
+          </div>
+        </section>
+
+        {/* ── How It Works ── */}
+        <section id="pricing" className="section">
+          <div className="sectionHeader">
+            <h2>How It Works</h2>
+            <p className="sectionSub">
+              Three steps. No dashboard. No signup. Your agent handles everything.
+            </p>
+          </div>
+
+          <div className="stepsGrid">
+            {STEPS.map((step) => (
+              <div key={step.number} className="stepCard">
+                <div className="stepNumber">{step.number}</div>
+                <h3 className="stepTitle">{step.title}</h3>
+                <p className="stepDesc">{step.description}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Why CrossFin ── */}
+        <section className="section">
+          <div className="sectionHeader">
+            <h2>Why CrossFin</h2>
+            <p className="sectionSub">
+              The only x402-native Korean crypto data provider.
+            </p>
+          </div>
+
           <div className="grid">
-            <article className="card">
-              <h3>Phase 1</h3>
-              <p>에이전트 가계부: 지갑/송금/예산/리포트 + 대시보드</p>
-            </article>
-            <article className="card">
-              <h3>Phase 2</h3>
-              <p>아시아/글로벌 레일 연동 + 멀티커런시 + 스마트 라우팅</p>
-            </article>
-            <article className="card">
-              <h3>Phase 3+</h3>
-              <p>신용/평판/분쟁 해결을 포함한 에이전트 금융 시스템</p>
-            </article>
+            {FEATURES.map((feat) => (
+              <article key={feat.title} className="card featureCard">
+                <h3>{feat.title}</h3>
+                <p>{feat.description}</p>
+              </article>
+            ))}
           </div>
         </section>
       </main>
 
       <footer className="footer">
         <div className="footerInner">
-          <span className="footerBrand">CrossFin</span>
-          <span className="footerMeta">Prototype · {new Date().getFullYear()}</span>
+          <div className="footerTop">
+            <span className="footerBrand">CrossFin</span>
+            <div className="footerLinks">
+              <a
+                href="https://github.com/bubilife1202/crossfin"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                GitHub
+              </a>
+              <a
+                href={API_BASE}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                API
+              </a>
+              <a
+                href="https://basescan.org/address/0xe4E79Ce6a1377C58f0Bb99D023908858A4DB5779"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                BaseScan
+              </a>
+            </div>
+          </div>
+          <div className="footerBottom">
+            Powered by x402 protocol on Base
+          </div>
         </div>
       </footer>
     </div>
