@@ -1,7 +1,7 @@
 # CrossFin API (Workers + D1 + x402)
 
 Live API:
-- Base URL: https://crossfin-api.bubilife.workers.dev
+- Base URL: https://crossfin.dev
 
 Key endpoints:
 - `GET /` health
@@ -47,7 +47,7 @@ By default this calls `GET /api/premium/enterprise` (priced at $20). To call the
 
 ```bash
 cd apps/api
-API_URL="https://crossfin-api.bubilife.workers.dev/api/premium/report" EVM_PRIVATE_KEY="<private_key>" npm run x402:paid
+API_URL="https://crossfin.dev/api/premium/report" EVM_PRIVATE_KEY="<private_key>" npm run x402:paid
 ```
 
 If it succeeds, the script prints a `basescan=` link with the settlement transaction.

@@ -5,7 +5,7 @@ import { createPublicClient, http, formatEther, formatUnits } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 
-const API_URL = (process.env.API_URL || 'https://crossfin-api.bubilife.workers.dev/api/premium/enterprise').trim()
+const API_URL = (process.env.API_URL || 'https://crossfin.dev/api/premium/enterprise').trim()
 const RPC_URL = (process.env.RPC_URL || 'https://sepolia.base.org').trim()
 const USDC = (process.env.USDC_ADDRESS || '0x036CbD53842c5426634e7929541eC2318f3dCF7e').trim()
 const USDC_DECIMALS = Number(process.env.USDC_DECIMALS || '6')

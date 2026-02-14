@@ -16,7 +16,7 @@ function basescanLink(networkId, txHash) {
   return null
 }
 
-const API_URL = (process.env.API_URL || 'https://crossfin-api.bubilife.workers.dev/api/premium/enterprise').trim()
+const API_URL = (process.env.API_URL || 'https://crossfin.dev/api/premium/enterprise').trim()
 const EVM_PRIVATE_KEY = requireEnv('EVM_PRIVATE_KEY')
 const REQUEST_TIMEOUT_MS = Math.max(1000, Number(process.env.REQUEST_TIMEOUT_MS || '15000'))
 

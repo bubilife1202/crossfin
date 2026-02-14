@@ -1,7 +1,7 @@
 import './App.css'
 import LiveSignals from './components/LiveSignals'
 
-const API_BASE = 'https://crossfin-api.bubilife.workers.dev'
+const API_BASE = 'https://crossfin.dev'
 
 const ENDPOINTS = [
   {
@@ -216,7 +216,7 @@ function App() {
                 GitHub
               </a>
               <a
-                href={API_BASE}
+                href={`${API_BASE}/api/arbitrage/demo`}
                 target="_blank"
                 rel="noopener noreferrer"
               >

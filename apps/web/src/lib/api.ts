@@ -42,7 +42,15 @@ export type ArbitrageDemoResponse = {
 function apiBaseUrl(): string {
   const raw = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
   if (raw) return raw.replace(/\/$/, '')
-  return 'https://crossfin-api.bubilife.workers.dev'
+
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname
+    if (host === 'crossfin.dev' || host === 'www.crossfin.dev') {
+      return window.location.origin
+    }
+  }
+
+  return 'https://crossfin.dev'
 }
 
 export function getApiBaseUrl(): string {
