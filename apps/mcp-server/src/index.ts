@@ -306,5 +306,26 @@ server.registerTool(
   }
 )
 
+server.registerTool(
+  'get_guide',
+  {
+    title: 'Get CrossFin guide',
+    description:
+      'Get the complete CrossFin API guide — what services are available, how to search, pricing, x402 payment flow, and code examples',
+    inputSchema: z.object({}),
+  },
+  async (_params): Promise<CallToolResult> => {
+    try {
+      const data = await apiFetch<unknown>('/api/docs/guide')
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    } catch (e) {
+      return {
+        content: [{ type: 'text', text: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` }],
+        isError: true,
+      }
+    }
+  }
+)
+
 const transport = new StdioServerTransport()
 await server.connect(transport)

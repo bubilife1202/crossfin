@@ -20,6 +20,7 @@ Local MCP server that exposes a minimal agent ledger as tools.
 - `list_categories`
 - `get_kimchi_premium`
 - `get_analytics`
+- `get_guide`
 
 ## Run (dev)
 
