@@ -47,8 +47,233 @@ app.onError((err, c) => {
   return c.json({ error: 'Internal server error' }, 500)
 })
 
-app.get('/', (c) => c.json({ name: 'crossfin-api', version: '1.2.0', status: 'ok' }))
-app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '1.2.0', status: 'ok' }))
+app.get('/', (c) => c.json({ name: 'crossfin-api', version: '1.3.0', status: 'ok' }))
+app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '1.3.0', status: 'ok' }))
+
+app.get('/api/docs/guide', (c) => {
+  return c.json({
+    name: 'CrossFin Agent Guide',
+    version: '1.3.0',
+    overview: {
+      what: 'CrossFin is a service gateway for AI agents. Discover, compare, and call x402/REST services through a single API.',
+      services: 'Use GET /api/registry/stats for the current active service counts.',
+      payment: 'CrossFin services use x402 protocol — pay per API call with USDC on Base mainnet. No API key, no subscription.',
+      free: 'Registry search, categories, stats, and the arbitrage demo are all free.',
+    },
+    quickStart: {
+      step1: {
+        title: 'Search for services',
+        endpoint: 'GET /api/registry/search?q=crypto',
+        description: 'Search by keyword. Returns matching services with endpoint, price, and payment metadata.',
+        example: 'curl https://crossfin.dev/api/registry/search?q=korea',
+      },
+      step2: {
+        title: 'Get service details',
+        endpoint: 'GET /api/registry/{id}',
+        description: 'Get full details for a specific service including endpoint URL, pricing, inputSchema/outputExample, and (for CrossFin services) a guide field.',
+        example: 'curl https://crossfin.dev/api/registry/crossfin_kimchi_premium',
+      },
+      step3: {
+        title: 'Call the service',
+        description:
+          'Call the service endpoint directly. For x402 services, the first request returns HTTP 402 with payment details. Sign the payment and resend.',
+        freeExample: 'curl https://crossfin.dev/api/arbitrage/demo',
+        paidExample: 'Requires x402 client library — see x402Payment section below.',
+      },
+    },
+    freeEndpoints: [
+      { path: '/api/health', description: 'Health check' },
+      { path: '/api/registry/search?q=', description: 'Search services by keyword' },
+      { path: '/api/registry', description: 'List all services (filterable by category)' },
+      { path: '/api/registry/categories', description: 'List categories with counts' },
+      { path: '/api/registry/stats', description: 'Total service counts' },
+      { path: '/api/registry/{id}', description: 'Service details by ID' },
+      { path: '/api/arbitrage/demo', description: 'Free kimchi premium preview (top 3 pairs)' },
+      { path: '/api/analytics/overview', description: 'Gateway usage analytics' },
+      { path: '/api/stats', description: 'Agent/wallet/transaction counts' },
+      { path: '/api/openapi.json', description: 'OpenAPI 3.1 specification' },
+      { path: '/api/docs/guide', description: 'This guide' },
+    ],
+    crossfinServices: [
+      {
+        id: 'crossfin_kimchi_premium',
+        name: 'Kimchi Premium Index',
+        price: '$0.05',
+        description:
+          'Real-time price spread between Korean (Bithumb) and global (Binance) exchanges for 10+ crypto pairs.',
+      },
+      {
+        id: 'crossfin_kimchi_premium_history',
+        name: 'Kimchi Premium History',
+        price: '$0.05',
+        description: 'Hourly snapshots of kimchi premium data, up to 7 days lookback.',
+      },
+      {
+        id: 'crossfin_arbitrage_opportunities',
+        name: 'Arbitrage Opportunities',
+        price: '$0.10',
+        description: 'Pre-calculated profitable arbitrage routes with fees and risk scores.',
+      },
+      {
+        id: 'crossfin_bithumb_orderbook',
+        name: 'Bithumb Orderbook',
+        price: '$0.02',
+        description: 'Live 30-level orderbook depth from Bithumb for any KRW trading pair.',
+      },
+      {
+        id: 'crossfin_bithumb_volume',
+        name: 'Bithumb Volume Analysis',
+        price: '$0.03',
+        description: '24h volume distribution, concentration, and unusual volume detection.',
+      },
+      {
+        id: 'crossfin_korea_sentiment',
+        name: 'Korea Market Sentiment',
+        price: '$0.03',
+        description: 'Top gainers, losers, volume leaders on Bithumb with market mood indicator.',
+      },
+      {
+        id: 'crossfin_usdkrw',
+        name: 'USD/KRW Rate',
+        price: '$0.01',
+        description: 'Current USD to KRW exchange rate for converting Korean exchange prices.',
+      },
+      {
+        id: 'crossfin_upbit_ticker',
+        name: 'Upbit Ticker',
+        price: '$0.02',
+        description: 'Upbit spot ticker data for any KRW market pair.',
+      },
+      {
+        id: 'crossfin_upbit_orderbook',
+        name: 'Upbit Orderbook',
+        price: '$0.02',
+        description: 'Upbit orderbook snapshot for any KRW market pair.',
+      },
+      {
+        id: 'crossfin_upbit_signals',
+        name: 'Upbit Trading Signals',
+        price: '$0.05',
+        description: 'Momentum, volatility, and volume signals for major Upbit KRW markets.',
+      },
+      {
+        id: 'crossfin_coinone_ticker',
+        name: 'Coinone Ticker',
+        price: '$0.02',
+        description: 'Coinone spot ticker data for any KRW pair.',
+      },
+      {
+        id: 'crossfin_cross_exchange',
+        name: 'Cross-Exchange Comparison',
+        price: '$0.08',
+        description: 'Compare crypto prices across Bithumb, Upbit, Coinone, and Binance simultaneously.',
+      },
+      {
+        id: 'crossfin_korea_headlines',
+        name: 'Korea Headlines',
+        price: '$0.03',
+        description: 'Korean crypto/finance news headlines via Google News RSS feed.',
+      },
+    ],
+    x402Payment: {
+      protocol: 'x402 (HTTP 402 Payment Required)',
+      network: 'Base mainnet (eip155:8453)',
+      currency: 'USDC',
+      facilitator: 'Coinbase x402 facilitator',
+      flow: [
+        '1. Send GET request to paid endpoint',
+        '2. Receive HTTP 402 with PAYMENT-REQUIRED header containing payment details (base64 JSON)',
+        '3. Parse payment details (amount, recipient, network)',
+        '4. Sign USDC transfer with your wallet',
+        '5. Resend request with PAYMENT-SIGNATURE header',
+        '6. Receive paid response (HTTP 200)',
+      ],
+      libraries: {
+        javascript: '@x402/client',
+        python: 'x402-python (pip install x402)',
+      },
+      walletRequirement: 'You need a wallet with USDC on Base mainnet. Minimum $0.01 for cheapest endpoint.',
+      codeExamples: {
+        curl: "# Free endpoint (no payment)\ncurl https://crossfin.dev/api/arbitrage/demo\n\n# Inspect PAYMENT-REQUIRED header (paid endpoint)\ncurl -s -D - https://crossfin.dev/api/premium/arbitrage/kimchi -o /dev/null",
+        javascript: "import { payForResponse } from '@x402/client';\n\nconst response = await payForResponse(\n  'https://crossfin.dev/api/premium/arbitrage/kimchi',\n  { wallet: yourWallet }\n);",
+        python: "from x402 import pay_for_response\n\nresponse = pay_for_response(\n    'https://crossfin.dev/api/premium/arbitrage/kimchi',\n    wallet=your_wallet\n)",
+      },
+    },
+    mcpServer: {
+      description: 'CrossFin MCP server for Claude Desktop and other MCP clients.',
+      install: 'cd apps/mcp-server && npm install && npm run build',
+      tools: [
+        { name: 'search_services', description: 'Search the service registry by keyword' },
+        { name: 'list_services', description: 'List services with optional category filter' },
+        { name: 'get_service', description: 'Get details for a specific service' },
+        { name: 'list_categories', description: 'List all categories with counts' },
+        { name: 'get_kimchi_premium', description: 'Free kimchi premium preview' },
+        { name: 'get_analytics', description: 'Gateway usage analytics' },
+        { name: 'get_guide', description: 'Get the full CrossFin agent guide' },
+        { name: 'create_wallet', description: 'Create a wallet in local ledger' },
+        { name: 'get_balance', description: 'Check wallet balance' },
+        { name: 'transfer', description: 'Transfer funds between wallets' },
+        { name: 'list_transactions', description: 'List recent transactions' },
+        { name: 'set_budget', description: 'Set daily spend limit' },
+      ],
+      claudeDesktopConfig: {
+        mcpServers: {
+          crossfin: {
+            command: 'node',
+            args: ['/path/to/crossfin/apps/mcp-server/dist/index.js'],
+            env: {
+              CROSSFIN_API_URL: 'https://crossfin.dev',
+            },
+          },
+        },
+      },
+    },
+    links: {
+      website: 'https://crossfin.dev',
+      liveDemo: 'https://live.crossfin.dev',
+      github: 'https://github.com/bubilife1202/crossfin',
+      openapi: 'https://crossfin.dev/api/openapi.json',
+    },
+  })
+})
+
+app.get('/.well-known/crossfin.json', (c) => {
+  const origin = new URL(c.req.url).origin
+  return c.json({
+    name: 'CrossFin',
+    version: '1.3.0',
+    description: 'Agent-first directory and gateway for x402 services and Korean market data.',
+    urls: {
+      website: 'https://crossfin.dev',
+      origin,
+      openapi: `${origin}/api/openapi.json`,
+      guide: `${origin}/api/docs/guide`,
+      registry: `${origin}/api/registry`,
+      registrySearch: `${origin}/api/registry/search?q=`,
+    },
+    payment: {
+      protocol: 'x402',
+      network: 'eip155:8453',
+      currency: 'USDC',
+      note: 'Paid endpoints respond with HTTP 402 and a PAYMENT-REQUIRED header (base64 JSON).',
+    },
+    mcp: {
+      name: 'crossfin',
+      repo: 'https://github.com/bubilife1202/crossfin/tree/main/apps/mcp-server',
+      env: { CROSSFIN_API_URL: origin },
+      tools: [
+        'search_services',
+        'list_services',
+        'get_service',
+        'list_categories',
+        'get_kimchi_premium',
+        'get_analytics',
+        'get_guide',
+      ],
+    },
+    updatedAt: new Date().toISOString(),
+  })
+})
 
 // === OpenAPI Spec ===
 
@@ -57,7 +282,7 @@ app.get('/api/openapi.json', (c) => {
     openapi: '3.1.0',
     info: {
       title: 'CrossFin — x402 Agent Services Gateway (Korea)',
-      version: '1.2.0',
+      version: '1.3.0',
       description: 'Service registry + pay-per-request APIs for AI agents. Discover x402 services and access Korean market data. Payments via x402 protocol with USDC on Base mainnet.',
       contact: { url: 'https://crossfin.dev' },
       'x-logo': { url: 'https://crossfin.dev/logos/crossfin.png' },
@@ -70,6 +295,34 @@ app.get('/api/openapi.json', (c) => {
           summary: 'Health check',
           tags: ['Free'],
           responses: { '200': { description: 'API status', content: { 'application/json': { schema: { type: 'object', properties: { name: { type: 'string' }, version: { type: 'string' }, status: { type: 'string' } } } } } } },
+        },
+      },
+      '/api/docs/guide': {
+        get: {
+          operationId: 'agentGuide',
+          summary: 'CrossFin agent onboarding guide',
+          description: 'Structured JSON guide for AI agents: how to search services, pricing, x402 payment flow, and MCP usage.',
+          tags: ['Free'],
+          responses: {
+            '200': {
+              description: 'Agent guide (JSON)',
+              content: { 'application/json': { schema: { type: 'object' } } },
+            },
+          },
+        },
+      },
+      '/.well-known/crossfin.json': {
+        get: {
+          operationId: 'crossfinWellKnown',
+          summary: 'CrossFin discovery metadata',
+          description: 'Well-known discovery endpoint for agents to find CrossFin registry + OpenAPI + guide links.',
+          tags: ['Free'],
+          responses: {
+            '200': {
+              description: 'Discovery metadata (JSON)',
+              content: { 'application/json': { schema: { type: 'object' } } },
+            },
+          },
         },
       },
       '/api/arbitrage/demo': {
@@ -899,6 +1152,376 @@ type ServiceSeed = Omit<RegistryService, 'isCrossfin' | 'createdAt' | 'updatedAt
   isCrossfin?: boolean
 }
 
+type ServiceGuide = {
+  whatItDoes: string
+  whenToUse: string[]
+  howToCall: string[]
+  exampleCurl: string
+  notes?: string[]
+  relatedServiceIds?: string[]
+}
+
+type RegistryServiceResponse = RegistryService & { guide?: ServiceGuide }
+
+type CrossfinRuntimeDocs = {
+  guide: ServiceGuide
+  inputSchema: unknown
+  outputExample: unknown
+}
+
+const CROSSFIN_RUNTIME_DOCS: Record<string, CrossfinRuntimeDocs> = {
+  crossfin_kimchi_premium: {
+    guide: {
+      whatItDoes: 'Real-time Kimchi Premium index: price spread between Korean exchange (Bithumb) and global exchange (Binance) across 10+ pairs.',
+      whenToUse: [
+        'Detect Korea-vs-global mispricing (kimchi premium) in real time',
+        'Build Korea market sentiment signals or arbitrage monitors',
+        'Use as an input feature for trading/risk models',
+      ],
+      howToCall: [
+        'Send GET request to the endpoint',
+        'Handle HTTP 402 (x402 payment required) and pay with USDC on Base',
+        'Retry with PAYMENT-SIGNATURE header to receive data',
+      ],
+      exampleCurl: 'curl -s -D - https://crossfin.dev/api/premium/arbitrage/kimchi -o /dev/null',
+      notes: ['Cheapest way to preview is GET /api/arbitrage/demo (free, top 3 pairs).'],
+      relatedServiceIds: ['crossfin_arbitrage_opportunities', 'crossfin_cross_exchange', 'crossfin_usdkrw'],
+    },
+    inputSchema: {
+      type: 'http',
+      method: 'GET',
+      query: {},
+    },
+    outputExample: {
+      paid: true,
+      service: 'crossfin-kimchi-premium',
+      krwUsdRate: 1450,
+      pairsTracked: 12,
+      avgPremiumPct: 2.15,
+      topPremium: { coin: 'XRP', premiumPct: 4.12 },
+      premiums: [
+        {
+          coin: 'BTC',
+          bithumbKrw: 145000000,
+          bithumbUsd: 100000,
+          binanceUsd: 97850,
+          premiumPct: 2.2,
+          volume24hUsd: 5000000,
+          change24hPct: 1.1,
+        },
+      ],
+      at: '2026-02-15T00:00:00.000Z',
+    },
+  },
+  crossfin_kimchi_premium_history: {
+    guide: {
+      whatItDoes: 'Hourly historical snapshots of kimchi premium captured by CrossFin cron (up to 7 days lookback).',
+      whenToUse: [
+        'Backtest kimchi premium strategies',
+        'Compute moving averages/volatility of premium',
+        'Compare premium regimes across coins',
+      ],
+      howToCall: [
+        'Send GET request with optional coin/hours query params',
+        'Pay via x402 if HTTP 402 is returned',
+        'Use the returned snapshots array for analysis',
+      ],
+      exampleCurl: 'curl -s -D - "https://crossfin.dev/api/premium/arbitrage/kimchi/history?hours=24" -o /dev/null',
+      notes: ['hours defaults to 24, max 168. coin is optional (e.g. BTC, ETH).'],
+      relatedServiceIds: ['crossfin_kimchi_premium'],
+    },
+    inputSchema: {
+      type: 'http',
+      method: 'GET',
+      query: {
+        coin: { type: 'string', required: false, example: 'BTC', description: 'Optional coin filter (BTC, ETH, XRP...)' },
+        hours: { type: 'integer', required: false, example: 24, description: 'Lookback window in hours (max 168)' },
+      },
+    },
+    outputExample: {
+      paid: true,
+      service: 'crossfin-kimchi-history',
+      coin: 'BTC',
+      hours: 24,
+      groupedBy: 'hour',
+      snapshots: [{ at: '2026-02-15T00:00:00.000Z', avgPremiumPct: 2.1 }],
+      count: 24,
+      at: '2026-02-15T00:00:00.000Z',
+    },
+  },
+  crossfin_arbitrage_opportunities: {
+    guide: {
+      whatItDoes: 'Pre-calculated profitable arbitrage routes between Korean and global exchanges with fee assumptions and risk scoring.',
+      whenToUse: [
+        'Find best routes to exploit kimchi premium with fees considered',
+        'Generate ranked opportunities list for execution bots',
+        'Monitor market stress (risk score shifts) across routes',
+      ],
+      howToCall: [
+        'Send GET request',
+        'Pay via x402 if HTTP 402 is returned',
+        'Read opportunities[] sorted by net profitability',
+      ],
+      exampleCurl: 'curl -s -D - https://crossfin.dev/api/premium/arbitrage/opportunities -o /dev/null',
+      relatedServiceIds: ['crossfin_kimchi_premium', 'crossfin_cross_exchange'],
+    },
+    inputSchema: { type: 'http', method: 'GET', query: {} },
+    outputExample: {
+      paid: true,
+      service: 'crossfin-arbitrage-opportunities',
+      totalOpportunities: 24,
+      profitableCount: 8,
+      bestOpportunity: { coin: 'XRP', netProfitPct: 1.2, direction: 'Buy global, sell Korea' },
+      opportunities: [{ coin: 'XRP', netProfitPct: 1.2, grossPremiumPct: 2.3, estimatedFeesPct: 1.1, riskScore: 'medium' }],
+      at: '2026-02-15T00:00:00.000Z',
+    },
+  },
+  crossfin_bithumb_orderbook: {
+    guide: {
+      whatItDoes: 'Live 30-level orderbook depth from Bithumb (KRW market), including spread metrics and USD conversions.',
+      whenToUse: [
+        'Estimate slippage and liquidity for a KRW pair on Bithumb',
+        'Compute cross-exchange execution costs',
+        'Drive market-making/hedging strategies',
+      ],
+      howToCall: [
+        'Send GET with pair= (e.g. BTC, ETH)',
+        'Pay via x402 if HTTP 402 is returned',
+        'Use depth.bids/asks for execution models',
+      ],
+      exampleCurl: 'curl -s -D - "https://crossfin.dev/api/premium/bithumb/orderbook?pair=BTC" -o /dev/null',
+      notes: ['pair is KRW market symbol (BTC, ETH, XRP...).'],
+      relatedServiceIds: ['crossfin_kimchi_premium', 'crossfin_cross_exchange'],
+    },
+    inputSchema: {
+      type: 'http',
+      method: 'GET',
+      query: { pair: { type: 'string', required: true, example: 'BTC', description: 'KRW trading pair symbol' } },
+    },
+    outputExample: {
+      paid: true,
+      service: 'crossfin-bithumb-orderbook',
+      pair: 'BTC',
+      exchange: 'bithumb',
+      bestBidKrw: 145000000,
+      bestAskKrw: 145100000,
+      spreadKrw: 100000,
+      spreadPct: 0.07,
+      depth: { bids: [{ price: '145000000', quantity: '0.12' }], asks: [{ price: '145100000', quantity: '0.10' }] },
+      at: '2026-02-15T00:00:00.000Z',
+    },
+  },
+  crossfin_bithumb_volume: {
+    guide: {
+      whatItDoes: 'Bithumb-wide 24h volume analysis: top coins, volume concentration, unusual volume detection, and USD conversions.',
+      whenToUse: [
+        'Detect attention rotation in Korean markets',
+        'Spot unusually active coins for momentum scans',
+        'Estimate market-wide liquidity on Bithumb',
+      ],
+      howToCall: [
+        'Send GET request',
+        'Pay via x402 if HTTP 402 is returned',
+        'Use unusualVolume/topByVolume for signals',
+      ],
+      exampleCurl: 'curl -s -D - https://crossfin.dev/api/premium/bithumb/volume-analysis -o /dev/null',
+      relatedServiceIds: ['crossfin_korea_sentiment', 'crossfin_upbit_signals'],
+    },
+    inputSchema: { type: 'http', method: 'GET', query: {} },
+    outputExample: {
+      paid: true,
+      service: 'crossfin-bithumb-volume-analysis',
+      totalVolume24hUsd: 123456789,
+      totalCoins: 200,
+      volumeConcentration: { top5Pct: 42.1, top5Coins: [{ coin: 'BTC', pct: 12.3 }] },
+      unusualVolume: [{ coin: 'XRP', score: 2.1 }],
+      topByVolume: [{ coin: 'BTC', volume24hUsd: 50000000 }],
+      at: '2026-02-15T00:00:00.000Z',
+    },
+  },
+  crossfin_korea_sentiment: {
+    guide: {
+      whatItDoes: 'Korean market sentiment snapshot from Bithumb: top gainers/losers, volume leaders, and a mood indicator.',
+      whenToUse: [
+        'Quickly gauge market mood (bullish/bearish/neutral) in Korea',
+        'Generate watchlists for movers and liquidity',
+        'Augment global crypto sentiment with Korea-specific view',
+      ],
+      howToCall: [
+        'Send GET request',
+        'Pay via x402 if HTTP 402 is returned',
+        'Use movers and volume leaders to build alerts',
+      ],
+      exampleCurl: 'curl -s -D - https://crossfin.dev/api/premium/market/korea -o /dev/null',
+      relatedServiceIds: ['crossfin_bithumb_volume', 'crossfin_kimchi_premium'],
+    },
+    inputSchema: { type: 'http', method: 'GET', query: {} },
+    outputExample: {
+      paid: true,
+      service: 'crossfin-korea-market',
+      mood: 'neutral',
+      gainers: [{ coin: 'XRP', change24hPct: 8.1 }],
+      losers: [{ coin: 'ADA', change24hPct: -6.2 }],
+      volumeLeaders: [{ coin: 'BTC', volume24hUsd: 50000000 }],
+      at: '2026-02-15T00:00:00.000Z',
+    },
+  },
+  crossfin_usdkrw: {
+    guide: {
+      whatItDoes: 'USD/KRW exchange rate used across CrossFin for converting KRW-denominated exchange prices into USD.',
+      whenToUse: [
+        'Convert KRW price feeds into USD',
+        'Compute premiums in USD terms',
+        'Normalize Korean exchange metrics with global markets',
+      ],
+      howToCall: [
+        'Send GET request',
+        'Pay via x402 if HTTP 402 is returned',
+        'Use usdKrw value in downstream calculations',
+      ],
+      exampleCurl: 'curl -s -D - https://crossfin.dev/api/premium/market/fx/usdkrw -o /dev/null',
+      relatedServiceIds: ['crossfin_kimchi_premium', 'crossfin_cross_exchange'],
+    },
+    inputSchema: { type: 'http', method: 'GET', query: {} },
+    outputExample: { paid: true, service: 'crossfin-usdkrw', usdKrw: 1375.23, at: '2026-02-15T00:00:00.000Z' },
+  },
+  crossfin_upbit_ticker: {
+    guide: {
+      whatItDoes: 'Upbit spot ticker for a KRW market symbol (e.g. KRW-BTC).',
+      whenToUse: [
+        'Fetch Upbit last trade price and 24h change for KRW markets',
+        'Compare Upbit vs Bithumb vs global exchanges',
+        'Drive KRW market alerts',
+      ],
+      howToCall: [
+        'Send GET with market= (e.g. KRW-BTC)',
+        'Pay via x402 if HTTP 402 is returned',
+        'Read price/change/volume fields',
+      ],
+      exampleCurl: 'curl -s -D - "https://crossfin.dev/api/premium/market/upbit/ticker?market=KRW-BTC" -o /dev/null',
+      relatedServiceIds: ['crossfin_cross_exchange', 'crossfin_usdkrw'],
+    },
+    inputSchema: {
+      type: 'http',
+      method: 'GET',
+      query: { market: { type: 'string', required: true, example: 'KRW-BTC', description: 'Upbit market symbol' } },
+    },
+    outputExample: { paid: true, service: 'crossfin-upbit-ticker', market: 'KRW-BTC', tradePriceKrw: 123456789, change24hPct: 1.2, at: '2026-02-15T00:00:00.000Z' },
+  },
+  crossfin_upbit_orderbook: {
+    guide: {
+      whatItDoes: 'Upbit orderbook snapshot for a KRW market symbol (e.g. KRW-BTC).',
+      whenToUse: [
+        'Estimate Upbit liquidity and spread',
+        'Compare depth vs Bithumb',
+        'Compute execution-aware signals',
+      ],
+      howToCall: [
+        'Send GET with market= (e.g. KRW-BTC)',
+        'Pay via x402 if HTTP 402 is returned',
+        'Use units[] for depth calculations',
+      ],
+      exampleCurl: 'curl -s -D - "https://crossfin.dev/api/premium/market/upbit/orderbook?market=KRW-BTC" -o /dev/null',
+      relatedServiceIds: ['crossfin_upbit_ticker', 'crossfin_bithumb_orderbook'],
+    },
+    inputSchema: {
+      type: 'http',
+      method: 'GET',
+      query: { market: { type: 'string', required: true, example: 'KRW-BTC', description: 'Upbit market symbol' } },
+    },
+    outputExample: { paid: true, service: 'crossfin-upbit-orderbook', market: 'KRW-BTC', units: [{ bidPrice: 123, bidSize: 0.5, askPrice: 124, askSize: 0.4 }], at: '2026-02-15T00:00:00.000Z' },
+  },
+  crossfin_upbit_signals: {
+    guide: {
+      whatItDoes: 'Trading signals for major Upbit KRW markets using momentum, volatility, and relative volume features.',
+      whenToUse: [
+        'Run a lightweight momentum/volatility scan for KRW markets',
+        'Rank markets for potential breakout or mean reversion',
+        'Drive alerting and watchlist generation',
+      ],
+      howToCall: [
+        'Send GET request',
+        'Pay via x402 if HTTP 402 is returned',
+        'Use signals[] for per-market features and combined call',
+      ],
+      exampleCurl: 'curl -s -D - https://crossfin.dev/api/premium/market/upbit/signals -o /dev/null',
+      relatedServiceIds: ['crossfin_upbit_ticker', 'crossfin_bithumb_volume'],
+    },
+    inputSchema: { type: 'http', method: 'GET', query: {} },
+    outputExample: { paid: true, service: 'crossfin-upbit-signals', signals: [{ market: 'KRW-BTC', momentum: 'neutral', volume: 'high', volatility: 'medium', call: 'neutral' }], at: '2026-02-15T00:00:00.000Z' },
+  },
+  crossfin_coinone_ticker: {
+    guide: {
+      whatItDoes: 'Coinone spot ticker for a given currency symbol (e.g. BTC).',
+      whenToUse: [
+        'Fetch Coinone KRW market price for a coin',
+        'Triangulate Korea pricing across exchanges',
+        'Build exchange comparison dashboards',
+      ],
+      howToCall: [
+        'Send GET with currency= (e.g. BTC)',
+        'Pay via x402 if HTTP 402 is returned',
+        'Read price and volume fields',
+      ],
+      exampleCurl: 'curl -s -D - "https://crossfin.dev/api/premium/market/coinone/ticker?currency=BTC" -o /dev/null',
+      relatedServiceIds: ['crossfin_cross_exchange', 'crossfin_usdkrw'],
+    },
+    inputSchema: { type: 'http', method: 'GET', query: { currency: { type: 'string', required: true, example: 'BTC', description: 'Coinone currency symbol' } } },
+    outputExample: { paid: true, service: 'crossfin-coinone-ticker', currency: 'BTC', lastKrw: 123456789, change24hPct: 0.8, at: '2026-02-15T00:00:00.000Z' },
+  },
+  crossfin_cross_exchange: {
+    guide: {
+      whatItDoes: 'Compare crypto prices across Bithumb, Upbit, Coinone, and Binance in one response. Includes premiums per exchange.',
+      whenToUse: [
+        'Compare KRW prices vs global USD prices across exchanges',
+        'Identify domestic vs global dislocations by exchange',
+        'Generate an exchange-aware kimchi premium view',
+      ],
+      howToCall: [
+        'Send GET request',
+        'Pay via x402 if HTTP 402 is returned',
+        'Use comparison[] to compute per-exchange spreads',
+      ],
+      exampleCurl: 'curl -s -D - https://crossfin.dev/api/premium/market/cross-exchange -o /dev/null',
+      relatedServiceIds: ['crossfin_kimchi_premium', 'crossfin_usdkrw'],
+    },
+    inputSchema: { type: 'http', method: 'GET', query: {} },
+    outputExample: { paid: true, service: 'crossfin-cross-exchange', comparisons: [{ coin: 'BTC', bithumbKrw: 1, upbitKrw: 1, coinoneKrw: 1, binanceUsd: 1, premiumPctBithumb: 2.1 }], at: '2026-02-15T00:00:00.000Z' },
+  },
+  crossfin_korea_headlines: {
+    guide: {
+      whatItDoes: 'Korean headlines feed (Google News RSS) for market context. Returns a list of recent headlines with publishers and links.',
+      whenToUse: [
+        'Add Korea news context to trading/analysis agents',
+        'Run keyword monitoring and summarization pipelines',
+        'Correlate market moves with headline bursts',
+      ],
+      howToCall: [
+        'Send GET request',
+        'Pay via x402 if HTTP 402 is returned',
+        'Use items[] as input to summarizers or alerting',
+      ],
+      exampleCurl: 'curl -s -D - https://crossfin.dev/api/premium/news/korea/headlines -o /dev/null',
+      notes: ['This endpoint parses RSS and may occasionally omit fields if the feed changes.'],
+      relatedServiceIds: ['crossfin_kimchi_premium'],
+    },
+    inputSchema: { type: 'http', method: 'GET', query: { limit: { type: 'integer', required: false, example: 20, description: 'Max items (1..50). Default 20.' } } },
+    outputExample: { paid: true, service: 'crossfin-korea-headlines', items: [{ title: 'Korean market headline', publisher: 'Example', link: 'https://news.google.com/...', publishedAt: '2026-02-15T00:00:00.000Z' }], at: '2026-02-15T00:00:00.000Z' },
+  },
+}
+
+function applyCrossfinDocs(service: RegistryService): RegistryServiceResponse {
+  if (!service.isCrossfin) return service
+  const docs = CROSSFIN_RUNTIME_DOCS[service.id]
+  if (!docs) return service
+  return {
+    ...service,
+    guide: docs.guide,
+    inputSchema: docs.inputSchema,
+    outputExample: docs.outputExample,
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
@@ -998,20 +1621,33 @@ async function fetchX402EngineSeeds(): Promise<ServiceSeed[]> {
       const endpoint = typeof item.endpoint === 'string' ? item.endpoint : ''
       if (!id || !name || !price || !endpoint) continue
 
+      const rawCat = String(cat)
+      const isKnownDead =
+        rawCat === 'compute' ||
+        id.startsWith('image') ||
+        id.startsWith('code') ||
+        id.startsWith('audio') ||
+        id.startsWith('llm') ||
+        id.startsWith('wallet') ||
+        id.startsWith('tx-') ||
+        id === 'token-prices' ||
+        id === 'ipfs-pin'
+      const status: ServiceStatus = isKnownDead ? 'disabled' : 'active'
+
       seeds.push({
         id: `x402engine_${id}`,
         name,
         description: null,
         provider: 'x402engine',
-        category: `x402engine:${cat}`,
+        category: `x402engine:${rawCat}`,
         endpoint,
         method: 'UNKNOWN',
         price,
         currency,
         network,
         payTo: null,
-        status: 'active',
-        tags: ['x402', 'external', 'x402engine', cat],
+        status,
+        tags: ['x402', 'external', 'x402engine', rawCat],
       })
     }
   }
@@ -1019,7 +1655,95 @@ async function fetchX402EngineSeeds(): Promise<ServiceSeed[]> {
   return seeds
 }
 
-async function ensureRegistrySeeded(db: D1Database, receiverAddress: string): Promise<void> {
+async function fetchEinsteinAiSeeds(): Promise<ServiceSeed[]> {
+  const url = 'https://emc2ai.io/.well-known/x402.json'
+  const res = await fetch(url, { headers: { 'User-Agent': 'crossfin-registry-seed/1.0' } })
+  if (!res.ok) return []
+
+  const json: unknown = await res.json()
+  if (!isRecord(json)) return []
+
+  const endpoints = isRecord(json.endpoints) ? json.endpoints : null
+  const baseUrlRaw = endpoints && typeof endpoints.base === 'string' ? endpoints.base.trim() : ''
+  if (!baseUrlRaw) return []
+
+  let origin = 'https://emc2ai.io'
+  try {
+    origin = new URL(baseUrlRaw).origin
+  } catch {
+    origin = 'https://emc2ai.io'
+  }
+
+  const services = Array.isArray(json.services) ? json.services : []
+
+  function toIdPart(value: string): string {
+    return value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+/, '')
+      .replace(/_+$/, '')
+      .slice(0, 120)
+  }
+
+  function titleFromPath(path: string): string {
+    const parts = path.split('/').filter(Boolean)
+    const tail = parts.slice(-2).join(' ')
+    const friendly = (tail || parts.slice(-1)[0] || path).replace(/-/g, ' ').trim()
+    return friendly ? `Einstein AI ${friendly}` : 'Einstein AI Service'
+  }
+
+  const seeds: ServiceSeed[] = []
+  for (const item of services) {
+    if (!isRecord(item)) continue
+    const path = typeof item.path === 'string' ? item.path.trim() : ''
+    const method = typeof item.method === 'string' ? item.method.trim() : 'UNKNOWN'
+    const description = typeof item.description === 'string' ? item.description.trim() : null
+    const cat = typeof item.category === 'string' ? item.category.trim() : 'other'
+
+    const pricing = isRecord(item.pricing) ? item.pricing : null
+    const asset = pricing && typeof pricing.asset === 'string' ? pricing.asset.trim() : 'USDC'
+    const amount = pricing && typeof pricing.amount === 'string' ? pricing.amount.trim() : ''
+    const network = pricing && typeof pricing.network === 'string' ? pricing.network.trim() : 'eip155:8453'
+
+    if (!path) continue
+
+    const endpoint = path.startsWith('http')
+      ? path
+      : path.startsWith('/')
+          ? `${origin}${path}`
+          : `${baseUrlRaw.replace(/\/$/, '')}/${path}`
+
+    const tags = Array.isArray(item.tags) ? item.tags.filter((t): t is string => typeof t === 'string') : []
+    const idPart = toIdPart(path)
+    const id = idPart ? `einstein_${idPart}` : `einstein_${crypto.randomUUID()}`
+    const name = titleFromPath(path)
+    const price = amount ? `$${amount}` : '$0.01+'
+
+    seeds.push({
+      id,
+      name,
+      description,
+      provider: 'einstein-ai',
+      category: `einstein:${cat || 'other'}`,
+      endpoint,
+      method,
+      price,
+      currency: asset || 'USDC',
+      network: network || null,
+      payTo: null,
+      status: 'active',
+      tags: ['x402', 'external', 'einstein', ...tags],
+    })
+  }
+
+  return seeds
+}
+
+async function ensureRegistrySeeded(
+  db: D1Database,
+  receiverAddress: string,
+  input?: { force?: boolean }
+): Promise<void> {
   let row: { count: number | string } | null
   try {
     row = await db.prepare('SELECT COUNT(*) as count FROM services').first<{ count: number | string }>()
@@ -1028,7 +1752,7 @@ async function ensureRegistrySeeded(db: D1Database, receiverAddress: string): Pr
   }
 
   const count = row ? Number(row.count) : 0
-  if (Number.isFinite(count) && count > 0) return
+  if (!input?.force && Number.isFinite(count) && count > 0) return
 
   const crossfinSeeds: ServiceSeed[] = [
     {
@@ -2090,7 +2814,15 @@ async function ensureRegistrySeeded(db: D1Database, receiverAddress: string): Pr
   ]
 
   const x402engineSeeds = await fetchX402EngineSeeds()
-  const allSeeds = [...crossfinSeeds, ...externalSeeds, ...x402engineSeeds]
+  const einsteinSeeds = await fetchEinsteinAiSeeds()
+
+  const disabledSeedProviders = new Set(['ouchanip', 'snack.money', 'firecrawl'])
+  const normalizedExternalSeeds = externalSeeds.map((seed) => {
+    if (!disabledSeedProviders.has(seed.provider)) return seed
+    return { ...seed, status: 'disabled' }
+  })
+
+  const allSeeds = [...crossfinSeeds, ...normalizedExternalSeeds, ...x402engineSeeds, ...einsteinSeeds]
 
   const statements = allSeeds.map((seed) => {
     const tags = seed.tags ? JSON.stringify(seed.tags) : null
@@ -2166,7 +2898,7 @@ app.get('/api/registry', async (c) => {
   ).bind(...params, limit, offset).all<Record<string, unknown>>()
 
   return c.json({
-    data: (results ?? []).map(mapServiceRow),
+    data: (results ?? []).map((row) => applyCrossfinDocs(mapServiceRow(row))),
     total: countRow ? Number(countRow.count) : 0,
     limit,
     offset,
@@ -2199,7 +2931,7 @@ app.get('/api/registry/search', async (c) => {
 
   return c.json({
     q: qRaw,
-    data: (results ?? []).map(mapServiceRow),
+    data: (results ?? []).map((row) => applyCrossfinDocs(mapServiceRow(row))),
     total: countRow ? Number(countRow.count) : 0,
     limit,
     offset,
@@ -2243,6 +2975,40 @@ app.get('/api/registry/stats', async (c) => {
   })
 })
 
+app.get('/api/registry/sync', async (c) => {
+  const confirm = (c.req.query('confirm') ?? '').trim().toLowerCase()
+  if (confirm !== 'yes') {
+    throw new HTTPException(400, { message: 'Add ?confirm=yes to sync new registry seeds (insert-only)' })
+  }
+
+  const before = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT COUNT(*) as count FROM services'),
+    c.env.DB.prepare("SELECT COUNT(*) as count FROM services WHERE status = 'active'"),
+  ])
+
+  await ensureRegistrySeeded(c.env.DB, c.env.PAYMENT_RECEIVER_ADDRESS, { force: true })
+
+  const after = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT COUNT(*) as count FROM services'),
+    c.env.DB.prepare("SELECT COUNT(*) as count FROM services WHERE status = 'active'"),
+  ])
+
+  const beforeTotal = Number(((before[0]?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0))
+  const beforeActive = Number(((before[1]?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0))
+  const afterTotal = Number(((after[0]?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0))
+  const afterActive = Number(((after[1]?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0))
+
+  return c.json({
+    ok: true,
+    services: {
+      before: { total: beforeTotal, active: beforeActive },
+      after: { total: afterTotal, active: afterActive },
+      added: { total: Math.max(0, afterTotal - beforeTotal), active: Math.max(0, afterActive - beforeActive) },
+    },
+    at: new Date().toISOString(),
+  })
+})
+
 app.get('/api/registry/reseed', async (c) => {
   const confirm = (c.req.query('confirm') ?? '').trim().toLowerCase()
   if (confirm !== 'yes') {
@@ -2272,7 +3038,7 @@ app.get('/api/registry/:id', async (c) => {
 
   if (!row) throw new HTTPException(404, { message: 'Service not found' })
 
-  return c.json({ data: mapServiceRow(row) })
+  return c.json({ data: applyCrossfinDocs(mapServiceRow(row)) })
 })
 
 app.post('/api/registry', agentAuth, async (c) => {
@@ -2340,7 +3106,7 @@ app.post('/api/registry', agentAuth, async (c) => {
   await audit(c.env.DB, agentId, 'service.create', 'services', id, 'success')
 
   const created = await c.env.DB.prepare('SELECT * FROM services WHERE id = ?').bind(id).first<Record<string, unknown>>()
-  return c.json({ data: created ? mapServiceRow(created) : { id } }, 201)
+  return c.json({ data: created ? applyCrossfinDocs(mapServiceRow(created)) : { id } }, 201)
 })
 
 async function proxyToService(c: Context<Env>, method: 'GET' | 'POST'): Promise<Response> {
@@ -2503,7 +3269,7 @@ app.get('/api/analytics/services/:serviceId', async (c) => {
     : Math.round(Number(statsRow.avgResponseTimeMs))
 
   return c.json({
-    service: mapServiceRow(row),
+    service: applyCrossfinDocs(mapServiceRow(row)),
     stats: {
       totalCalls,
       successRate,
@@ -3276,7 +4042,9 @@ app.get('/api/premium/news/korea/headlines', async (c) => {
   const items: Array<{ title: string; publisher: string | null; link: string; publishedAt: string }> = []
   const re = /<item>([\s\S]*?)<\/item>/g
   let match: RegExpExecArray | null
-  while ((match = re.exec(xml)) && items.length < limit) {
+  while (items.length < limit) {
+    match = re.exec(xml)
+    if (!match) break
     const block = match[1] ?? ''
     const rawTitle = extractXmlTag(block, 'title')
     const link = extractXmlTag(block, 'link')
