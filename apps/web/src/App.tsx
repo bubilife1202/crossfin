@@ -298,7 +298,7 @@ function App() {
     <div className="page">
       <header className="topbar">
         <div className="topbarInner">
-          <div className="brand">CrossFin</div>
+          <a href="#" className="brand" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>CrossFin</a>
           <nav className="nav">
             <a href="#activity">Activity</a>
             <a href="#services">Services</a>

@@ -32,6 +32,9 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   font-size: 1.05rem;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
 }
 
 .nav {

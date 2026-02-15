@@ -8,21 +8,48 @@ const REFRESH_INTERVAL = 15_000;
 
 interface ArbitragePair {
   coin: string;
-  premium_pct: number;
+  premiumPct: number;
   direction: string;
-  status?: string;
+}
+
+interface ArbitrageRaw {
+  demo: boolean;
+  avgPremiumPct: number;
+  preview: ArbitragePair[];
+  at: string;
 }
 
 interface ArbitrageData {
   average_premium: number;
   pairs: ArbitragePair[];
-  timestamp?: string;
+}
+
+interface RegistryStatsRaw {
+  services: { total: number; crossfin: number; external: number };
 }
 
 interface RegistryStats {
   total: number;
   crossfin: number;
   external: number;
+}
+
+interface RecentCallRaw {
+  serviceName: string;
+  status: string;
+  responseTimeMs: number | null;
+  createdAt: string;
+}
+
+interface TopServiceRaw {
+  serviceName: string;
+  calls: number;
+}
+
+interface AnalyticsRaw {
+  totalCalls: number;
+  topServices: TopServiceRaw[];
+  recentCalls: RecentCallRaw[];
 }
 
 interface RecentCall {
@@ -52,6 +79,20 @@ interface FxData {
   rates: Record<string, number>;
 }
 
+/* ─── Helpers ─── */
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 0) return "just now";
+  const secs = Math.floor(diff / 1000);
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
 /* ─── Fetch helpers ─── */
 
 async function fetchJson<T>(url: string): Promise<T | null> {
@@ -79,9 +120,9 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     const results = await Promise.allSettled([
-      fetchJson<ArbitrageData>(`${API}/api/arbitrage/demo`),
-      fetchJson<RegistryStats>(`${API}/api/registry/stats`),
-      fetchJson<AnalyticsOverview>(`${API}/api/analytics/overview`),
+      fetchJson<ArbitrageRaw>(`${API}/api/arbitrage/demo`),
+      fetchJson<RegistryStatsRaw>(`${API}/api/registry/stats`),
+      fetchJson<AnalyticsRaw>(`${API}/api/analytics/overview`),
       fetchJson<HealthData>(`${API}/api/health`),
       fetchJson<FxData>("https://open.er-api.com/v6/latest/USD"),
     ]);
@@ -90,13 +131,44 @@ export default function App() {
       r.status === "fulfilled" ? r.value : null,
     );
 
-    const [arbVal, statsVal, analyticsVal, healthVal, fxVal] = vals as [
-      ArbitrageData | null,
-      RegistryStats | null,
-      AnalyticsOverview | null,
+    const [arbRaw, statsRaw, analyticsRaw, healthVal, fxVal] = vals as [
+      ArbitrageRaw | null,
+      RegistryStatsRaw | null,
+      AnalyticsRaw | null,
       HealthData | null,
       FxData | null,
     ];
+
+    const arbVal: ArbitrageData | null = arbRaw
+      ? {
+          average_premium: arbRaw.avgPremiumPct ?? 0,
+          pairs: (arbRaw.preview ?? []).map((p) => ({
+            coin: p.coin,
+            premiumPct: p.premiumPct,
+            direction: p.direction ?? (p.premiumPct >= 0 ? "Korea premium" : "Korea discount"),
+          })),
+        }
+      : null;
+
+    const statsVal: RegistryStats | null = statsRaw?.services
+      ? statsRaw.services
+      : null;
+
+    const analyticsVal: AnalyticsOverview | null = analyticsRaw
+      ? {
+          totalCalls: analyticsRaw.totalCalls ?? 0,
+          topServices: (analyticsRaw.topServices ?? []).map((s) => ({
+            name: s.serviceName ?? "Unknown",
+            calls: Number(s.calls ?? 0),
+          })),
+          recentCalls: (analyticsRaw.recentCalls ?? []).map((c) => ({
+            service: c.serviceName ?? "Unknown",
+            status: c.status ?? "unknown",
+            responseTime: Number(c.responseTimeMs ?? 0),
+            when: c.createdAt ? timeAgo(c.createdAt) : "—",
+          })),
+        }
+      : null;
 
     setArb(arbVal);
     setStats(statsVal);
@@ -227,10 +299,10 @@ export default function App() {
                   <tr key={p.coin} className="fadeIn">
                     <td className="coinCell">{p.coin}</td>
                     <td
-                      className={`pctCell ${p.premium_pct >= 0 ? "positive" : "negative"}`}
+                      className={`pctCell ${p.premiumPct >= 0 ? "positive" : "negative"}`}
                     >
-                      {p.premium_pct >= 0 ? "+" : ""}
-                      {p.premium_pct.toFixed(3)}%
+                      {p.premiumPct >= 0 ? "+" : ""}
+                      {p.premiumPct.toFixed(3)}%
                     </td>
                     <td className="dirCell">{p.direction}</td>
                     <td>
