@@ -145,25 +145,36 @@ curl https://crossfin.dev/api/premium/market/fx/usdkrw
 ### Pay with x402 (JavaScript)
 
 ```javascript
-import { payForResponse } from '@x402/client';
+import { x402Client, wrapFetchWithPayment } from '@x402/fetch';
+import { registerExactEvmScheme } from '@x402/evm/exact/client';
+import { privateKeyToAccount } from 'viem/accounts';
 
-const response = await payForResponse(
-  'https://crossfin.dev/api/premium/arbitrage/kimchi',
-  { wallet: yourWallet }
-);
-console.log(await response.json());
+const signer = privateKeyToAccount(process.env.EVM_PRIVATE_KEY);
+const client = new x402Client();
+registerExactEvmScheme(client, { signer });
+
+const paidFetch = wrapFetchWithPayment(fetch, client);
+const res = await paidFetch('https://crossfin.dev/api/premium/arbitrage/kimchi', { method: 'GET' });
+console.log(await res.json());
 ```
 
 ### Pay with x402 (Python)
 
 ```python
-from x402 import pay_for_response
+import os
+from eth_account import Account
+from x402 import x402ClientSync
+from x402.http.clients import x402_requests
+from x402.mechanisms.evm import EthAccountSigner
+from x402.mechanisms.evm.exact.register import register_exact_evm_client
 
-response = pay_for_response(
-    'https://crossfin.dev/api/premium/arbitrage/kimchi',
-    wallet=your_wallet
-)
-print(response)
+client = x402ClientSync()
+account = Account.from_key(os.environ['EVM_PRIVATE_KEY'])
+register_exact_evm_client(client, EthAccountSigner(account))
+
+with x402_requests(client) as session:
+    r = session.get('https://crossfin.dev/api/premium/arbitrage/kimchi')
+    print(r.json())
 ```
 
 ## Revenue Model
@@ -191,7 +202,7 @@ Phase 3 (6 months) → Agent banking: wallet management, budget controls, fiat o
 
 ```
 apps/
-  api/          Cloudflare Workers API (v1.3.0)
+  api/          Cloudflare Workers API (v1.3.2)
     src/
       index.ts    Routes, x402 paywall, registry, guide, seeds, proxy, analytics
     migrations/

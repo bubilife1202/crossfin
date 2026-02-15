@@ -1,11 +1,11 @@
 # CrossFin PRD — x402 Agent Gateway
 
 > 최종 업데이트: 2026-02-15
-> 상태: MVP 배포 완료 (v1.3.1)
+> 상태: MVP 배포 완료 (v1.3.2)
 
 ---
 
-## 0. 현재 제품 상태 (v1.3.1)
+## 0. 현재 제품 상태 (v1.3.2)
 
 Live:
 - Dashboard: https://crossfin.dev
@@ -245,7 +245,7 @@ crossfin.dev는 "서비스 대시보드"로 동작한다.
 
 ## 10. 성공 지표
 
-### 현재 (v1.3.1)
+### 현재 (v1.3.2)
 - 라이브 URL: crossfin.dev
 - 등록 서비스: 162
 - CrossFin 자체 서비스: 13

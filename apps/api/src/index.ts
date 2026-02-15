@@ -47,13 +47,13 @@ app.onError((err, c) => {
   return c.json({ error: 'Internal server error' }, 500)
 })
 
-app.get('/', (c) => c.json({ name: 'crossfin-api', version: '1.3.1', status: 'ok' }))
-app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '1.3.1', status: 'ok' }))
+app.get('/', (c) => c.json({ name: 'crossfin-api', version: '1.3.2', status: 'ok' }))
+app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '1.3.2', status: 'ok' }))
 
 app.get('/api/docs/guide', (c) => {
   return c.json({
     name: 'CrossFin Agent Guide',
-    version: '1.3.1',
+    version: '1.3.2',
     overview: {
       what: 'CrossFin is a service gateway for AI agents. Discover, compare, and call x402/REST services through a single API.',
       services: 'Use GET /api/registry/stats for the current active service counts.',
@@ -189,14 +189,14 @@ app.get('/api/docs/guide', (c) => {
         '6. Receive paid response (HTTP 200)',
       ],
       libraries: {
-        javascript: '@x402/client',
-        python: 'x402-python (pip install x402)',
+        javascript: '@x402/fetch (wrapFetchWithPayment)',
+        python: 'x402 (pip install x402)',
       },
       walletRequirement: 'You need a wallet with USDC on Base mainnet. Minimum $0.01 for cheapest endpoint.',
       codeExamples: {
         curl: "# Free endpoint (no payment)\ncurl https://crossfin.dev/api/arbitrage/demo\n\n# Inspect PAYMENT-REQUIRED header (paid endpoint)\ncurl -s -D - https://crossfin.dev/api/premium/arbitrage/kimchi -o /dev/null",
-        javascript: "import { payForResponse } from '@x402/client';\n\nconst response = await payForResponse(\n  'https://crossfin.dev/api/premium/arbitrage/kimchi',\n  { wallet: yourWallet }\n);",
-        python: "from x402 import pay_for_response\n\nresponse = pay_for_response(\n    'https://crossfin.dev/api/premium/arbitrage/kimchi',\n    wallet=your_wallet\n)",
+        javascript: "import { x402Client, wrapFetchWithPayment } from '@x402/fetch';\nimport { registerExactEvmScheme } from '@x402/evm/exact/client';\nimport { privateKeyToAccount } from 'viem/accounts';\n\nconst signer = privateKeyToAccount(process.env.EVM_PRIVATE_KEY);\nconst client = new x402Client();\nregisterExactEvmScheme(client, { signer });\n\nconst paidFetch = wrapFetchWithPayment(fetch, client);\nconst res = await paidFetch('https://crossfin.dev/api/premium/arbitrage/kimchi', { method: 'GET' });\nconsole.log(await res.json());",
+        python: "import os\nfrom eth_account import Account\nfrom x402 import x402ClientSync\nfrom x402.http.clients import x402_requests\nfrom x402.mechanisms.evm import EthAccountSigner\nfrom x402.mechanisms.evm.exact.register import register_exact_evm_client\n\nclient = x402ClientSync()\naccount = Account.from_key(os.environ['EVM_PRIVATE_KEY'])\nregister_exact_evm_client(client, EthAccountSigner(account))\n\nwith x402_requests(client) as session:\n    r = session.get('https://crossfin.dev/api/premium/arbitrage/kimchi')\n    print(r.json())",
       },
     },
     mcpServer: {
@@ -241,7 +241,7 @@ app.get('/.well-known/crossfin.json', (c) => {
   const origin = new URL(c.req.url).origin
   return c.json({
     name: 'CrossFin',
-    version: '1.3.1',
+    version: '1.3.2',
     description: 'Agent-first directory and gateway for x402 services and Korean market data.',
     urls: {
       website: 'https://crossfin.dev',
@@ -282,7 +282,7 @@ app.get('/api/openapi.json', (c) => {
     openapi: '3.1.0',
     info: {
       title: 'CrossFin — x402 Agent Services Gateway (Korea)',
-      version: '1.3.1',
+      version: '1.3.2',
       description: 'Service registry + pay-per-request APIs for AI agents. Discover x402 services and access Korean market data. Payments via x402 protocol with USDC on Base mainnet.',
       contact: { url: 'https://crossfin.dev' },
       'x-logo': { url: 'https://crossfin.dev/logos/crossfin.png' },

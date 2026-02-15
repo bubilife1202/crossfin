@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.3.2] - 2026-02-15
+
+### Changed
+
+**x402 client examples**
+- Fixed agent onboarding snippets to use official x402 wrappers: `@x402/fetch` + `wrapFetchWithPayment` (JS) and `x402_requests` / `x402HttpxClient` (Python)
+- Removed incorrect `@x402/client`, `payForResponse`, and `pay_for_response` references
+
+**Frontend copy**
+- Wallets stat now says "Budget + circuit breaker supported" (avoids implying it's already active)
+- Get Started service-count fallback updated to "162+"
+
+**Versioning**
+- Bumped public API version to 1.3.2 (health, OpenAPI, agent guide, discovery metadata)
+
 ## [1.3.1] - 2026-02-15
 
 ### Changed

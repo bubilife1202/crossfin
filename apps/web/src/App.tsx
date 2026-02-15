@@ -353,9 +353,9 @@ function App() {
               <div className="statValue">
                 {agentStats.status === 'success' ? agentStats.data.wallets : '—'}
               </div>
-              <div className="statMeta">Budget + circuit breaker enabled</div>
+              <div className="statMeta">Budget + circuit breaker supported</div>
             </div>
-           </div>
+          </div>
         </section>
 
         <div className="tabBar">
@@ -694,18 +694,25 @@ console.log('Private Key:', wallet.privateKey)`}</code></pre>
                     <button
                       type="button"
                       className="codeBlockCopy"
-                      onClick={() => copyToClipboard('step3-python', `from x402 import pay_for_response\n\nresponse = pay_for_response(\n    "https://crossfin.dev/api/premium/market/fx/usdkrw",\n    wallet=your_wallet\n)\nprint(response)`)}
+                      onClick={() => copyToClipboard('step3-python', `import os\nfrom eth_account import Account\nfrom x402 import x402ClientSync\nfrom x402.http.clients import x402_requests\nfrom x402.mechanisms.evm import EthAccountSigner\nfrom x402.mechanisms.evm.exact.register import register_exact_evm_client\n\nclient = x402ClientSync()\naccount = Account.from_key(os.environ['EVM_PRIVATE_KEY'])\nregister_exact_evm_client(client, EthAccountSigner(account))\n\nwith x402_requests(client) as session:\n    r = session.get('https://crossfin.dev/api/premium/market/fx/usdkrw')\n    print(r.json())`)}
                     >
                       {copiedId === 'step3-python' ? '✓ Copied' : 'Copy'}
                     </button>
                   </div>
-                  <pre className="codeBlockPre"><code>{`from x402 import pay_for_response
+                  <pre className="codeBlockPre"><code>{`import os
+from eth_account import Account
+from x402 import x402ClientSync
+from x402.http.clients import x402_requests
+from x402.mechanisms.evm import EthAccountSigner
+from x402.mechanisms.evm.exact.register import register_exact_evm_client
 
-response = pay_for_response(
-    "https://crossfin.dev/api/premium/market/fx/usdkrw",
-    wallet=your_wallet
-)
-print(response)`}</code></pre>
+client = x402ClientSync()
+account = Account.from_key(os.environ['EVM_PRIVATE_KEY'])
+register_exact_evm_client(client, EthAccountSigner(account))
+
+with x402_requests(client) as session:
+    r = session.get('https://crossfin.dev/api/premium/market/fx/usdkrw')
+    print(r.json())`}</code></pre>
                 </div>
               )}
               {codeTab === 'javascript' && (
@@ -715,18 +722,22 @@ print(response)`}</code></pre>
                     <button
                       type="button"
                       className="codeBlockCopy"
-                      onClick={() => copyToClipboard('step3-js', `import { payForResponse } from '@x402/client';\n\nconst response = await payForResponse(\n  'https://crossfin.dev/api/premium/market/fx/usdkrw',\n  { wallet: yourWallet }\n);\nconsole.log(await response.json());`)}
+                      onClick={() => copyToClipboard('step3-js', `import { x402Client, wrapFetchWithPayment } from '@x402/fetch';\nimport { registerExactEvmScheme } from '@x402/evm/exact/client';\nimport { privateKeyToAccount } from 'viem/accounts';\n\nconst signer = privateKeyToAccount(process.env.EVM_PRIVATE_KEY);\nconst client = new x402Client();\nregisterExactEvmScheme(client, { signer });\n\nconst paidFetch = wrapFetchWithPayment(fetch, client);\nconst res = await paidFetch('https://crossfin.dev/api/premium/market/fx/usdkrw', { method: 'GET' });\nconsole.log(await res.json());`)}
                     >
                       {copiedId === 'step3-js' ? '✓ Copied' : 'Copy'}
                     </button>
                   </div>
-                  <pre className="codeBlockPre"><code>{`import { payForResponse } from '@x402/client';
+                  <pre className="codeBlockPre"><code>{`import { x402Client, wrapFetchWithPayment } from '@x402/fetch';
+import { registerExactEvmScheme } from '@x402/evm/exact/client';
+import { privateKeyToAccount } from 'viem/accounts';
 
-const response = await payForResponse(
-  'https://crossfin.dev/api/premium/market/fx/usdkrw',
-  { wallet: yourWallet }
-);
-console.log(await response.json());`}</code></pre>
+const signer = privateKeyToAccount(process.env.EVM_PRIVATE_KEY);
+const client = new x402Client();
+registerExactEvmScheme(client, { signer });
+
+const paidFetch = wrapFetchWithPayment(fetch, client);
+const res = await paidFetch('https://crossfin.dev/api/premium/market/fx/usdkrw', { method: 'GET' });
+console.log(await res.json());`}</code></pre>
                 </div>
               )}
             </div>
@@ -735,7 +746,7 @@ console.log(await response.json());`}</code></pre>
               <div className="stepNumber">STEP 04</div>
               <h3 className="stepTitle">Browse &amp; Discover</h3>
               <p className="stepDesc">
-                Search {registryStats.status === 'success' ? registryStats.data.total : '160+'} services in the registry.
+                Search {registryStats.status === 'success' ? registryStats.data.total : '162+'} services in the registry.
               </p>
               <div className="codeBlock">
                 <div className="codeBlockHeader">
