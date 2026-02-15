@@ -47,8 +47,8 @@ app.onError((err, c) => {
   return c.json({ error: 'Internal server error' }, 500)
 })
 
-app.get('/', (c) => c.json({ name: 'crossfin-api', version: '1.0.0', status: 'ok' }))
-app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '1.0.0', status: 'ok' }))
+app.get('/', (c) => c.json({ name: 'crossfin-api', version: '1.2.0', status: 'ok' }))
+app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '1.2.0', status: 'ok' }))
 
 // === OpenAPI Spec ===
 
@@ -57,7 +57,7 @@ app.get('/api/openapi.json', (c) => {
     openapi: '3.1.0',
     info: {
       title: 'CrossFin — x402 Agent Services Gateway (Korea)',
-      version: '1.0.0',
+      version: '1.2.0',
       description: 'Service registry + pay-per-request APIs for AI agents. Discover x402 services and access Korean market data. Payments via x402 protocol with USDC on Base mainnet.',
       contact: { url: 'https://crossfin.dev' },
       'x-logo': { url: 'https://crossfin.dev/logos/crossfin.png' },

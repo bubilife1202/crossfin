@@ -15,10 +15,19 @@ import {
 
 
 const LEDGER_PATH = process.env.CROSSFIN_LEDGER_PATH?.trim() || defaultLedgerPath()
+const API_BASE = (process.env.CROSSFIN_API_URL?.trim() || 'https://crossfin.dev').replace(/\/$/, '')
 
 const server = new McpServer({ name: 'crossfin', version: '0.0.0' })
 
 const railSchema = z.enum(['manual', 'kakaopay', 'toss', 'stripe', 'x402'])
+
+async function apiFetch<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`)
+  if (!res.ok) {
+    throw new Error(`API ${res.status}: ${await res.text().catch(() => res.statusText)}`)
+  }
+  return res.json() as Promise<T>
+}
 
 server.registerTool(
   'create_wallet',
@@ -158,6 +167,141 @@ server.registerTool(
     return {
       content: [{ type: 'text', text: JSON.stringify(out) }],
       structuredContent: out,
+    }
+  }
+)
+
+server.registerTool(
+  'search_services',
+  {
+    title: 'Search services',
+    description: 'Search the CrossFin service registry for x402 services by keyword',
+    inputSchema: z.object({
+      query: z.string().describe('Search keyword (e.g. "crypto", "translate", "korea")'),
+    }),
+  },
+  async ({ query }): Promise<CallToolResult> => {
+    try {
+      const qs = new URLSearchParams({ q: query })
+      const data = await apiFetch<unknown>(`/api/registry/search?${qs.toString()}`)
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    } catch (e) {
+      return {
+        content: [{ type: 'text', text: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` }],
+        isError: true,
+      }
+    }
+  }
+)
+
+server.registerTool(
+  'list_services',
+  {
+    title: 'List services',
+    description: 'List services from the CrossFin registry with optional category filter',
+    inputSchema: z.object({
+      category: z.string().optional().describe('Category filter (e.g. "crypto-data", "ai", "tools")'),
+      limit: z.number().int().min(1).max(100).optional().describe('Max results (default 20, max 100)'),
+    }),
+  },
+  async ({ category, limit }): Promise<CallToolResult> => {
+    try {
+      const qs = new URLSearchParams()
+      const trimmedCategory = category?.trim()
+      if (trimmedCategory) qs.set('category', trimmedCategory)
+      if (typeof limit === 'number') qs.set('limit', String(limit))
+      const path = qs.size ? `/api/registry?${qs.toString()}` : '/api/registry'
+      const data = await apiFetch<unknown>(path)
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    } catch (e) {
+      return {
+        content: [{ type: 'text', text: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` }],
+        isError: true,
+      }
+    }
+  }
+)
+
+server.registerTool(
+  'get_service',
+  {
+    title: 'Get service',
+    description: 'Get detailed information about a specific service by ID',
+    inputSchema: z.object({
+      serviceId: z.string().describe('Service ID (e.g. "svc_kimchi_premium")'),
+    }),
+  },
+  async ({ serviceId }): Promise<CallToolResult> => {
+    try {
+      const encodedId = encodeURIComponent(serviceId)
+      const data = await apiFetch<unknown>(`/api/registry/${encodedId}`)
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    } catch (e) {
+      return {
+        content: [{ type: 'text', text: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` }],
+        isError: true,
+      }
+    }
+  }
+)
+
+server.registerTool(
+  'list_categories',
+  {
+    title: 'List categories',
+    description: 'List all service categories with counts',
+    inputSchema: z.object({}),
+  },
+  async (_params): Promise<CallToolResult> => {
+    try {
+      const data = await apiFetch<unknown>('/api/registry/categories')
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    } catch (e) {
+      return {
+        content: [{ type: 'text', text: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` }],
+        isError: true,
+      }
+    }
+  }
+)
+
+server.registerTool(
+  'get_kimchi_premium',
+  {
+    title: 'Get kimchi premium',
+    description:
+      'Get free preview of the Kimchi Premium index — real-time price spread between Korean and global crypto exchanges (top 3 pairs)',
+    inputSchema: z.object({}),
+  },
+  async (_params): Promise<CallToolResult> => {
+    try {
+      const data = await apiFetch<unknown>('/api/arbitrage/demo')
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    } catch (e) {
+      return {
+        content: [{ type: 'text', text: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` }],
+        isError: true,
+      }
+    }
+  }
+)
+
+server.registerTool(
+  'get_analytics',
+  {
+    title: 'Get analytics',
+    description: 'Get CrossFin gateway usage analytics — total calls, top services, recent activity',
+    inputSchema: z.object({}),
+  },
+  async (_params): Promise<CallToolResult> => {
+    try {
+      const data = await apiFetch<unknown>('/api/analytics/overview')
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    } catch (e) {
+      return {
+        content: [{ type: 'text', text: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` }],
+        isError: true,
+      }
     }
   }
 )
