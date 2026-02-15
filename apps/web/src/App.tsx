@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent as ReactFormEvent } from 'react'
 
 import './App.css'
-import LiveSignals from './components/LiveSignals'
 import {
   fetchAnalytics,
   fetchRegistryCategories,
@@ -15,10 +14,10 @@ import {
   type RegistryService,
 } from './lib/api'
 
-type TabId = 'services' | 'live' | 'developers' | 'activity'
+type TabId = 'services' | 'developers' | 'activity'
 
-const TAB_IDS: readonly TabId[] = ['services', 'live', 'developers', 'activity'] as const
-const tabLabels: Record<TabId, string> = { services: 'Services', live: 'Live', developers: 'Developers', activity: 'Activity' }
+const TAB_IDS: readonly TabId[] = ['services', 'developers', 'activity'] as const
+const tabLabels: Record<TabId, string> = { services: 'Services', developers: 'Developers', activity: 'Activity' }
 
 function parseHash(): TabId {
   const raw = window.location.hash.replace('#', '') as TabId
@@ -289,6 +288,13 @@ function App() {
               rel="noopener noreferrer"
             >
               GitHub
+            </a>
+            <a
+              href="https://live.crossfin.dev"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Live Demo
             </a>
           </nav>
         </div>
@@ -588,18 +594,6 @@ function App() {
               )}
             </aside>
           </div>
-        </section>
-        )}
-
-        {activeTab === 'live' && (
-        <section id="live" className="section">
-          <div className="sectionHeader">
-            <h2>Live Kimchi Premium (Free Preview)</h2>
-            <p className="sectionSub">
-              Real-time preview from <code className="inlineCode">/api/arbitrage/demo</code>
-            </p>
-          </div>
-          <LiveSignals />
         </section>
         )}
 
