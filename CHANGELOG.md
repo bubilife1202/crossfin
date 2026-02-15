@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.3.0] - 2026-02-15
+
+### Added
+
+**Agent onboarding + discovery**
+- `GET /api/docs/guide` — Structured JSON guide for agents (search, pricing, x402 payment flow, MCP usage)
+- Service details for CrossFin services now include `guide`, plus richer `inputSchema` and `outputExample`
+- `/.well-known/crossfin.json` — CrossFin discovery metadata for agents and tools
+
+**Registry growth (verified only)**
+- Import Einstein AI (emc2ai.io) x402 catalog (104 endpoints) via `.well-known/x402.json`
+- `GET /api/registry/sync?confirm=yes` — Insert-only seed sync for adding new providers without wiping the DB
+
+### Changed
+
+**Registry hygiene**
+- Disabled 58 dead external services (providers: ouchanip, snack.money, firecrawl, and non-functional x402engine endpoints)
+- x402engine seeding now marks known-dead categories/endpoints as `disabled` by default
+
 ## [1.2.0] - 2026-02-15
 
 ### Changed
