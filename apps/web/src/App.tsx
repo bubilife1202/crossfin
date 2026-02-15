@@ -1,89 +1,236 @@
+import { useCallback, useEffect, useState, type FormEvent as ReactFormEvent } from 'react'
+
 import './App.css'
 import LiveSignals from './components/LiveSignals'
+import {
+  createRegistryService,
+  fetchAnalytics,
+  fetchRegistryCategories,
+  fetchRegistryServices,
+  fetchRegistryStats,
+  fetchStats,
+  getApiBaseUrl,
+  searchRegistryServices,
+  type AnalyticsOverview,
+  type RegistryCategory,
+  type RegistryService,
+} from './lib/api'
 
-const API_BASE = 'https://crossfin.dev'
+type LoadState<T> =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'success'; data: T }
 
-const ENDPOINTS = [
-  {
-    method: 'GET',
-    path: '/api/arbitrage/demo',
-    price: 'Free',
-    priceClass: 'free',
-    description: 'Top 3 kimchi premium pairs (preview). No authentication required.',
-  },
-  {
-    method: 'GET',
-    path: '/api/premium/arbitrage/kimchi',
-    price: '$0.05',
-    priceClass: 'paid',
-    description: 'Full kimchi premium index with 10+ trading pairs, premium percentages, and directional signals.',
-  },
-  {
-    method: 'GET',
-    path: '/api/premium/arbitrage/opportunities',
-    price: '$0.10',
-    priceClass: 'paid',
-    description: 'Profitable arbitrage opportunities with recommended entry/exit points and estimated returns.',
-  },
-  {
-    method: 'GET',
-    path: '/api/premium/bithumb/orderbook?pair=BTC',
-    price: '$0.02',
-    priceClass: 'paid',
-    description: 'Real-time Bithumb orderbook depth. Supports BTC, ETH, XRP, DOGE, and 6+ more pairs.',
-  },
-  {
-    method: 'GET',
-    path: '/api/premium/market/korea',
-    price: '$0.03',
-    priceClass: 'paid',
-    description: 'Korean crypto market sentiment analysis derived from exchange volume and premium trends.',
-  },
-] as const
+function truncateMiddle(value: string, max = 56): string {
+  const raw = value.trim()
+  if (raw.length <= max) return raw
+  const head = raw.slice(0, Math.max(0, Math.floor(max * 0.6)))
+  const tail = raw.slice(-Math.max(0, Math.floor(max * 0.25)))
+  return `${head}…${tail}`
+}
 
-const STEPS = [
-  {
-    number: '01',
-    title: 'Discover',
-    description: 'Explore endpoints via our free demo API or browse the documentation below. No signup needed.',
-  },
-  {
-    number: '02',
-    title: 'Pay',
-    description: 'Your agent sends USDC on Base via x402 protocol. Standard HTTP 402 flow. No API keys, no OAuth.',
-  },
-  {
-    number: '03',
-    title: 'Get Data',
-    description: 'Receive real-time Korean exchange data as JSON. Parse, analyze, and act on arbitrage signals.',
-  },
-] as const
-
-const FEATURES = [
-  {
-    title: 'Exclusive Korean Data',
-    description: 'Direct Bithumb API integration. Data not available elsewhere in the x402 ecosystem. Unique alpha for your trading agents.',
-  },
-  {
-    title: 'Built for Agents',
-    description: 'x402 native. HTTP 402 paywall. No auth flows, no API keys, no subscriptions. Agents pay and get data in a single request.',
-  },
-  {
-    title: 'Institutional Grade',
-    description: 'Real-time orderbook data, 10+ trading pairs, market sentiment analysis, and actionable arbitrage signals.',
-  },
-] as const
+function parseTags(value: string): string[] {
+  return value
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .slice(0, 20)
+}
 
 function App() {
+  const apiBase = getApiBaseUrl()
+
+  const [registryStats, setRegistryStats] = useState<LoadState<{ total: number; crossfin: number; external: number }>>({ status: 'loading' })
+  const [agentStats, setAgentStats] = useState<LoadState<{ agents: number; wallets: number; transactions: number; blocked: number }>>({ status: 'loading' })
+  const [categories, setCategories] = useState<LoadState<RegistryCategory[]>>({ status: 'loading' })
+  const [services, setServices] = useState<LoadState<{ items: RegistryService[]; total: number }>>({ status: 'loading' })
+  const [selected, setSelected] = useState<RegistryService | null>(null)
+
+  const [category, setCategory] = useState<string>('')
+  const [crossfinOnly, setCrossfinOnly] = useState<boolean>(false)
+  const [query, setQuery] = useState<string>('')
+
+  const [analytics, setAnalytics] = useState<LoadState<AnalyticsOverview>>({ status: 'loading' })
+  const [codeTab, setCodeTab] = useState<'curl' | 'python' | 'javascript'>('curl')
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  const [registerAgentKey, setRegisterAgentKey] = useState<string>('')
+  const [registerName, setRegisterName] = useState<string>('')
+  const [registerProvider, setRegisterProvider] = useState<string>('')
+  const [registerCategory, setRegisterCategory] = useState<string>('other')
+  const [registerEndpoint, setRegisterEndpoint] = useState<string>('')
+  const [registerMethod, setRegisterMethod] = useState<string>('GET')
+  const [registerPrice, setRegisterPrice] = useState<string>('$0.01')
+  const [registerCurrency, setRegisterCurrency] = useState<string>('USDC')
+  const [registerNetwork, setRegisterNetwork] = useState<string>('eip155:8453')
+  const [registerPayTo, setRegisterPayTo] = useState<string>('')
+  const [registerTags, setRegisterTags] = useState<string>('')
+  const [registerState, setRegisterState] = useState<LoadState<RegistryService> | null>(null)
+
+  useEffect(() => {
+    const ctrl = new AbortController()
+
+    void (async () => {
+      try {
+        const [rs, as] = await Promise.all([
+          fetchRegistryStats(ctrl.signal),
+          fetchStats(ctrl.signal),
+        ])
+        setRegistryStats({ status: 'success', data: rs })
+        setAgentStats({ status: 'success', data: as })
+      } catch (e) {
+        if (ctrl.signal.aborted) return
+        const msg = e instanceof Error ? e.message : 'Failed to load stats'
+        setRegistryStats({ status: 'error', message: msg })
+        setAgentStats({ status: 'error', message: msg })
+      }
+    })()
+
+    void (async () => {
+      try {
+        const cats = await fetchRegistryCategories(ctrl.signal)
+        setCategories({ status: 'success', data: cats })
+      } catch (e) {
+        if (ctrl.signal.aborted) return
+        const msg = e instanceof Error ? e.message : 'Failed to load categories'
+        setCategories({ status: 'error', message: msg })
+      }
+    })()
+
+    void (async () => {
+      try {
+        const a = await fetchAnalytics(ctrl.signal)
+        setAnalytics({ status: 'success', data: a })
+      } catch (e) {
+        if (ctrl.signal.aborted) return
+        const msg = e instanceof Error ? e.message : 'Failed to load analytics'
+        setAnalytics({ status: 'error', message: msg })
+      }
+    })()
+
+    return () => ctrl.abort()
+  }, [])
+
+  const loadServices = useCallback(async (opts?: { q?: string }) => {
+    setServices({ status: 'loading' })
+    try {
+      const q = (opts?.q ?? '').trim()
+      const resp = q
+        ? await searchRegistryServices(q, { limit: 200, offset: 0 })
+        : await fetchRegistryServices({
+            category: category || undefined,
+            isCrossfin: crossfinOnly,
+            limit: 200,
+            offset: 0,
+          })
+
+      setServices({ status: 'success', data: { items: resp.data, total: resp.total } })
+      setSelected((prev) => {
+        if (!prev) return prev
+        const next = resp.data.find((s) => s.id === prev.id)
+        return next ?? null
+      })
+    } catch (e) {
+      setServices({ status: 'error', message: e instanceof Error ? e.message : 'Failed to load services' })
+    }
+  }, [category, crossfinOnly])
+
+  useEffect(() => {
+    void loadServices({ q: '' })
+  }, [loadServices])
+
+  function onSearchSubmit(e: ReactFormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const q = query.trim()
+    void loadServices({ q })
+  }
+
+  async function onRegisterSubmit(e: ReactFormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setRegisterState({ status: 'loading' })
+
+    try {
+      const created = await createRegistryService({
+        agentKey: registerAgentKey,
+        name: registerName.trim(),
+        provider: registerProvider.trim(),
+        category: registerCategory.trim() || 'other',
+        endpoint: registerEndpoint.trim(),
+        method: registerMethod.trim(),
+        price: registerPrice.trim(),
+        currency: registerCurrency.trim() || 'USDC',
+        network: registerNetwork.trim() ? registerNetwork.trim() : null,
+        payTo: registerPayTo.trim() ? registerPayTo.trim() : null,
+        tags: parseTags(registerTags),
+      })
+
+      setRegisterState({ status: 'success', data: created })
+      setRegisterName('')
+      setRegisterEndpoint('')
+      setRegisterTags('')
+      void loadServices({ q: '' })
+    } catch (err) {
+      setRegisterState({
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed to register service',
+      })
+    }
+  }
+
+  function relativeTime(dateStr: string): string {
+    const now = Date.now()
+    const then = new Date(dateStr).getTime()
+    const diff = now - then
+    if (Number.isNaN(diff) || diff < 0) return 'just now'
+    const seconds = Math.floor(diff / 1000)
+    if (seconds < 60) return `${seconds}s ago`
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${minutes}m ago`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours}h ago`
+    const days = Math.floor(hours / 24)
+    return `${days}d ago`
+  }
+
+  function responseTimeClass(ms: number): string {
+    if (ms < 200) return 'rtFast'
+    if (ms < 500) return 'rtMedium'
+    return 'rtSlow'
+  }
+
+  function copyToClipboard(id: string, text: string) {
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopiedId(id)
+      setTimeout(() => setCopiedId((prev) => (prev === id ? null : prev)), 2000)
+    })
+  }
+
+  const analyticsData = analytics.status === 'success' ? analytics.data : null
+  const hasAnalyticsData = analyticsData !== null && analyticsData.totalCalls > 0
+  const successRate = analyticsData
+    ? analyticsData.recentCalls.length > 0
+      ? Math.round((analyticsData.recentCalls.filter((c) => c.status === 'success').length / analyticsData.recentCalls.length) * 100)
+      : 0
+    : 0
+  const avgResponseTime = analyticsData
+    ? analyticsData.recentCalls.length > 0
+      ? Math.round(analyticsData.recentCalls.reduce((sum, c) => sum + c.responseTimeMs, 0) / analyticsData.recentCalls.length)
+      : 0
+    : 0
+  const topServiceName = analyticsData && analyticsData.topServices.length > 0 ? analyticsData.topServices[0].serviceName : '—'
+  const maxTopServiceCalls = analyticsData ? Math.max(...analyticsData.topServices.map((s) => s.calls), 1) : 1
+
   return (
     <div className="page">
       <header className="topbar">
         <div className="topbarInner">
           <div className="brand">CrossFin</div>
           <nav className="nav">
-            <a href="#live-data">Live Data</a>
-            <a href="#api">API</a>
-            <a href="#pricing">Pricing</a>
+            <a href="#activity">Activity</a>
+            <a href="#services">Services</a>
+            <a href="#live">Live</a>
+            <a href="#register">Register</a>
+            <a href="#get-started">Get Started</a>
             <a
               href="https://github.com/bubilife1202/crossfin"
               target="_blank"
@@ -96,109 +243,530 @@ function App() {
       </header>
 
       <main className="content">
-        {/* ── Hero ── */}
         <section className="hero">
-          <div className="heroBadge">Korean Crypto Arbitrage Data API</div>
+          <div className="heroBadge">x402 Agent Services Gateway</div>
           <h1>
-            Kimchi Premium Data<br />
-            <span className="heroAccent">for Autonomous Agents</span>
+            The Gateway<br />
+            <span className="heroAccent">for Agent Services</span>
           </h1>
           <p className="heroSub">
-            AI agents pay per-call with USDC via x402. No API keys. No subscriptions.
-            Real-time Korean exchange data delivered over HTTP.
+            Discover x402 services and access Korean market data. Pay per-call with USDC on Base.
           </p>
 
           <div className="heroCtas">
-            <a className="button primary" href="#live-data">
-              View Live Data
+            <a className="button primary" href="#services">
+              Browse Services
             </a>
-            <a className="button" href="#api">
-              API Docs
+            <a className="button" href="#register">
+              Register Service
             </a>
           </div>
 
           <div className="heroPills">
             <span className="pill">Live on Base mainnet</span>
             <span className="pill">x402 protocol</span>
-            <span className="pill">From $0.02/call</span>
+            <span className="pill">Registry + APIs</span>
           </div>
         </section>
 
-        {/* ── Live Data ── */}
-        <section id="live-data" className="section">
+        <section className="section">
           <div className="sectionHeader">
-            <h2>Live Kimchi Premium Data</h2>
+            <h2>Gateway Stats</h2>
             <p className="sectionSub">
-              Real-time arbitrage data from our free demo endpoint. This is what your agents will consume.
+              Base URL: <code className="inlineCode">{apiBase}</code>
+            </p>
+          </div>
+
+          <div className="statsGrid">
+            <div className="statCard">
+              <div className="statLabel">Services</div>
+              <div className="statValue">
+                {registryStats.status === 'success' ? registryStats.data.total : '—'}
+              </div>
+              <div className="statMeta">
+                {registryStats.status === 'success'
+                  ? `${registryStats.data.crossfin} CrossFin · ${registryStats.data.external} External`
+                  : registryStats.status === 'error'
+                    ? registryStats.message
+                    : 'Loading…'}
+              </div>
+            </div>
+
+            <div className="statCard">
+              <div className="statLabel">Agents</div>
+              <div className="statValue">
+                {agentStats.status === 'success' ? agentStats.data.agents : '—'}
+              </div>
+              <div className="statMeta">
+                {agentStats.status === 'success'
+                  ? `${agentStats.data.transactions} tx · ${agentStats.data.blocked} blocked`
+                  : agentStats.status === 'error'
+                    ? agentStats.message
+                    : 'Loading…'}
+              </div>
+            </div>
+
+            <div className="statCard">
+              <div className="statLabel">Wallets</div>
+              <div className="statValue">
+                {agentStats.status === 'success' ? agentStats.data.wallets : '—'}
+              </div>
+              <div className="statMeta">Budget + circuit breaker enabled</div>
+            </div>
+          </div>
+        </section>
+
+        <section id="activity" className="section">
+          <div className="sectionHeader">
+            <h2>Activity</h2>
+            <p className="sectionSub">API calls and service usage</p>
+          </div>
+
+          {analytics.status === 'loading' ? (
+            <div className="panelLoading">Loading analytics…</div>
+          ) : analytics.status === 'error' ? (
+            <div className="activityEmpty">
+              <div className="activityEmptyIcon">📊</div>
+              <div className="activityEmptyTitle">No API calls yet</div>
+              <div className="activityEmptyDesc">Start by calling a service endpoint.</div>
+            </div>
+          ) : !hasAnalyticsData ? (
+            <div className="activityEmpty">
+              <div className="activityEmptyIcon">📊</div>
+              <div className="activityEmptyTitle">No API calls yet</div>
+              <div className="activityEmptyDesc">Start by calling a service endpoint.</div>
+            </div>
+          ) : (
+            <>
+              <div className="analyticsStatsGrid">
+                <div className="statCard">
+                  <div className="statLabel">Total Calls</div>
+                  <div className="statValue">{analyticsData.totalCalls.toLocaleString()}</div>
+                  <div className="statMeta">{analyticsData.totalServices} services used</div>
+                </div>
+                <div className="statCard">
+                  <div className="statLabel">Success Rate</div>
+                  <div className="statValue">{successRate}%</div>
+                  <div className="statMeta">{analyticsData.recentCalls.filter((c) => c.status === 'success').length} / {analyticsData.recentCalls.length} recent</div>
+                </div>
+                <div className="statCard">
+                  <div className="statLabel">Top Service</div>
+                  <div className="statValue statValueSmall">{topServiceName}</div>
+                  <div className="statMeta">{analyticsData.topServices.length > 0 ? `${analyticsData.topServices[0].calls} calls` : '—'}</div>
+                </div>
+                <div className="statCard">
+                  <div className="statLabel">Avg Response</div>
+                  <div className="statValue">{avgResponseTime}<span className="statUnit">ms</span></div>
+                  <div className="statMeta">across recent calls</div>
+                </div>
+              </div>
+
+              <div className="analyticsColumns">
+                <div className="analyticsPanel">
+                  <div className="analyticsPanelTitle">Recent API Calls</div>
+                  <div className="recentCallsList">
+                    <div className="recentCallsHeader">
+                      <span>Service</span>
+                      <span>Status</span>
+                      <span>Time</span>
+                      <span>When</span>
+                    </div>
+                    {analyticsData.recentCalls.map((call, i) => (
+                      <div key={`${call.serviceId}-${call.createdAt}-${i}`} className="recentCallRow">
+                        <span className="recentCallService">{call.serviceName}</span>
+                        <span className="recentCallStatus">
+                          <span className={`statusDot ${call.status === 'success' ? 'statusSuccess' : 'statusError'}`} />
+                          {call.status}
+                        </span>
+                        <span className={`recentCallTime ${responseTimeClass(call.responseTimeMs)}`}>
+                          {call.responseTimeMs}ms
+                        </span>
+                        <span className="recentCallWhen">{relativeTime(call.createdAt)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="analyticsPanel">
+                  <div className="analyticsPanelTitle">Top Services</div>
+                  <div className="topServicesList">
+                    {analyticsData.topServices.map((svc) => (
+                      <div key={svc.serviceId} className="topServiceRow">
+                        <div className="topServiceInfo">
+                          <span className="topServiceName">{svc.serviceName}</span>
+                          <span className="topServiceCalls">{svc.calls.toLocaleString()} calls</span>
+                        </div>
+                        <div className="topServiceBar">
+                          <div
+                            className="topServiceBarFill"
+                            style={{ width: `${Math.round((svc.calls / maxTopServiceCalls) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </section>
+
+        <section id="services" className="section">
+          <div className="sectionHeader">
+            <h2>Services</h2>
+            <p className="sectionSub">
+              Browse x402 services and Korean market endpoints. Select a service to view details.
+            </p>
+          </div>
+
+          <div className="serviceControls">
+            <form className="serviceSearch" onSubmit={onSearchSubmit}>
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search (name, provider, category, tags)…"
+              />
+              <button className="miniButton primary" type="submit">Search</button>
+              <button
+                className="miniButton"
+                type="button"
+                onClick={() => {
+                  setQuery('')
+                  void loadServices({ q: '' })
+                }}
+              >
+                Clear
+              </button>
+            </form>
+
+            <div className="serviceFilters">
+              <label className="filter">
+                <span className="filterLabel">Category</span>
+                <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                  <option value="">All</option>
+                  {categories.status === 'success'
+                    ? categories.data.map((c) => (
+                      <option key={c.category} value={c.category}>
+                        {c.category} ({c.count})
+                      </option>
+                    ))
+                    : null}
+                </select>
+              </label>
+              <label className="filter toggle">
+                <input
+                  type="checkbox"
+                  checked={crossfinOnly}
+                  onChange={(e) => setCrossfinOnly(e.target.checked)}
+                />
+                <span>CrossFin only</span>
+              </label>
+              <button className="miniButton" type="button" onClick={() => void loadServices({ q: query.trim() })}>
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          <div className="servicesLayout">
+            <div className="servicesPanel">
+              {services.status === 'loading' ? (
+                <div className="panelLoading">Loading services…</div>
+              ) : services.status === 'error' ? (
+                <div className="panelError">{services.message}</div>
+              ) : (
+                <div className="servicesGrid">
+                  {services.data.items.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={`serviceCard ${selected?.id === s.id ? 'active' : ''}`}
+                      onClick={() => setSelected(s)}
+                    >
+                      <div className="serviceCardTop">
+                        <div className="serviceName">{s.name}</div>
+                        <div className={`servicePrice ${s.isCrossfin ? 'primary' : ''}`}>{s.price}</div>
+                      </div>
+                      <div className="serviceMeta">
+                        <span className="serviceProvider">{s.provider}</span>
+                        <span className="dot" aria-hidden>·</span>
+                        <span className="serviceCategory">{s.category}</span>
+                      </div>
+                      <div className="serviceEndpoint">{truncateMiddle(s.endpoint)}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <aside className="serviceDetail">
+              {selected ? (
+                <div className="detailCard">
+                  <div className="detailTitle">{selected.name}</div>
+                  <div className="detailRow"><span>Provider</span><strong>{selected.provider}</strong></div>
+                  <div className="detailRow"><span>Category</span><strong>{selected.category}</strong></div>
+                  <div className="detailRow"><span>Price</span><strong>{selected.price} {selected.currency}</strong></div>
+                  <div className="detailRow"><span>Network</span><strong>{selected.network ?? '—'}</strong></div>
+                  <div className="detailRow"><span>PayTo</span><strong className="mono">{selected.payTo ?? '—'}</strong></div>
+
+                  <div className="detailBlock">
+                    <div className="detailBlockLabel">Endpoint</div>
+                    <div className="detailEndpoint mono">{selected.endpoint}</div>
+                    <div className="detailCtas">
+                      <a className="miniButton" href={selected.endpoint} target="_blank" rel="noopener noreferrer">
+                        Open
+                      </a>
+                      <a className="miniButton" href={`${apiBase}/api/openapi.json`} target="_blank" rel="noopener noreferrer">
+                        OpenAPI
+                      </a>
+                    </div>
+                  </div>
+
+                  {selected.description ? <div className="detailDesc">{selected.description}</div> : null}
+
+                  {selected.tags.length ? (
+                    <div className="tagRow">
+                      {selected.tags.map((t) => (
+                        <span key={t} className="tag">{t}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="detailEmpty">Select a service to see details.</div>
+              )}
+            </aside>
+          </div>
+        </section>
+
+        <section id="live" className="section">
+          <div className="sectionHeader">
+            <h2>Live Kimchi Premium (Free Preview)</h2>
+            <p className="sectionSub">
+              Real-time preview from <code className="inlineCode">/api/arbitrage/demo</code>
             </p>
           </div>
           <LiveSignals />
         </section>
 
-        {/* ── API Endpoints ── */}
-        <section id="api" className="section">
+        <section id="register" className="section">
           <div className="sectionHeader">
-            <h2>API Endpoints</h2>
+            <h2>Register a Service</h2>
             <p className="sectionSub">
-              Base URL: <code className="inlineCode">{API_BASE}</code>
+              Requires <code className="inlineCode">X-Agent-Key</code>.
             </p>
           </div>
 
-          <div className="endpointsGrid">
-            {ENDPOINTS.map((ep) => (
-              <div key={ep.path} className="endpointCard">
-                <div className="endpointTop">
-                  <span className="endpointMethod">{ep.method}</span>
-                  <span className={`endpointPrice ${ep.priceClass}`}>{ep.price}</span>
+          <form className="registerForm" onSubmit={onRegisterSubmit}>
+            <div className="formGrid">
+              <label className="field">
+                <span className="fieldLabel">X-Agent-Key</span>
+                <input value={registerAgentKey} onChange={(e) => setRegisterAgentKey(e.target.value)} placeholder="cf_…" />
+              </label>
+              <label className="field">
+                <span className="fieldLabel">Provider</span>
+                <input value={registerProvider} onChange={(e) => setRegisterProvider(e.target.value)} placeholder="e.g., myservice" />
+              </label>
+              <label className="field span2">
+                <span className="fieldLabel">Name</span>
+                <input value={registerName} onChange={(e) => setRegisterName(e.target.value)} placeholder="Service display name" />
+              </label>
+              <label className="field">
+                <span className="fieldLabel">Category</span>
+                <input value={registerCategory} onChange={(e) => setRegisterCategory(e.target.value)} placeholder="other" />
+              </label>
+              <label className="field">
+                <span className="fieldLabel">Method</span>
+                <select value={registerMethod} onChange={(e) => setRegisterMethod(e.target.value)}>
+                  <option value="GET">GET</option>
+                  <option value="POST">POST</option>
+                  <option value="PUT">PUT</option>
+                  <option value="DELETE">DELETE</option>
+                  <option value="PATCH">PATCH</option>
+                </select>
+              </label>
+              <label className="field span2">
+                <span className="fieldLabel">Endpoint (https://…)</span>
+                <input value={registerEndpoint} onChange={(e) => setRegisterEndpoint(e.target.value)} placeholder="https://example.com/api" />
+              </label>
+              <label className="field">
+                <span className="fieldLabel">Price</span>
+                <input value={registerPrice} onChange={(e) => setRegisterPrice(e.target.value)} placeholder="$0.01" />
+              </label>
+              <label className="field">
+                <span className="fieldLabel">Currency</span>
+                <input value={registerCurrency} onChange={(e) => setRegisterCurrency(e.target.value)} placeholder="USDC" />
+              </label>
+              <label className="field">
+                <span className="fieldLabel">Network (optional)</span>
+                <input value={registerNetwork} onChange={(e) => setRegisterNetwork(e.target.value)} placeholder="eip155:8453" />
+              </label>
+              <label className="field">
+                <span className="fieldLabel">PayTo (optional)</span>
+                <input value={registerPayTo} onChange={(e) => setRegisterPayTo(e.target.value)} placeholder="0x…" />
+              </label>
+              <label className="field span2">
+                <span className="fieldLabel">Tags (comma separated)</span>
+                <input value={registerTags} onChange={(e) => setRegisterTags(e.target.value)} placeholder="korea, x402, data" />
+              </label>
+            </div>
+
+            <div className="registerActions">
+              <button className="miniButton primary" type="submit" disabled={registerState?.status === 'loading'}>
+                {registerState?.status === 'loading' ? 'Registering…' : 'Register'}
+              </button>
+              {registerState?.status === 'error' ? <div className="registerError">{registerState.message}</div> : null}
+              {registerState?.status === 'success' ? <div className="registerSuccess">Registered: {registerState.data.id}</div> : null}
+            </div>
+          </form>
+        </section>
+        <section id="get-started" className="section">
+          <div className="sectionHeader">
+            <h2>Get Started</h2>
+            <p className="sectionSub">Four steps to start using CrossFin APIs with x402 payments.</p>
+          </div>
+
+          <div className="getStartedGrid">
+            <div className="stepCard">
+              <div className="stepNumber">STEP 01</div>
+              <h3 className="stepTitle">Create a Wallet</h3>
+              <p className="stepDesc">Generate an EVM wallet to pay for API calls.</p>
+              <div className="codeBlock">
+                <div className="codeBlockHeader">
+                  <span className="codeBlockLang">bash / javascript</span>
+                  <button
+                    type="button"
+                    className="codeBlockCopy"
+                    onClick={() => copyToClipboard('step1', "npm install ethers\n\nconst wallet = ethers.Wallet.createRandom()\nconsole.log('Address:', wallet.address)\nconsole.log('Private Key:', wallet.privateKey)")}
+                  >
+                    {copiedId === 'step1' ? '✓ Copied' : 'Copy'}
+                  </button>
                 </div>
-                <div className="endpointPath">{ep.path}</div>
-                <div className="endpointDesc">{ep.description}</div>
+                <pre className="codeBlockPre"><code>{`npm install ethers
+
+const wallet = ethers.Wallet.createRandom()
+console.log('Address:', wallet.address)
+console.log('Private Key:', wallet.privateKey)`}</code></pre>
               </div>
-            ))}
-          </div>
+            </div>
 
-          <div className="apiNote">
-            All paid endpoints return HTTP 402 with x402 payment instructions.
-            Your agent completes the USDC payment on Base and re-sends the request with a payment proof header.
-          </div>
-        </section>
-
-        {/* ── How It Works ── */}
-        <section id="pricing" className="section">
-          <div className="sectionHeader">
-            <h2>How It Works</h2>
-            <p className="sectionSub">
-              Three steps. No dashboard. No signup. Your agent handles everything.
-            </p>
-          </div>
-
-          <div className="stepsGrid">
-            {STEPS.map((step) => (
-              <div key={step.number} className="stepCard">
-                <div className="stepNumber">{step.number}</div>
-                <h3 className="stepTitle">{step.title}</h3>
-                <p className="stepDesc">{step.description}</p>
+            <div className="stepCard">
+              <div className="stepNumber">STEP 02</div>
+              <h3 className="stepTitle">Fund with USDC</h3>
+              <p className="stepDesc">Send USDC (Base network) to your wallet address.</p>
+              <div className="stepDetail">
+                <div className="stepDetailRow">
+                  <span className="stepDetailLabel">Minimum</span>
+                  <span className="stepDetailValue">$0.10 for testing</span>
+                </div>
+                <div className="stepDetailRow">
+                  <span className="stepDetailLabel">Get USDC</span>
+                  <span className="stepDetailValue">Coinbase, Binance, or any DEX on Base</span>
+                </div>
               </div>
-            ))}
-          </div>
-        </section>
+            </div>
 
-        {/* ── Why CrossFin ── */}
-        <section className="section">
-          <div className="sectionHeader">
-            <h2>Why CrossFin</h2>
-            <p className="sectionSub">
-              The only x402-native Korean crypto data provider.
-            </p>
-          </div>
+            <div className="stepCard stepCardWide">
+              <div className="stepNumber">STEP 03</div>
+              <h3 className="stepTitle">Call an API</h3>
+              <p className="stepDesc">Make your first paid API call using x402.</p>
+              <div className="codeTabs">
+                <button
+                  type="button"
+                  className={`codeTabBtn ${codeTab === 'curl' ? 'codeTabActive' : ''}`}
+                  onClick={() => setCodeTab('curl')}
+                >
+                  cURL
+                </button>
+                <button
+                  type="button"
+                  className={`codeTabBtn ${codeTab === 'python' ? 'codeTabActive' : ''}`}
+                  onClick={() => setCodeTab('python')}
+                >
+                  Python
+                </button>
+                <button
+                  type="button"
+                  className={`codeTabBtn ${codeTab === 'javascript' ? 'codeTabActive' : ''}`}
+                  onClick={() => setCodeTab('javascript')}
+                >
+                  JavaScript
+                </button>
+              </div>
+              {codeTab === 'curl' && (
+                <div className="codeBlock">
+                  <div className="codeBlockHeader">
+                    <span className="codeBlockLang">bash</span>
+                    <button
+                      type="button"
+                      className="codeBlockCopy"
+                      onClick={() => copyToClipboard('step3-curl', 'curl https://crossfin.dev/api/premium/market/fx/usdkrw')}
+                    >
+                      {copiedId === 'step3-curl' ? '✓ Copied' : 'Copy'}
+                    </button>
+                  </div>
+                  <pre className="codeBlockPre"><code>{`curl https://crossfin.dev/api/premium/market/fx/usdkrw`}</code></pre>
+                </div>
+              )}
+              {codeTab === 'python' && (
+                <div className="codeBlock">
+                  <div className="codeBlockHeader">
+                    <span className="codeBlockLang">python</span>
+                    <button
+                      type="button"
+                      className="codeBlockCopy"
+                      onClick={() => copyToClipboard('step3-python', `from x402 import Client\n\nclient = Client(private_key="YOUR_KEY")\ndata = client.get("https://crossfin.dev/api/premium/market/fx/usdkrw")\nprint(data)`)}
+                    >
+                      {copiedId === 'step3-python' ? '✓ Copied' : 'Copy'}
+                    </button>
+                  </div>
+                  <pre className="codeBlockPre"><code>{`from x402 import Client
 
-          <div className="grid">
-            {FEATURES.map((feat) => (
-              <article key={feat.title} className="card featureCard">
-                <h3>{feat.title}</h3>
-                <p>{feat.description}</p>
-              </article>
-            ))}
+client = Client(private_key="YOUR_KEY")
+data = client.get("https://crossfin.dev/api/premium/market/fx/usdkrw")
+print(data)`}</code></pre>
+                </div>
+              )}
+              {codeTab === 'javascript' && (
+                <div className="codeBlock">
+                  <div className="codeBlockHeader">
+                    <span className="codeBlockLang">javascript</span>
+                    <button
+                      type="button"
+                      className="codeBlockCopy"
+                      onClick={() => copyToClipboard('step3-js', `import { paymentFetch } from '@x402/fetch'\n\nconst res = await paymentFetch(\n  'https://crossfin.dev/api/premium/market/fx/usdkrw',\n  { privateKey: 'YOUR_KEY' }\n)\nconsole.log(await res.json())`)}
+                    >
+                      {copiedId === 'step3-js' ? '✓ Copied' : 'Copy'}
+                    </button>
+                  </div>
+                  <pre className="codeBlockPre"><code>{`import { paymentFetch } from '@x402/fetch'
+
+const res = await paymentFetch(
+  'https://crossfin.dev/api/premium/market/fx/usdkrw',
+  { privateKey: 'YOUR_KEY' }
+)
+console.log(await res.json())`}</code></pre>
+                </div>
+              )}
+            </div>
+
+            <div className="stepCard">
+              <div className="stepNumber">STEP 04</div>
+              <h3 className="stepTitle">Browse &amp; Discover</h3>
+              <p className="stepDesc">Search 60+ services in the registry.</p>
+              <div className="codeBlock">
+                <div className="codeBlockHeader">
+                  <span className="codeBlockLang">bash</span>
+                  <button
+                    type="button"
+                    className="codeBlockCopy"
+                    onClick={() => copyToClipboard('step4', 'curl https://crossfin.dev/api/registry/search?q=crypto')}
+                  >
+                    {copiedId === 'step4' ? '✓ Copied' : 'Copy'}
+                  </button>
+                </div>
+                <pre className="codeBlockPre"><code>{`curl https://crossfin.dev/api/registry/search?q=crypto`}</code></pre>
+              </div>
+            </div>
           </div>
         </section>
       </main>
@@ -216,11 +784,18 @@ function App() {
                 GitHub
               </a>
               <a
-                href={`${API_BASE}/api/arbitrage/demo`}
+                href={`${apiBase}/api/registry`}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                API
+                Registry
+              </a>
+              <a
+                href={`${apiBase}/api/openapi.json`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                OpenAPI
               </a>
               <a
                 href="https://basescan.org/address/0xe4E79Ce6a1377C58f0Bb99D023908858A4DB5779"

@@ -1,5 +1,5 @@
 import { createPublicClient, http, formatEther, formatUnits } from 'viem'
-import { baseSepolia } from 'viem/chains'
+import { base, baseSepolia } from 'viem/chains'
 import { privateKeyToAccount } from 'viem/accounts'
 
 function resolveAddress() {
@@ -10,13 +10,14 @@ function resolveAddress() {
   throw new Error('Provide ADDRESS=0x... or EVM_PRIVATE_KEY=0x...')
 }
 
-const RPC_URL = (process.env.RPC_URL || 'https://sepolia.base.org').trim()
-const USDC = (process.env.USDC_ADDRESS || '0x036CbD53842c5426634e7929541eC2318f3dCF7e').trim()
+const CHAIN = (process.env.CHAIN || 'base').trim().toLowerCase()
+const RPC_URL = (process.env.RPC_URL || (CHAIN === 'base' ? 'https://mainnet.base.org' : 'https://sepolia.base.org')).trim()
+const USDC = (process.env.USDC_ADDRESS || (CHAIN === 'base' ? '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' : '0x036CbD53842c5426634e7929541eC2318f3dCF7e')).trim()
 const USDC_DECIMALS = Number(process.env.USDC_DECIMALS || '6')
 const address = resolveAddress()
 
 const client = createPublicClient({
-  chain: baseSepolia,
+  chain: CHAIN === 'base' ? base : baseSepolia,
   transport: http(RPC_URL),
 })
 

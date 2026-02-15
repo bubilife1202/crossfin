@@ -55,16 +55,15 @@ try {
           const usdc = atomic / 1_000_000
           console.log(`required_usdc=${usdc.toFixed(6)}`)
 
-          if (atomic < 20_000_000) {
-            console.error('revenue_target_not_met=true')
-            console.error('hint=use_enterprise_endpoint_or_set_API_URL')
-            process.exit(2)
-          }
-        }
-      }
-    } catch {
-      console.log('payment_required_decoded=false')
-    }
+           if (atomic < 20_000_000) {
+             console.error('micro_price_notice=true')
+             console.error('hint=you_are_testing_a_micro_endpoint')
+           }
+         }
+       }
+     } catch {
+       console.log('payment_required_decoded=false')
+     }
   }
 
   const res = await paidFetch(API_URL, { method: 'GET' })
