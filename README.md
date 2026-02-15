@@ -1,20 +1,21 @@
 # CrossFin
 
-**The x402 Agent Services Gateway** — Discover, call, and pay for AI agent services in one place. 116+ services, 13 Korean market APIs, and a 5% proxy fee layer. All payments via [x402](https://x402.org) protocol with USDC on Base mainnet.
+**The x402 Agent Services Gateway** — Discover, call, and pay for AI agent services in one place. 162 services (13 CrossFin + 149 external), Korean market APIs, MCP server, and structured agent guides. All payments via [x402](https://x402.org) protocol with USDC on Base mainnet.
 
 **Live:** https://crossfin.dev | **Demo:** https://live.crossfin.dev
 
 ## What is CrossFin?
 
-CrossFin is a **marketplace and gateway for AI agent services**, built on the x402 payment protocol.
+CrossFin is a **gateway and registry for AI agent services**, built on the x402 payment protocol.
 
-- **Service Registry:** 116+ x402 services — agents search, discover, and call APIs from one gateway
-- **Proxy Layer:** Call any registered service through CrossFin (`/api/proxy/:serviceId`) — 5% fee, automatic call logging
+- **Service Registry:** 162 verified services from multiple x402 providers (CrossFin, Einstein AI, x402engine)
+- **Agent Guide API:** Structured JSON guide at `/api/docs/guide` — service catalog, payment flow, code examples, MCP setup
+- **Agent Discovery:** `/.well-known/crossfin.json` for automatic service detection
+- **MCP Server:** 12 tools for Claude Desktop and other MCP clients — search, browse, and call services
 - **Korea-First APIs:** 13 proprietary endpoints (Kimchi Premium, Bithumb, Upbit, Coinone, FX, headlines, trading signals)
+- **Proxy Layer:** Call any registered service through CrossFin (`/api/proxy/:serviceId`) — 5% fee, automatic call logging
 - **Analytics:** Real-time service usage stats (`/api/analytics/overview`)
-- **API Playground:** Interactive endpoint tester with live JSON responses
 - **Live Demo:** Real-time gateway dashboard at [live.crossfin.dev](https://live.crossfin.dev)
-- **Onboarding:** Get Started guide with Python/JS/cURL code snippets
 
 **Think RapidAPI, but for AI agents paying with crypto.**
 
@@ -22,11 +23,11 @@ CrossFin is a **marketplace and gateway for AI agent services**, built on the x4
 
 | Problem | CrossFin Solution |
 |---------|-------------------|
-| x402 services are scattered across the internet | Unified registry with 116+ services |
-| Agents can't discover available APIs | Search API: `/api/registry/search?q=translate` |
+| x402 services are scattered across the internet | Unified registry with 162 verified services |
+| Agents can't discover available APIs | Search API + `.well-known/crossfin.json` + MCP server |
 | No Korean market data for agents | 13 proprietary Korea APIs (Bithumb, Upbit, Coinone, trading signals) |
+| No structured docs for agents | `/api/docs/guide` — JSON guide with schemas, examples, payment flow |
 | No revenue model for gateway operators | 5% proxy fee on every call through CrossFin |
-| No way to see what's happening | Live demo dashboard at [live.crossfin.dev](https://live.crossfin.dev) |
 | Crypto is hard for end users | Roadmap: fiat on-ramp (KRW → USDC auto-conversion) |
 
 ## Endpoints
@@ -38,9 +39,16 @@ CrossFin is a **marketplace and gateway for AI agent services**, built on the x4
 | `GET /api/registry` | List all services (filterable by category, provider) |
 | `GET /api/registry/search?q=...` | Full-text search across services |
 | `GET /api/registry/categories` | Category breakdown with counts |
-| `GET /api/registry/stats` | Total services: 116 (13 CrossFin + 103 external) |
-| `GET /api/registry/:id` | Service detail by ID |
+| `GET /api/registry/stats` | Total services: 162 (13 CrossFin + 149 external) |
+| `GET /api/registry/:id` | Service detail with guide, inputSchema, outputExample |
 | `POST /api/registry` | Register a new service (requires `X-Agent-Key`) |
+
+### Agent Discovery & Docs (Free)
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/docs/guide` | Structured JSON guide for agents (services, payment, MCP setup) |
+| `GET /.well-known/crossfin.json` | Agent auto-discovery metadata |
 
 ### Proxy (Free — 5% fee built into forwarded price)
 
@@ -79,9 +87,44 @@ CrossFin is a **marketplace and gateway for AI agent services**, built on the x4
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/health` | Health check |
+| `GET /api/health` | Health check (includes version) |
 | `GET /api/stats` | Agent/wallet/transaction counts |
 | `GET /api/openapi.json` | OpenAPI 3.1 spec (agent-readable) |
+
+## MCP Server
+
+CrossFin includes an MCP (Model Context Protocol) server for Claude Desktop and other MCP clients. 12 tools available:
+
+| Tool | Description |
+|------|-------------|
+| `search_services` | Search the service registry by keyword |
+| `list_services` | List services with optional category filter |
+| `get_service` | Get details for a specific service |
+| `list_categories` | List all categories with counts |
+| `get_kimchi_premium` | Free kimchi premium preview |
+| `get_analytics` | Gateway usage analytics |
+| `get_guide` | Get the full CrossFin agent guide |
+| `create_wallet` | Create a wallet in local ledger |
+| `get_balance` | Check wallet balance |
+| `transfer` | Transfer funds between wallets |
+| `list_transactions` | List recent transactions |
+| `set_budget` | Set daily spend limit |
+
+### Claude Desktop Config
+
+```json
+{
+  "mcpServers": {
+    "crossfin": {
+      "command": "node",
+      "args": ["/path/to/crossfin/apps/mcp-server/dist/index.js"],
+      "env": {
+        "CROSSFIN_API_URL": "https://crossfin.dev"
+      }
+    }
+  }
+}
+```
 
 ## Quick Start
 
@@ -102,23 +145,25 @@ curl https://crossfin.dev/api/premium/market/fx/usdkrw
 ### Pay with x402 (JavaScript)
 
 ```javascript
-import { paymentFetch } from '@x402/fetch'
+import { payForResponse } from '@x402/client';
 
-const res = await paymentFetch(
-  'https://crossfin.dev/api/premium/market/fx/usdkrw',
-  { privateKey: 'YOUR_PRIVATE_KEY' }
-)
-console.log(await res.json())
+const response = await payForResponse(
+  'https://crossfin.dev/api/premium/arbitrage/kimchi',
+  { wallet: yourWallet }
+);
+console.log(await response.json());
 ```
 
 ### Pay with x402 (Python)
 
 ```python
-from x402 import Client
+from x402 import pay_for_response
 
-client = Client(private_key="YOUR_PRIVATE_KEY")
-data = client.get("https://crossfin.dev/api/premium/arbitrage/kimchi")
-print(data)
+response = pay_for_response(
+    'https://crossfin.dev/api/premium/arbitrage/kimchi',
+    wallet=your_wallet
+)
+print(response)
 ```
 
 ## Revenue Model
@@ -137,6 +182,7 @@ Phase 3 (6 months) → Agent banking: wallet management, budget controls, fiat o
 | Database | Cloudflare D1 (SQLite) |
 | Payments | x402 protocol (@x402/hono, @x402/extensions/bazaar) |
 | Network | Base mainnet, USDC |
+| MCP Server | @modelcontextprotocol/sdk (12 tools) |
 | Frontend | React + Vite → Cloudflare Pages |
 | Live Demo | React + Vite → Cloudflare Pages (live.crossfin.dev) |
 | Domain | crossfin.dev + live.crossfin.dev |
@@ -145,9 +191,9 @@ Phase 3 (6 months) → Agent banking: wallet management, budget controls, fiat o
 
 ```
 apps/
-  api/          Cloudflare Workers API
+  api/          Cloudflare Workers API (v1.3.0)
     src/
-      index.ts    All routes, x402 paywall, registry, proxy, analytics
+      index.ts    Routes, x402 paywall, registry, guide, seeds, proxy, analytics
     migrations/
       0001_init.sql               Agents, wallets, transactions, budgets
       0002_services_registry.sql  Services registry + call logging
@@ -157,11 +203,17 @@ apps/
       x402-funds-check.mjs   Check Base wallet balance
       x402-usdc-balance.mjs  Check USDC balance
       x402-gen-wallet.mjs    Generate EVM wallet
-  web/          Gateway Dashboard (React)
+  mcp-server/   MCP Server (12 tools)
     src/
-      App.tsx       Dashboard: services browser, analytics, playground, get-started, register
-      App.css       All styles
+      index.ts       MCP tool definitions + CrossFin API integration
+      ledgerStore.ts Local ledger for wallet/budget tools
+  web/          Gateway Dashboard (React, tab-based UI)
+    src/
+      App.tsx       3-tab layout: Services, Developers, Activity
+      App.css       Tab bar + component styles
       lib/api.ts    API client with type-safe fetchers
+    public/
+      .well-known/crossfin.json  Static agent discovery metadata
   live/         Live Demo Dashboard (React)
     src/
       App.tsx       Real-time monitoring: kimchi premium, gateway stats, health
@@ -200,6 +252,8 @@ cd apps/live && npm run build && npx wrangler pages deploy dist --project-name c
 
 - **Dashboard:** https://crossfin.dev
 - **Live Demo:** https://live.crossfin.dev
+- **Agent Guide:** https://crossfin.dev/api/docs/guide
+- **Agent Discovery:** https://crossfin.dev/.well-known/crossfin.json
 - **Registry Stats:** https://crossfin.dev/api/registry/stats
 - **Free Demo:** https://crossfin.dev/api/arbitrage/demo
 - **OpenAPI Spec:** https://crossfin.dev/api/openapi.json
