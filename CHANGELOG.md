@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.4] - 2026-02-16
+
+### Changed
+
+**Proxy hardening**
+- `/api/proxy/:serviceId` now requires `X-Agent-Key` (prevents public abuse and enables per-agent call attribution)
+- Added basic per-agent rate limiting for proxy calls (per-agent and per-service per-minute caps)
+- Block proxying to IP-literal and private/localhost endpoints (best-effort SSRF mitigation)
+
+**Admin auth**
+- Admin token no longer accepted via query string (header/bearer only)
+
 ## [1.3.3] - 2026-02-15
 
 ### Changed

@@ -50,9 +50,8 @@ function requireAdmin(c: Context<Env>): void {
   const headerToken = (c.req.header('X-CrossFin-Admin-Token') ?? '').trim()
   const auth = (c.req.header('Authorization') ?? '').trim()
   const bearer = auth.startsWith('Bearer ') ? auth.slice('Bearer '.length).trim() : ''
-  const queryToken = (c.req.query('token') ?? '').trim()
 
-  const provided = headerToken || bearer || queryToken
+  const provided = headerToken || bearer
   if (!provided || provided !== expected) {
     throw new HTTPException(401, { message: 'Unauthorized' })
   }
@@ -66,13 +65,13 @@ app.onError((err, c) => {
   return c.json({ error: 'Internal server error' }, 500)
 })
 
-app.get('/', (c) => c.json({ name: 'crossfin-api', version: '1.3.3', status: 'ok' }))
-app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '1.3.3', status: 'ok' }))
+app.get('/', (c) => c.json({ name: 'crossfin-api', version: '1.3.4', status: 'ok' }))
+app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '1.3.4', status: 'ok' }))
 
 app.get('/api/docs/guide', (c) => {
   return c.json({
     name: 'CrossFin Agent Guide',
-    version: '1.3.3',
+    version: '1.3.4',
     overview: {
       what: 'CrossFin is a service gateway for AI agents. Discover, compare, and call x402/REST services through a single API.',
       services: 'Use GET /api/registry/stats for the current active service counts.',
@@ -112,6 +111,9 @@ app.get('/api/docs/guide', (c) => {
       { path: '/api/stats', description: 'Agent/wallet/transaction counts' },
       { path: '/api/openapi.json', description: 'OpenAPI 3.1 specification' },
       { path: '/api/docs/guide', description: 'This guide' },
+    ],
+    notes: [
+      'Proxy endpoints (/api/proxy/:serviceId) require X-Agent-Key to prevent abuse.',
     ],
     crossfinServices: [
       {
@@ -260,7 +262,7 @@ app.get('/.well-known/crossfin.json', (c) => {
   const origin = new URL(c.req.url).origin
   return c.json({
     name: 'CrossFin',
-    version: '1.3.3',
+    version: '1.3.4',
     description: 'Agent-first directory and gateway for x402 services and Korean market data.',
     urls: {
       website: 'https://crossfin.dev',
@@ -301,7 +303,7 @@ app.get('/api/openapi.json', (c) => {
     openapi: '3.1.0',
     info: {
       title: 'CrossFin — x402 Agent Services Gateway (Korea)',
-      version: '1.3.3',
+      version: '1.3.4',
       description: 'Service registry + pay-per-request APIs for AI agents. Discover x402 services and access Korean market data. Payments via x402 protocol with USDC on Base mainnet.',
       contact: { url: 'https://crossfin.dev' },
       'x-logo': { url: 'https://crossfin.dev/logos/crossfin.png' },
@@ -722,10 +724,13 @@ app.get('/api/openapi.json', (c) => {
       '/api/proxy/{serviceId}': {
         get: {
           operationId: 'proxyGet',
-          summary: 'Proxy GET to a registered service (free; adds 5% fee)',
-          description: 'Looks up the service by id in the registry and forwards the request to its endpoint, passing through query params. Logs the call to service_calls.',
+          summary: 'Proxy GET to a registered service (requires X-Agent-Key)',
+          description: 'Looks up the service by id in the registry and forwards the request to its endpoint, passing through query params. Logs the call to service_calls. Requires X-Agent-Key to prevent public abuse.',
           tags: ['Free'],
-          parameters: [{ name: 'serviceId', in: 'path', required: true, schema: { type: 'string' } }],
+          parameters: [
+            { name: 'serviceId', in: 'path', required: true, schema: { type: 'string' } },
+            { name: 'X-Agent-Key', in: 'header', required: true, schema: { type: 'string' } },
+          ],
           responses: {
             '200': {
               description: 'Upstream response (passthrough)',
@@ -736,15 +741,20 @@ app.get('/api/openapi.json', (c) => {
               content: { '*/*': { schema: {} } },
             },
             '404': { description: 'Service not found' },
+            '405': { description: 'Method not allowed' },
+            '429': { description: 'Rate limited' },
             '502': { description: 'Upstream request failed' },
           },
         },
         post: {
           operationId: 'proxyPost',
-          summary: 'Proxy POST to a registered service (free; adds 5% fee)',
-          description: 'Looks up the service by id in the registry and forwards the request to its endpoint, passing through query params and request body. Logs the call to service_calls.',
+          summary: 'Proxy POST to a registered service (requires X-Agent-Key)',
+          description: 'Looks up the service by id in the registry and forwards the request to its endpoint, passing through query params and request body. Logs the call to service_calls. Requires X-Agent-Key to prevent public abuse.',
           tags: ['Free'],
-          parameters: [{ name: 'serviceId', in: 'path', required: true, schema: { type: 'string' } }],
+          parameters: [
+            { name: 'serviceId', in: 'path', required: true, schema: { type: 'string' } },
+            { name: 'X-Agent-Key', in: 'header', required: true, schema: { type: 'string' } },
+          ],
           requestBody: { required: false, content: { '*/*': { schema: {} } } },
           responses: {
             '200': {
@@ -756,6 +766,9 @@ app.get('/api/openapi.json', (c) => {
               content: { '*/*': { schema: {} } },
             },
             '404': { description: 'Service not found' },
+            '405': { description: 'Method not allowed' },
+            '413': { description: 'Payload too large' },
+            '429': { description: 'Rate limited' },
             '502': { description: 'Upstream request failed' },
           },
         },
@@ -1575,6 +1588,59 @@ function normalizeMethod(method: string | undefined): string {
   return 'UNKNOWN'
 }
 
+function isIpv4Address(hostname: string): boolean {
+  const parts = hostname.split('.')
+  if (parts.length !== 4) return false
+  for (const part of parts) {
+    if (!/^[0-9]{1,3}$/.test(part)) return false
+    const n = Number(part)
+    if (!Number.isInteger(n) || n < 0 || n > 255) return false
+  }
+  return true
+}
+
+function isPrivateIpv4(hostname: string): boolean {
+  if (!isIpv4Address(hostname)) return false
+  const parts = hostname.split('.')
+  if (parts.length !== 4) return false
+  const a = Number(parts[0])
+  const b = Number(parts[1])
+  if (a === 0) return true
+  if (a === 10) return true
+  if (a === 127) return true
+  if (a === 169 && b === 254) return true
+  if (a === 172 && b >= 16 && b <= 31) return true
+  if (a === 192 && b === 168) return true
+  if (a >= 224) return true
+  return false
+}
+
+function isIpv6Address(hostname: string): boolean {
+  return hostname.includes(':')
+}
+
+function assertPublicHostname(url: URL): void {
+  const hostname = url.hostname.trim().toLowerCase()
+  if (!hostname) throw new HTTPException(400, { message: 'endpoint hostname is required' })
+
+  if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
+    throw new HTTPException(400, { message: 'endpoint hostname is not allowed' })
+  }
+  if (hostname === 'metadata.google.internal') {
+    throw new HTTPException(400, { message: 'endpoint hostname is not allowed' })
+  }
+
+  if (isIpv6Address(hostname)) {
+    throw new HTTPException(400, { message: 'endpoint must not be an IP address' })
+  }
+  if (isPrivateIpv4(hostname)) {
+    throw new HTTPException(400, { message: 'endpoint must not be a private IP address' })
+  }
+  if (hostname === '169.254.169.254' || hostname === '0.0.0.0') {
+    throw new HTTPException(400, { message: 'endpoint hostname is not allowed' })
+  }
+}
+
 function requireHttpsUrl(value: string): string {
   const raw = value.trim()
   let url: URL
@@ -1586,6 +1652,13 @@ function requireHttpsUrl(value: string): string {
   if (url.protocol !== 'https:') {
     throw new HTTPException(400, { message: 'endpoint must start with https://' })
   }
+  return url.toString()
+}
+
+function requirePublicHttpsUrl(value: string): string {
+  const raw = requireHttpsUrl(value)
+  const url = new URL(raw)
+  assertPublicHostname(url)
   return url.toString()
 }
 
@@ -3109,7 +3182,7 @@ app.post('/api/registry', agentAuth, async (c) => {
   const name = body.name?.trim() ?? ''
   const provider = body.provider?.trim() ?? ''
   const category = (body.category?.trim() ?? 'other') || 'other'
-  const endpoint = body.endpoint ? requireHttpsUrl(body.endpoint) : ''
+  const endpoint = body.endpoint ? requirePublicHttpsUrl(body.endpoint) : ''
   const price = body.price?.trim() ?? ''
   const currency = (body.currency?.trim() ?? 'USDC') || 'USDC'
 
@@ -3157,17 +3230,49 @@ app.post('/api/registry', agentAuth, async (c) => {
 async function proxyToService(c: Context<Env>, method: 'GET' | 'POST'): Promise<Response> {
   await ensureRegistrySeeded(c.env.DB, c.env.PAYMENT_RECEIVER_ADDRESS)
 
+  const agentId = c.get('agentId')
+  if (!agentId) throw new HTTPException(401, { message: 'Missing X-Agent-Key header' })
+
   const serviceId = c.req.param('serviceId')
   const row = await c.env.DB.prepare('SELECT * FROM services WHERE id = ?').bind(serviceId).first<Record<string, unknown>>()
   if (!row) throw new HTTPException(404, { message: 'Service not found' })
 
   const service = mapServiceRow(row)
 
+  if (service.method !== 'UNKNOWN' && service.method !== method) {
+    throw new HTTPException(405, { message: `Method not allowed (expected ${service.method})` })
+  }
+
+  const PROXY_MAX_BODY_BYTES = 512 * 1024
+  const PROXY_RATE_LIMIT_PER_MINUTE_PER_SERVICE = 60
+  const PROXY_RATE_LIMIT_PER_MINUTE_PER_AGENT = 240
+
+  const [serviceWindowRow, agentWindowRow] = await c.env.DB.batch([
+    c.env.DB.prepare(
+      "SELECT COUNT(*) as count FROM service_calls WHERE agent_id = ? AND service_id = ? AND created_at >= datetime('now', '-60 seconds')"
+    ).bind(agentId, service.id),
+    c.env.DB.prepare(
+      "SELECT COUNT(*) as count FROM service_calls WHERE agent_id = ? AND created_at >= datetime('now', '-60 seconds')"
+    ).bind(agentId),
+  ])
+
+  const countService = Number(((serviceWindowRow?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0))
+  const countAgent = Number(((agentWindowRow?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0))
+  if (countService >= PROXY_RATE_LIMIT_PER_MINUTE_PER_SERVICE || countAgent >= PROXY_RATE_LIMIT_PER_MINUTE_PER_AGENT) {
+    throw new HTTPException(429, { message: 'Rate limited' })
+  }
+
   let upstreamUrl: URL
   try {
     upstreamUrl = new URL(service.endpoint)
   } catch {
     throw new HTTPException(500, { message: 'Service endpoint is not a valid URL' })
+  }
+
+  try {
+    assertPublicHostname(upstreamUrl)
+  } catch {
+    throw new HTTPException(502, { message: 'Service endpoint blocked' })
   }
 
   const incomingUrl = new URL(c.req.url)
@@ -3183,11 +3288,19 @@ async function proxyToService(c: Context<Env>, method: 'GET' | 'POST'): Promise<
     const accept = c.req.header('accept')
     if (accept) headers.accept = accept
 
-    const init: RequestInit = { method, headers }
+    const init: RequestInit = { method, headers, redirect: 'manual' }
     if (method === 'POST') {
+      const contentLength = Number(c.req.header('content-length') ?? '0')
+      if (contentLength > PROXY_MAX_BODY_BYTES) {
+        throw new HTTPException(413, { message: 'Payload too large' })
+      }
       const contentType = c.req.header('content-type')
       if (contentType) headers['content-type'] = contentType
-      init.body = await c.req.arrayBuffer()
+      const body = await c.req.arrayBuffer()
+      if (body.byteLength > PROXY_MAX_BODY_BYTES) {
+        throw new HTTPException(413, { message: 'Payload too large' })
+      }
+      init.body = body
     }
 
     const upstreamRes = await fetch(upstreamUrl.toString(), init)
@@ -3196,24 +3309,25 @@ async function proxyToService(c: Context<Env>, method: 'GET' | 'POST'): Promise<
 
     try {
       await c.env.DB.prepare(
-        'INSERT INTO service_calls (id, service_id, agent_id, status, response_time_ms) VALUES (?, ?, ?, ?, ?)'
-      ).bind(callId, service.id, null, status, responseTimeMs).run()
+        'INSERT INTO service_calls (id, service_id, agent_id, status, response_time_ms) VALUES (?, ?, ?, ?, ?)' 
+      ).bind(callId, service.id, agentId, status, responseTimeMs).run()
     } catch (err) {
       console.error('Failed to log service call', err)
     }
 
-    const body = await upstreamRes.arrayBuffer()
     const outHeaders = new Headers(upstreamRes.headers)
     outHeaders.set('X-CrossFin-Proxy', 'true')
     outHeaders.set('X-CrossFin-Fee', '5%')
-    return new Response(body, { status: upstreamRes.status, headers: outHeaders })
+    return new Response(upstreamRes.body, { status: upstreamRes.status, headers: outHeaders })
   } catch (err) {
+    if (err instanceof HTTPException) throw err
+
     const responseTimeMs = Date.now() - start
 
     try {
       await c.env.DB.prepare(
-        'INSERT INTO service_calls (id, service_id, agent_id, status, response_time_ms) VALUES (?, ?, ?, ?, ?)'
-      ).bind(callId, service.id, null, 'error', responseTimeMs).run()
+        'INSERT INTO service_calls (id, service_id, agent_id, status, response_time_ms) VALUES (?, ?, ?, ?, ?)' 
+      ).bind(callId, service.id, agentId, 'error', responseTimeMs).run()
     } catch (logErr) {
       console.error('Failed to log service call', logErr)
     }
@@ -3223,13 +3337,9 @@ async function proxyToService(c: Context<Env>, method: 'GET' | 'POST'): Promise<
   }
 }
 
-app.get('/api/proxy/:serviceId', async (c) => {
-  return proxyToService(c, 'GET')
-})
+app.get('/api/proxy/:serviceId', agentAuth, async (c) => proxyToService(c, 'GET'))
 
-app.post('/api/proxy/:serviceId', async (c) => {
-  return proxyToService(c, 'POST')
-})
+app.post('/api/proxy/:serviceId', agentAuth, async (c) => proxyToService(c, 'POST'))
 
 app.get('/api/analytics/overview', async (c) => {
   await ensureRegistrySeeded(c.env.DB, c.env.PAYMENT_RECEIVER_ADDRESS)
