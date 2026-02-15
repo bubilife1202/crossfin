@@ -1,17 +1,19 @@
 # CrossFin
 
-**The x402 Agent Services Gateway** — Discover, call, and pay for AI agent services in one place. 112+ services, Korean market APIs, and a 5% proxy fee layer. All payments via [x402](https://x402.org) protocol with USDC on Base mainnet.
+**The x402 Agent Services Gateway** — Discover, call, and pay for AI agent services in one place. 116+ services, 13 Korean market APIs, and a 5% proxy fee layer. All payments via [x402](https://x402.org) protocol with USDC on Base mainnet.
 
-**Live:** https://crossfin.dev
+**Live:** https://crossfin.dev | **Demo:** https://live.crossfin.dev
 
 ## What is CrossFin?
 
 CrossFin is a **marketplace and gateway for AI agent services**, built on the x402 payment protocol.
 
-- **Service Registry:** 112+ x402 services — agents search, discover, and call APIs from one gateway
+- **Service Registry:** 116+ x402 services — agents search, discover, and call APIs from one gateway
 - **Proxy Layer:** Call any registered service through CrossFin (`/api/proxy/:serviceId`) — 5% fee, automatic call logging
-- **Korea-First APIs:** 10 proprietary endpoints (Kimchi Premium, Bithumb, Upbit, Coinone, FX, headlines)
+- **Korea-First APIs:** 13 proprietary endpoints (Kimchi Premium, Bithumb, Upbit, Coinone, FX, headlines, trading signals)
 - **Analytics:** Real-time service usage stats (`/api/analytics/overview`)
+- **API Playground:** Interactive endpoint tester with live JSON responses
+- **Live Demo:** Real-time gateway dashboard at [live.crossfin.dev](https://live.crossfin.dev)
 - **Onboarding:** Get Started guide with Python/JS/cURL code snippets
 
 **Think RapidAPI, but for AI agents paying with crypto.**
@@ -20,10 +22,11 @@ CrossFin is a **marketplace and gateway for AI agent services**, built on the x4
 
 | Problem | CrossFin Solution |
 |---------|-------------------|
-| x402 services are scattered across the internet | Unified registry with 112+ services |
+| x402 services are scattered across the internet | Unified registry with 116+ services |
 | Agents can't discover available APIs | Search API: `/api/registry/search?q=translate` |
-| No Korean market data for agents | 10 proprietary Korea APIs (Bithumb, Upbit, Coinone) |
+| No Korean market data for agents | 13 proprietary Korea APIs (Bithumb, Upbit, Coinone, trading signals) |
 | No revenue model for gateway operators | 5% proxy fee on every call through CrossFin |
+| No way to see what's happening | Live demo dashboard at [live.crossfin.dev](https://live.crossfin.dev) |
 | Crypto is hard for end users | Roadmap: fiat on-ramp (KRW → USDC auto-conversion) |
 
 ## Endpoints
@@ -35,7 +38,7 @@ CrossFin is a **marketplace and gateway for AI agent services**, built on the x4
 | `GET /api/registry` | List all services (filterable by category, provider) |
 | `GET /api/registry/search?q=...` | Full-text search across services |
 | `GET /api/registry/categories` | Category breakdown with counts |
-| `GET /api/registry/stats` | Total services: 113 (10 CrossFin + 103 external) |
+| `GET /api/registry/stats` | Total services: 116 (13 CrossFin + 103 external) |
 | `GET /api/registry/:id` | Service detail by ID |
 | `POST /api/registry` | Register a new service (requires `X-Agent-Key`) |
 
@@ -68,6 +71,9 @@ CrossFin is a **marketplace and gateway for AI agent services**, built on the x4
 | `GET /api/premium/market/coinone/ticker?currency=BTC` | $0.02 | Coinone ticker |
 | `GET /api/premium/market/cross-exchange` | $0.08 | Cross-exchange comparison (Bithumb vs Upbit vs Coinone vs Binance) |
 | `GET /api/premium/news/korea/headlines` | $0.03 | Korean headlines (Google News RSS) |
+| `GET /api/premium/arbitrage/kimchi/history` | $0.05 | Historical kimchi premium (hourly snapshots, up to 7 days) |
+| `GET /api/premium/bithumb/volume-analysis` | $0.03 | Bithumb 24h volume distribution & unusual activity detection |
+| `GET /api/premium/market/upbit/signals` | $0.05 | Upbit trading signals (momentum, volatility, confidence) |
 
 ### Other (Free)
 
@@ -118,7 +124,7 @@ print(data)
 ## Revenue Model
 
 ```
-Phase 1 (Now)      → Own API revenue: $0.01–$0.10 per call (10 Korean market APIs)
+Phase 1 (Now)      → Own API revenue: $0.01–$0.10 per call (13 Korean market APIs)
 Phase 2 (3 months) → Proxy fee: 5% on every call through /api/proxy/:serviceId
 Phase 3 (6 months) → Agent banking: wallet management, budget controls, fiat on-ramp
 ```
@@ -132,7 +138,8 @@ Phase 3 (6 months) → Agent banking: wallet management, budget controls, fiat o
 | Payments | x402 protocol (@x402/hono, @x402/extensions/bazaar) |
 | Network | Base mainnet, USDC |
 | Frontend | React + Vite → Cloudflare Pages |
-| Domain | crossfin.dev (Workers + Pages) |
+| Live Demo | React + Vite → Cloudflare Pages (live.crossfin.dev) |
+| Domain | crossfin.dev + live.crossfin.dev |
 
 ## Project Structure
 
@@ -144,6 +151,7 @@ apps/
     migrations/
       0001_init.sql               Agents, wallets, transactions, budgets
       0002_services_registry.sql  Services registry + call logging
+      0003_kimchi_history.sql     Kimchi premium hourly snapshots
     scripts/
       x402-paid-fetch.mjs    Test x402 paid endpoints
       x402-funds-check.mjs   Check Base wallet balance
@@ -151,9 +159,13 @@ apps/
       x402-gen-wallet.mjs    Generate EVM wallet
   web/          Gateway Dashboard (React)
     src/
-      App.tsx       Dashboard: services browser, analytics, get-started, register
+      App.tsx       Dashboard: services browser, analytics, playground, get-started, register
       App.css       All styles
       lib/api.ts    API client with type-safe fetchers
+  live/         Live Demo Dashboard (React)
+    src/
+      App.tsx       Real-time monitoring: kimchi premium, gateway stats, health
+      App.css       Dark trading-terminal theme
 ```
 
 ## Development
@@ -179,11 +191,15 @@ cd apps/api && npx wrangler deploy
 
 # Frontend → crossfin.dev
 cd apps/web && npm run build && npx wrangler pages deploy dist --project-name crossfin
+
+# Live Demo → live.crossfin.dev
+cd apps/live && npm run build && npx wrangler pages deploy dist --project-name crossfin-live
 ```
 
 ## Links
 
 - **Dashboard:** https://crossfin.dev
+- **Live Demo:** https://live.crossfin.dev
 - **Registry Stats:** https://crossfin.dev/api/registry/stats
 - **Free Demo:** https://crossfin.dev/api/arbitrage/demo
 - **OpenAPI Spec:** https://crossfin.dev/api/openapi.json
