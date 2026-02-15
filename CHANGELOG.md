@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0] - 2026-02-15
+
+### Changed
+
+**Frontend — Tab-based navigation redesign**
+- Replaced linear 7-section scroll with 4-tab layout: Services (default), Live, Developers, Activity
+- Compact hero: single-line title, removed pills, CTAs now switch tabs
+- Stats ribbon always visible above tabs for at-a-glance metrics
+- Nav bar simplified: 6 links → 4 tab switches + GitHub
+- Developers tab combines Get Started, Playground, and Register sections
+- URL hash sync (#services, #live, #developers, #activity) with browser back/forward support
+
 ## [1.1.0] - 2026-02-15
 
 ### Added

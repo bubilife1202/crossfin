@@ -15,6 +15,16 @@ import {
   type RegistryService,
 } from './lib/api'
 
+type TabId = 'services' | 'live' | 'developers' | 'activity'
+
+const TAB_IDS: readonly TabId[] = ['services', 'live', 'developers', 'activity'] as const
+const tabLabels: Record<TabId, string> = { services: 'Services', live: 'Live', developers: 'Developers', activity: 'Activity' }
+
+function parseHash(): TabId {
+  const raw = window.location.hash.replace('#', '') as TabId
+  return TAB_IDS.includes(raw) ? raw : 'services'
+}
+
 type LoadState<T> =
   | { status: 'loading' }
   | { status: 'error'; message: string }
@@ -44,6 +54,19 @@ function App() {
   const [analytics, setAnalytics] = useState<LoadState<AnalyticsOverview>>({ status: 'loading' })
   const [codeTab, setCodeTab] = useState<'curl' | 'python' | 'javascript'>('curl')
   const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  const [activeTab, setActiveTab] = useState<TabId>(parseHash)
+
+  useEffect(() => {
+    function onHash() { setActiveTab(parseHash()) }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+
+  const switchTab = useCallback((tab: TabId) => {
+    setActiveTab(tab)
+    history.replaceState(null, '', `#${tab}`)
+  }, [])
 
   const [pgEndpoint, setPgEndpoint] = useState<string>('/api/health')
   const [pgLoading, setPgLoading] = useState<boolean>(false)
@@ -250,12 +273,16 @@ function App() {
         <div className="topbarInner">
           <a href="#" className="brand" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>CrossFin</a>
           <nav className="nav">
-            <a href="#activity">Activity</a>
-            <a href="#services">Services</a>
-            <a href="#live">Live</a>
-            <a href="#register">Register</a>
-            <a href="#get-started">Get Started</a>
-            <a href="#playground">Playground</a>
+            {TAB_IDS.map((tab) => (
+              <a
+                key={tab}
+                href={`#${tab}`}
+                className={activeTab === tab ? 'navActive' : ''}
+                onClick={(e) => { e.preventDefault(); switchTab(tab) }}
+              >
+                {tabLabels[tab]}
+              </a>
+            ))}
             <a
               href="https://github.com/bubilife1202/crossfin"
               target="_blank"
@@ -268,40 +295,24 @@ function App() {
       </header>
 
       <main className="content">
-        <section className="hero">
+        <section className="heroCompact">
           <div className="heroBadge">x402 Agent Services Gateway</div>
-          <h1>
-            The Gateway<br />
-            <span className="heroAccent">for Agent Services</span>
-          </h1>
+          <h1>The Gateway <span className="heroAccent">for Agent Services</span></h1>
           <p className="heroSub">
             Discover x402 services and access Korean market data. Pay per-call with USDC on Base.
           </p>
 
           <div className="heroCtas">
-            <a className="button primary" href="#services">
+            <a className="button primary" href="#services" onClick={(e) => { e.preventDefault(); switchTab('services') }}>
               Browse Services
             </a>
-            <a className="button" href="#register">
-              Register Service
+            <a className="button" href="#developers" onClick={(e) => { e.preventDefault(); switchTab('developers') }}>
+              Get Started
             </a>
-          </div>
-
-          <div className="heroPills">
-            <span className="pill">Live on Base mainnet</span>
-            <span className="pill">x402 protocol</span>
-            <span className="pill">Registry + APIs</span>
           </div>
         </section>
 
         <section className="section">
-          <div className="sectionHeader">
-            <h2>Gateway Stats</h2>
-            <p className="sectionSub">
-              Base URL: <code className="inlineCode">{apiBase}</code>
-            </p>
-          </div>
-
           <div className="statsGrid">
             <div className="statCard">
               <div className="statLabel">Services</div>
@@ -338,9 +349,23 @@ function App() {
               </div>
               <div className="statMeta">Budget + circuit breaker enabled</div>
             </div>
-          </div>
+           </div>
         </section>
 
+        <div className="tabBar">
+          {TAB_IDS.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              className={`tabBtn ${activeTab === tab ? 'tabBtnActive' : ''}`}
+              onClick={() => switchTab(tab)}
+            >
+              {tabLabels[tab]}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'activity' && (
         <section id="activity" className="section">
           <div className="sectionHeader">
             <h2>Activity</h2>
@@ -435,7 +460,9 @@ function App() {
             </>
           )}
         </section>
+        )}
 
+        {activeTab === 'services' && (
         <section id="services" className="section">
           <div className="sectionHeader">
             <h2>Services</h2>
@@ -562,7 +589,9 @@ function App() {
             </aside>
           </div>
         </section>
+        )}
 
+        {activeTab === 'live' && (
         <section id="live" className="section">
           <div className="sectionHeader">
             <h2>Live Kimchi Premium (Free Preview)</h2>
@@ -572,76 +601,10 @@ function App() {
           </div>
           <LiveSignals />
         </section>
+        )}
 
-        <section id="register" className="section">
-          <div className="sectionHeader">
-            <h2>Register via API</h2>
-            <p className="sectionSub">Agents register services programmatically. No forms — just an API call.</p>
-          </div>
-
-          <div className="registerGuide">
-            <div className="registerStep">
-              <div className="registerStepNum">1</div>
-              <div className="registerStepContent">
-                <h3>POST to the registry</h3>
-                <div className="codeBlock">
-                  <div className="codeBlockHeader">
-                    <span className="codeBlockLang">curl</span>
-                  </div>
-                  <pre className="codeBlockPre"><code>{`curl -X POST https://crossfin.dev/api/registry \\
-  -H "Content-Type: application/json" \\
-  -H "X-Agent-Key: your-agent-id" \\
-  -d '{
-    "name": "My x402 Service",
-    "provider": "my-org",
-    "category": "ai",
-    "endpoint": "https://my-api.com/v1/generate",
-    "price": "$0.05",
-    "currency": "USDC",
-    "network": "eip155:8453",
-    "payTo": "0xYourAddress",
-    "tags": ["ai", "generation", "x402"]
-  }'`}</code></pre>
-                </div>
-              </div>
-            </div>
-
-            <div className="registerStep">
-              <div className="registerStepNum">2</div>
-              <div className="registerStepContent">
-                <h3>Your service is live</h3>
-                <p className="registerDesc">Agents worldwide can now discover and pay for your service through CrossFin.</p>
-                <div className="codeBlock">
-                  <div className="codeBlockHeader">
-                    <span className="codeBlockLang">response</span>
-                  </div>
-                  <pre className="codeBlockPre"><code>{`{
-  "data": {
-    "id": "svc_abc123",
-    "name": "My x402 Service",
-    "status": "active",
-    "endpoint": "https://my-api.com/v1/generate"
-  }
-}`}</code></pre>
-                </div>
-              </div>
-            </div>
-
-            <div className="registerStep">
-              <div className="registerStepNum">3</div>
-              <div className="registerStepContent">
-                <h3>Other agents find you</h3>
-                <div className="codeBlock">
-                  <div className="codeBlockHeader">
-                    <span className="codeBlockLang">bash</span>
-                  </div>
-                  <pre className="codeBlockPre"><code>{`curl "https://crossfin.dev/api/registry/search?q=generation"
-# → Your service appears in results`}</code></pre>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+        {activeTab === 'developers' && (
+        <>
         <section id="get-started" className="section">
           <div className="sectionHeader">
             <h2>Get Started</h2>
@@ -860,6 +823,78 @@ console.log(await res.json())`}</code></pre>
             </div>
           </div>
         </section>
+
+        <section id="register" className="section">
+          <div className="sectionHeader">
+            <h2>Register via API</h2>
+            <p className="sectionSub">Agents register services programmatically. No forms — just an API call.</p>
+          </div>
+
+          <div className="registerGuide">
+            <div className="registerStep">
+              <div className="registerStepNum">1</div>
+              <div className="registerStepContent">
+                <h3>POST to the registry</h3>
+                <div className="codeBlock">
+                  <div className="codeBlockHeader">
+                    <span className="codeBlockLang">curl</span>
+                  </div>
+                  <pre className="codeBlockPre"><code>{`curl -X POST https://crossfin.dev/api/registry \\
+  -H "Content-Type: application/json" \\
+  -H "X-Agent-Key: your-agent-id" \\
+  -d '{
+    "name": "My x402 Service",
+    "provider": "my-org",
+    "category": "ai",
+    "endpoint": "https://my-api.com/v1/generate",
+    "price": "$0.05",
+    "currency": "USDC",
+    "network": "eip155:8453",
+    "payTo": "0xYourAddress",
+    "tags": ["ai", "generation", "x402"]
+  }'`}</code></pre>
+                </div>
+              </div>
+            </div>
+
+            <div className="registerStep">
+              <div className="registerStepNum">2</div>
+              <div className="registerStepContent">
+                <h3>Your service is live</h3>
+                <p className="registerDesc">Agents worldwide can now discover and pay for your service through CrossFin.</p>
+                <div className="codeBlock">
+                  <div className="codeBlockHeader">
+                    <span className="codeBlockLang">response</span>
+                  </div>
+                  <pre className="codeBlockPre"><code>{`{
+  "data": {
+    "id": "svc_abc123",
+    "name": "My x402 Service",
+    "status": "active",
+    "endpoint": "https://my-api.com/v1/generate"
+  }
+}`}</code></pre>
+                </div>
+              </div>
+            </div>
+
+            <div className="registerStep">
+              <div className="registerStepNum">3</div>
+              <div className="registerStepContent">
+                <h3>Other agents find you</h3>
+                <div className="codeBlock">
+                  <div className="codeBlockHeader">
+                    <span className="codeBlockLang">bash</span>
+                  </div>
+                  <pre className="codeBlockPre"><code>{`curl "https://crossfin.dev/api/registry/search?q=generation"
+# → Your service appears in results`}</code></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        </>
+        )}
       </main>
 
       <footer className="footer">
