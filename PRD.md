@@ -1,11 +1,11 @@
 # CrossFin PRD — x402 Agent Gateway
 
 > 최종 업데이트: 2026-02-15
-> 상태: MVP 배포 완료 (v1.3.3)
+> 상태: MVP 배포 완료 (v1.3.4)
 
 ---
 
-## 0. 현재 제품 상태 (v1.3.3)
+## 0. 현재 제품 상태 (v1.3.4)
 
 Live:
 - Dashboard: https://crossfin.dev
@@ -18,7 +18,7 @@ Live:
 현황 (프로덕션):
 - Registry: 162 services (CrossFin 13 + External 149) — verified-only (dead providers disabled)
 - Korea APIs: 13 paid endpoints (x402, USDC on Base mainnet)
-- Proxy: `/api/proxy/:serviceId` GET/POST (forward + service_calls 로깅 + `X-CrossFin-Fee: 5%` 헤더). 결제 위임/정산은 Phase 2.
+- Proxy: `/api/proxy/:serviceId` GET/POST (requires `X-Agent-Key`, forward + service_calls 로깅 + `X-CrossFin-Fee: 5%` 헤더). 결제 위임/정산은 Phase 2.
 - Analytics: `/api/analytics/overview` (calls/top services/recent calls)
 - Agent onboarding: `/api/docs/guide` + `/.well-known/crossfin.json`
 - MCP Server: 12 tools (registry/guide/analytics + local wallet/budget)
@@ -106,7 +106,7 @@ Live:
 | 한국 데이터 API 13개 | ✅ 라이브 | 김프/히스토리/차익거래/호가/거래량/센티먼트/환율/뉴스/업비트/코인원/크로스거래소 |
 | 무료 데모 1개 | ✅ 라이브 | `/api/arbitrage/demo` |
 | Service Registry | ✅ 라이브 | `/api/registry/*` + 162 services (verified only) |
-| Proxy (forward + 로깅) | ✅ 라이브 | `/api/proxy/:serviceId` GET/POST |
+| Proxy (forward + 로깅) | ✅ 라이브 | `/api/proxy/:serviceId` GET/POST (requires `X-Agent-Key`) |
 | Analytics | ✅ 라이브 | `/api/analytics/overview` |
 | Agent Guide API | ✅ 라이브 | `/api/docs/guide` (구조화된 JSON) |
 | Agent Discovery | ✅ 라이브 | `/.well-known/crossfin.json` |
@@ -145,7 +145,7 @@ POST /api/registry                    — 서비스 등록 (인증 필요)
 ### 6.2 Gateway Proxy (현재 = forward + 로깅)
 
 현재 구현:
-- `/api/proxy/:serviceId` GET/POST
+- `/api/proxy/:serviceId` GET/POST (requires `X-Agent-Key`)
 - 업스트림 요청을 그대로 forward
 - `service_calls` 로그 적재 (analytics용)
 - 응답 헤더에 `X-CrossFin-Proxy: true`, `X-CrossFin-Fee: 5%` 표기
@@ -245,7 +245,7 @@ crossfin.dev는 "서비스 대시보드"로 동작한다.
 
 ## 10. 성공 지표
 
-### 현재 (v1.3.3)
+### 현재 (v1.3.4)
 - 라이브 URL: crossfin.dev
 - 등록 서비스: 162
 - CrossFin 자체 서비스: 13

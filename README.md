@@ -13,7 +13,7 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 - **Agent Discovery:** `/.well-known/crossfin.json` for automatic service detection
 - **MCP Server:** 12 tools for Claude Desktop and other MCP clients — search, browse, and call services
 - **Korea-First APIs:** 13 proprietary endpoints (Kimchi Premium, Bithumb, Upbit, Coinone, FX, headlines, trading signals)
-- **Proxy Layer:** Call any registered service through CrossFin (`/api/proxy/:serviceId`) — 5% fee, automatic call logging
+- **Proxy Layer:** Call any registered service through CrossFin (`/api/proxy/:serviceId`) — requires `X-Agent-Key`, 5% fee header, automatic call logging
 - **Analytics:** Real-time service usage stats (`/api/analytics/overview`)
 - **Live Demo:** Real-time gateway dashboard at [live.crossfin.dev](https://live.crossfin.dev)
 
@@ -54,8 +54,8 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/proxy/:serviceId` | Forward GET request to service, log call |
-| `POST /api/proxy/:serviceId` | Forward POST request to service, log call |
+| `GET /api/proxy/:serviceId` | Forward GET request to service (requires `X-Agent-Key`), log call |
+| `POST /api/proxy/:serviceId` | Forward POST request to service (requires `X-Agent-Key`), log call |
 
 ### Analytics (Free)
 
@@ -202,7 +202,7 @@ Phase 3 (6 months) → Agent banking: wallet management, budget controls, fiat o
 
 ```
 apps/
-  api/          Cloudflare Workers API (v1.3.3)
+    api/          Cloudflare Workers API (v1.3.4)
     src/
       index.ts    Routes, x402 paywall, registry, guide, seeds, proxy, analytics
     migrations/
