@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState, type FormEvent as ReactFormEvent } fr
 import './App.css'
 import LiveSignals from './components/LiveSignals'
 import {
-  createRegistryService,
   fetchAnalytics,
   fetchRegistryCategories,
   fetchRegistryServices,
@@ -27,14 +26,6 @@ function truncateMiddle(value: string, max = 56): string {
   const head = raw.slice(0, Math.max(0, Math.floor(max * 0.6)))
   const tail = raw.slice(-Math.max(0, Math.floor(max * 0.25)))
   return `${head}…${tail}`
-}
-
-function parseTags(value: string): string[] {
-  return value
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean)
-    .slice(0, 20)
 }
 
 function App() {
@@ -128,18 +119,7 @@ function App() {
     }
   }
 
-  const [registerAgentKey, setRegisterAgentKey] = useState<string>('')
-  const [registerName, setRegisterName] = useState<string>('')
-  const [registerProvider, setRegisterProvider] = useState<string>('')
-  const [registerCategory, setRegisterCategory] = useState<string>('other')
-  const [registerEndpoint, setRegisterEndpoint] = useState<string>('')
-  const [registerMethod, setRegisterMethod] = useState<string>('GET')
-  const [registerPrice, setRegisterPrice] = useState<string>('$0.01')
-  const [registerCurrency, setRegisterCurrency] = useState<string>('USDC')
-  const [registerNetwork, setRegisterNetwork] = useState<string>('eip155:8453')
-  const [registerPayTo, setRegisterPayTo] = useState<string>('')
-  const [registerTags, setRegisterTags] = useState<string>('')
-  const [registerState, setRegisterState] = useState<LoadState<RegistryService> | null>(null)
+
 
   useEffect(() => {
     const ctrl = new AbortController()
@@ -219,37 +199,7 @@ function App() {
     void loadServices({ q })
   }
 
-  async function onRegisterSubmit(e: ReactFormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setRegisterState({ status: 'loading' })
 
-    try {
-      const created = await createRegistryService({
-        agentKey: registerAgentKey,
-        name: registerName.trim(),
-        provider: registerProvider.trim(),
-        category: registerCategory.trim() || 'other',
-        endpoint: registerEndpoint.trim(),
-        method: registerMethod.trim(),
-        price: registerPrice.trim(),
-        currency: registerCurrency.trim() || 'USDC',
-        network: registerNetwork.trim() ? registerNetwork.trim() : null,
-        payTo: registerPayTo.trim() ? registerPayTo.trim() : null,
-        tags: parseTags(registerTags),
-      })
-
-      setRegisterState({ status: 'success', data: created })
-      setRegisterName('')
-      setRegisterEndpoint('')
-      setRegisterTags('')
-      void loadServices({ q: '' })
-    } catch (err) {
-      setRegisterState({
-        status: 'error',
-        message: err instanceof Error ? err.message : 'Failed to register service',
-      })
-    }
-  }
 
   function relativeTime(dateStr: string): string {
     const now = Date.now()
@@ -625,74 +575,72 @@ function App() {
 
         <section id="register" className="section">
           <div className="sectionHeader">
-            <h2>Register a Service</h2>
-            <p className="sectionSub">
-              Requires <code className="inlineCode">X-Agent-Key</code>.
-            </p>
+            <h2>Register via API</h2>
+            <p className="sectionSub">Agents register services programmatically. No forms — just an API call.</p>
           </div>
 
-          <form className="registerForm" onSubmit={onRegisterSubmit}>
-            <div className="formGrid">
-              <label className="field">
-                <span className="fieldLabel">X-Agent-Key</span>
-                <input value={registerAgentKey} onChange={(e) => setRegisterAgentKey(e.target.value)} placeholder="cf_…" />
-              </label>
-              <label className="field">
-                <span className="fieldLabel">Provider</span>
-                <input value={registerProvider} onChange={(e) => setRegisterProvider(e.target.value)} placeholder="e.g., myservice" />
-              </label>
-              <label className="field span2">
-                <span className="fieldLabel">Name</span>
-                <input value={registerName} onChange={(e) => setRegisterName(e.target.value)} placeholder="Service display name" />
-              </label>
-              <label className="field">
-                <span className="fieldLabel">Category</span>
-                <input value={registerCategory} onChange={(e) => setRegisterCategory(e.target.value)} placeholder="other" />
-              </label>
-              <label className="field">
-                <span className="fieldLabel">Method</span>
-                <select value={registerMethod} onChange={(e) => setRegisterMethod(e.target.value)}>
-                  <option value="GET">GET</option>
-                  <option value="POST">POST</option>
-                  <option value="PUT">PUT</option>
-                  <option value="DELETE">DELETE</option>
-                  <option value="PATCH">PATCH</option>
-                </select>
-              </label>
-              <label className="field span2">
-                <span className="fieldLabel">Endpoint (https://…)</span>
-                <input value={registerEndpoint} onChange={(e) => setRegisterEndpoint(e.target.value)} placeholder="https://example.com/api" />
-              </label>
-              <label className="field">
-                <span className="fieldLabel">Price</span>
-                <input value={registerPrice} onChange={(e) => setRegisterPrice(e.target.value)} placeholder="$0.01" />
-              </label>
-              <label className="field">
-                <span className="fieldLabel">Currency</span>
-                <input value={registerCurrency} onChange={(e) => setRegisterCurrency(e.target.value)} placeholder="USDC" />
-              </label>
-              <label className="field">
-                <span className="fieldLabel">Network (optional)</span>
-                <input value={registerNetwork} onChange={(e) => setRegisterNetwork(e.target.value)} placeholder="eip155:8453" />
-              </label>
-              <label className="field">
-                <span className="fieldLabel">PayTo (optional)</span>
-                <input value={registerPayTo} onChange={(e) => setRegisterPayTo(e.target.value)} placeholder="0x…" />
-              </label>
-              <label className="field span2">
-                <span className="fieldLabel">Tags (comma separated)</span>
-                <input value={registerTags} onChange={(e) => setRegisterTags(e.target.value)} placeholder="korea, x402, data" />
-              </label>
+          <div className="registerGuide">
+            <div className="registerStep">
+              <div className="registerStepNum">1</div>
+              <div className="registerStepContent">
+                <h3>POST to the registry</h3>
+                <div className="codeBlock">
+                  <div className="codeBlockHeader">
+                    <span className="codeBlockLang">curl</span>
+                  </div>
+                  <pre className="codeBlockPre"><code>{`curl -X POST https://crossfin.dev/api/registry \\
+  -H "Content-Type: application/json" \\
+  -H "X-Agent-Key: your-agent-id" \\
+  -d '{
+    "name": "My x402 Service",
+    "provider": "my-org",
+    "category": "ai",
+    "endpoint": "https://my-api.com/v1/generate",
+    "price": "$0.05",
+    "currency": "USDC",
+    "network": "eip155:8453",
+    "payTo": "0xYourAddress",
+    "tags": ["ai", "generation", "x402"]
+  }'`}</code></pre>
+                </div>
+              </div>
             </div>
 
-            <div className="registerActions">
-              <button className="miniButton primary" type="submit" disabled={registerState?.status === 'loading'}>
-                {registerState?.status === 'loading' ? 'Registering…' : 'Register'}
-              </button>
-              {registerState?.status === 'error' ? <div className="registerError">{registerState.message}</div> : null}
-              {registerState?.status === 'success' ? <div className="registerSuccess">Registered: {registerState.data.id}</div> : null}
+            <div className="registerStep">
+              <div className="registerStepNum">2</div>
+              <div className="registerStepContent">
+                <h3>Your service is live</h3>
+                <p className="registerDesc">Agents worldwide can now discover and pay for your service through CrossFin.</p>
+                <div className="codeBlock">
+                  <div className="codeBlockHeader">
+                    <span className="codeBlockLang">response</span>
+                  </div>
+                  <pre className="codeBlockPre"><code>{`{
+  "data": {
+    "id": "svc_abc123",
+    "name": "My x402 Service",
+    "status": "active",
+    "endpoint": "https://my-api.com/v1/generate"
+  }
+}`}</code></pre>
+                </div>
+              </div>
             </div>
-          </form>
+
+            <div className="registerStep">
+              <div className="registerStepNum">3</div>
+              <div className="registerStepContent">
+                <h3>Other agents find you</h3>
+                <div className="codeBlock">
+                  <div className="codeBlockHeader">
+                    <span className="codeBlockLang">bash</span>
+                  </div>
+                  <pre className="codeBlockPre"><code>{`curl "https://crossfin.dev/api/registry/search?q=generation"
+# → Your service appears in results`}</code></pre>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
         <section id="get-started" className="section">
           <div className="sectionHeader">

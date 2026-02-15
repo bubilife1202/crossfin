@@ -33,7 +33,7 @@ function requireCaip2(value: string): Caip2 {
 const app = new Hono<Env>()
 
 app.use('*', cors({
-  origin: ['http://localhost:5173', 'https://crossfin.pages.dev', 'https://crossfin.dev', 'https://www.crossfin.dev'],
+  origin: ['http://localhost:5173', 'https://crossfin.pages.dev', 'https://crossfin.dev', 'https://www.crossfin.dev', 'https://live.crossfin.dev', 'https://crossfin-live.pages.dev'],
   allowHeaders: ['Content-Type', 'Authorization', 'X-Agent-Key', 'PAYMENT-SIGNATURE'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   exposeHeaders: ['PAYMENT-REQUIRED', 'PAYMENT-RESPONSE'],
