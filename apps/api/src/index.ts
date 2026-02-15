@@ -123,6 +123,35 @@ app.get('/api/openapi.json', (c) => {
           },
         },
       },
+      '/api/premium/arbitrage/kimchi/history': {
+        get: {
+          operationId: 'kimchiPremiumHistory',
+          summary: 'Kimchi Premium History (hourly) — $0.05 USDC',
+          description: 'Historical hourly snapshots of the Kimchi Premium data captured by CrossFin cron. Query by coin and time range. Payment: $0.05 USDC on Base via x402.',
+          tags: ['Paid — x402'],
+          parameters: [
+            { name: 'coin', in: 'query', description: 'Optional coin filter (e.g. BTC, ETH). Default: all', schema: { type: 'string' } },
+            { name: 'hours', in: 'query', description: 'Lookback window in hours (default: 24, max: 168)', schema: { type: 'integer', default: 24, maximum: 168 } },
+          ],
+          responses: {
+            '200': {
+              description: 'Hourly kimchi premium snapshots',
+              content: { 'application/json': { schema: { type: 'object', properties: {
+                paid: { type: 'boolean' },
+                service: { type: 'string' },
+                coin: { type: ['string', 'null'] },
+                hours: { type: 'integer' },
+                groupedBy: { type: 'string' },
+                range: { type: 'object' },
+                snapshots: { type: 'array', items: { type: 'object' } },
+                count: { type: 'integer' },
+                at: { type: 'string', format: 'date-time' },
+              } } } },
+            },
+            '402': { description: 'Payment required — $0.05 USDC on Base mainnet' },
+          },
+        },
+      },
       '/api/premium/arbitrage/opportunities': {
         get: {
           operationId: 'arbitrageOpportunities',
@@ -179,6 +208,32 @@ app.get('/api/openapi.json', (c) => {
               } } } },
             },
             '402': { description: 'Payment required — $0.02 USDC on Base mainnet' },
+          },
+        },
+      },
+      '/api/premium/bithumb/volume-analysis': {
+        get: {
+          operationId: 'bithumbVolumeAnalysis',
+          summary: 'Bithumb 24h Volume Analysis — $0.03 USDC',
+          description: 'Bithumb-wide 24h volume analysis: total market volume, top coins by volume, volume concentration (top 5), volume-weighted change, and unusual volume detection. Payment: $0.03 USDC on Base via x402.',
+          tags: ['Paid — x402'],
+          responses: {
+            '200': {
+              description: 'Volume analysis snapshot',
+              content: { 'application/json': { schema: { type: 'object', properties: {
+                paid: { type: 'boolean' },
+                service: { type: 'string' },
+                totalVolume24hKrw: { type: 'number' },
+                totalVolume24hUsd: { type: 'number' },
+                totalCoins: { type: 'integer' },
+                volumeConcentration: { type: 'object', properties: { top5Pct: { type: 'number' }, top5Coins: { type: 'array', items: { type: 'object' } } } },
+                volumeWeightedChangePct: { type: 'number' },
+                unusualVolume: { type: 'array', items: { type: 'object' } },
+                topByVolume: { type: 'array', items: { type: 'object' } },
+                at: { type: 'string', format: 'date-time' },
+              } } } },
+            },
+            '402': { description: 'Payment required — $0.03 USDC on Base mainnet' },
           },
         },
       },
@@ -245,6 +300,42 @@ app.get('/api/openapi.json', (c) => {
           responses: {
             '200': { description: 'Orderbook snapshot', content: { 'application/json': { schema: { type: 'object' } } } },
             '402': { description: 'Payment required — $0.02 USDC on Base mainnet' },
+          },
+        },
+      },
+      '/api/premium/market/upbit/signals': {
+        get: {
+          operationId: 'upbitSignals',
+          summary: 'Upbit Trading Signals (Momentum + Volume) — $0.05 USDC',
+          description: 'Trading signals for major KRW markets on Upbit (KRW-BTC, KRW-ETH, KRW-XRP, KRW-SOL, KRW-DOGE, KRW-ADA). Includes momentum buckets, relative volume signals, volatility, and a combined bullish/bearish/neutral call. Payment: $0.05 USDC on Base via x402.',
+          tags: ['Paid — x402'],
+          responses: {
+            '200': {
+              description: 'Signals snapshot',
+              content: { 'application/json': { schema: { type: 'object', properties: {
+                paid: { type: 'boolean' },
+                service: { type: 'string' },
+                signals: { type: 'array', items: { type: 'object', properties: {
+                  market: { type: 'string' },
+                  priceKrw: { type: 'number' },
+                  change24hPct: { type: 'number' },
+                  volume24hKrw: { type: 'number' },
+                  volatilityPct: { type: 'number' },
+                  volumeSignal: { type: 'string', enum: ['high', 'normal', 'low'] },
+                  momentum: { type: 'string', enum: ['strong-up', 'up', 'neutral', 'down', 'strong-down'] },
+                  signal: { type: 'string', enum: ['bullish', 'bearish', 'neutral'] },
+                  confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+                } } },
+                marketSummary: { type: 'object', properties: {
+                  bullishCount: { type: 'integer' },
+                  bearishCount: { type: 'integer' },
+                  neutralCount: { type: 'integer' },
+                  overallSentiment: { type: 'string', enum: ['bullish', 'bearish', 'neutral'] },
+                } },
+                at: { type: 'string', format: 'date-time' },
+              } } } },
+            },
+            '402': { description: 'Payment required — $0.05 USDC on Base mainnet' },
           },
         },
       },
@@ -428,12 +519,15 @@ app.get('/api/openapi.json', (c) => {
       facilitator: 'https://facilitator.x402endpoints.online',
       pricing: {
         '/api/premium/arbitrage/kimchi': '$0.05',
+        '/api/premium/arbitrage/kimchi/history': '$0.05',
         '/api/premium/arbitrage/opportunities': '$0.10',
         '/api/premium/bithumb/orderbook': '$0.02',
+        '/api/premium/bithumb/volume-analysis': '$0.03',
         '/api/premium/market/korea': '$0.03',
         '/api/premium/market/fx/usdkrw': '$0.01',
         '/api/premium/market/upbit/ticker': '$0.02',
         '/api/premium/market/upbit/orderbook': '$0.02',
+        '/api/premium/market/upbit/signals': '$0.05',
         '/api/premium/market/coinone/ticker': '$0.02',
         '/api/premium/market/cross-exchange': '$0.08',
         '/api/premium/news/korea/headlines': '$0.03',
@@ -494,6 +588,32 @@ app.use(
             }),
           },
         },
+        'GET /api/premium/arbitrage/kimchi/history': {
+          accepts: {
+            scheme: 'exact',
+            price: '$0.05',
+            network,
+            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
+            maxTimeoutSeconds: 300,
+          },
+          description: 'Historical Kimchi Premium snapshots grouped by hour (from CrossFin cron). Query by coin and lookback hours.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              input: { hours: 24, coin: 'BTC' },
+              inputSchema: {
+                properties: {
+                  hours: { type: 'number', description: 'Lookback window in hours (1-168)' },
+                  coin: { type: 'string', description: 'Optional coin filter (e.g., BTC, ETH)' },
+                },
+              },
+              output: {
+                example: { paid: true, service: 'crossfin-kimchi-premium-history', hours: 24, groupedBy: 'hour', snapshots: [{ coin: 'BTC', premiumPct: 2.2, hour: '2026-02-15T03:00:00Z' }], count: 1 },
+                schema: { properties: { paid: { type: 'boolean' }, hours: { type: 'number' }, groupedBy: { type: 'string' }, snapshots: { type: 'array' }, count: { type: 'number' } }, required: ['paid', 'hours', 'groupedBy', 'snapshots', 'count'] },
+              },
+            }),
+          },
+        },
         'GET /api/premium/arbitrage/opportunities': {
           accepts: {
             scheme: 'exact',
@@ -530,6 +650,39 @@ app.use(
               output: {
                 example: { paid: true, service: 'crossfin-bithumb-orderbook', pair: 'BTC/KRW', exchange: 'Bithumb', bestBidKrw: 144900000, bestAskKrw: 145000000, spreadPct: 0.07, depth: { bids: [], asks: [] } },
                 schema: { properties: { paid: { type: 'boolean' }, pair: { type: 'string' }, bestBidKrw: { type: 'number' }, bestAskKrw: { type: 'number' }, spreadPct: { type: 'number' } }, required: ['paid', 'pair', 'bestBidKrw', 'bestAskKrw'] },
+              },
+            }),
+          },
+        },
+        'GET /api/premium/bithumb/volume-analysis': {
+          accepts: {
+            scheme: 'exact',
+            price: '$0.03',
+            network,
+            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
+            maxTimeoutSeconds: 300,
+          },
+          description: 'Bithumb 24h volume analysis: total market volume, volume concentration, volume-weighted change, and unusual volume detection (2x+ average).',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              output: {
+                example: { paid: true, service: 'crossfin-bithumb-volume', totalVolume24hKrw: 1234567890, totalVolume24hUsd: 850000, totalCoins: 200, volumeConcentration: { top5Pct: 62.5, top5Coins: [{ coin: 'BTC', volume24hKrw: 400000000, volumeSharePct: 32.4 }] }, volumeWeightedChangePct: 0.75, unusualVolume: [], topByVolume: [], at: '2026-02-15T00:00:00.000Z' },
+                schema: {
+                  properties: {
+                    paid: { type: 'boolean' },
+                    service: { type: 'string' },
+                    totalVolume24hKrw: { type: 'number' },
+                    totalVolume24hUsd: { type: 'number' },
+                    totalCoins: { type: 'number' },
+                    volumeConcentration: { type: 'object' },
+                    volumeWeightedChangePct: { type: 'number' },
+                    unusualVolume: { type: 'array' },
+                    topByVolume: { type: 'array' },
+                    at: { type: 'string' },
+                  },
+                  required: ['paid', 'service', 'totalVolume24hKrw', 'totalVolume24hUsd', 'totalCoins', 'volumeConcentration', 'volumeWeightedChangePct', 'unusualVolume', 'topByVolume', 'at'],
+                },
               },
             }),
           },
@@ -602,6 +755,34 @@ app.use(
               output: {
                 example: { paid: true, service: 'crossfin-upbit-orderbook', market: 'KRW-BTC', bestBidKrw: 99990000, bestAskKrw: 100000000, spreadPct: 0.01 },
                 schema: { properties: { paid: { type: 'boolean' }, market: { type: 'string' }, bestBidKrw: { type: 'number' }, bestAskKrw: { type: 'number' }, spreadPct: { type: 'number' } }, required: ['paid', 'market', 'bestBidKrw', 'bestAskKrw'] },
+              },
+            }),
+          },
+        },
+        'GET /api/premium/market/upbit/signals': {
+          accepts: {
+            scheme: 'exact',
+            price: '$0.05',
+            network,
+            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
+            maxTimeoutSeconds: 300,
+          },
+          description: 'Upbit trading signals with momentum, relative volume signal, and volatility for KRW-BTC, KRW-ETH, KRW-XRP, KRW-SOL, KRW-DOGE, KRW-ADA.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              output: {
+                example: { paid: true, service: 'crossfin-upbit-signals', signals: [{ market: 'KRW-BTC', priceKrw: 100000000, change24hPct: 1.25, volume24hKrw: 5000000000, volatilityPct: 2.1, volumeSignal: 'high', momentum: 'up', signal: 'bullish', confidence: 'medium' }], marketSummary: { bullishCount: 2, bearishCount: 1, neutralCount: 3, overallSentiment: 'neutral' }, at: '2026-02-15T00:00:00.000Z' },
+                schema: {
+                  properties: {
+                    paid: { type: 'boolean' },
+                    service: { type: 'string' },
+                    signals: { type: 'array' },
+                    marketSummary: { type: 'object' },
+                    at: { type: 'string' },
+                  },
+                  required: ['paid', 'service', 'signals', 'marketSummary', 'at'],
+                },
               },
             }),
           },
@@ -867,6 +1048,22 @@ async function ensureRegistrySeeded(db: D1Database, receiverAddress: string): Pr
       tags: ['korea', 'crypto', 'arbitrage', 'kimchi-premium'],
     },
     {
+      id: 'crossfin_kimchi_premium_history',
+      name: 'CrossFin Kimchi Premium History (Hourly)',
+      description: 'Historical hourly snapshots of kimchi premium data captured by CrossFin cron.',
+      provider: 'crossfin',
+      category: 'korea-crypto',
+      endpoint: 'https://crossfin.dev/api/premium/arbitrage/kimchi/history?hours=24',
+      method: 'GET',
+      price: '$0.05',
+      currency: 'USDC',
+      network: 'eip155:8453',
+      payTo: receiverAddress,
+      status: 'active',
+      isCrossfin: true,
+      tags: ['korea', 'crypto', 'arbitrage', 'kimchi-premium', 'history'],
+    },
+    {
       id: 'crossfin_arbitrage_opportunities',
       name: 'CrossFin Arbitrage Opportunities',
       description: 'Pre-calculated profitable arbitrage routes between Korean and global exchanges.',
@@ -897,6 +1094,22 @@ async function ensureRegistrySeeded(db: D1Database, receiverAddress: string): Pr
       status: 'active',
       isCrossfin: true,
       tags: ['korea', 'crypto', 'orderbook', 'bithumb'],
+    },
+    {
+      id: 'crossfin_bithumb_volume',
+      name: 'CrossFin Bithumb Volume Analysis',
+      description: 'Bithumb-wide 24h volume analysis with concentration and unusual volume detection.',
+      provider: 'crossfin',
+      category: 'korea-crypto',
+      endpoint: 'https://crossfin.dev/api/premium/bithumb/volume-analysis',
+      method: 'GET',
+      price: '$0.03',
+      currency: 'USDC',
+      network: 'eip155:8453',
+      payTo: receiverAddress,
+      status: 'active',
+      isCrossfin: true,
+      tags: ['korea', 'crypto', 'bithumb', 'volume', 'analysis'],
     },
     {
       id: 'crossfin_korea_sentiment',
@@ -961,6 +1174,22 @@ async function ensureRegistrySeeded(db: D1Database, receiverAddress: string): Pr
       status: 'active',
       isCrossfin: true,
       tags: ['korea', 'crypto', 'upbit', 'orderbook'],
+    },
+    {
+      id: 'crossfin_upbit_signals',
+      name: 'CrossFin Upbit Trading Signals',
+      description: 'Upbit momentum + relative volume + volatility trading signals for major KRW markets.',
+      provider: 'crossfin',
+      category: 'korea-crypto',
+      endpoint: 'https://crossfin.dev/api/premium/market/upbit/signals',
+      method: 'GET',
+      price: '$0.05',
+      currency: 'USDC',
+      network: 'eip155:8453',
+      payTo: receiverAddress,
+      status: 'active',
+      isCrossfin: true,
+      tags: ['korea', 'crypto', 'upbit', 'signals', 'momentum'],
     },
     {
       id: 'crossfin_coinone_ticker',
@@ -2523,6 +2752,83 @@ app.get('/api/premium/arbitrage/kimchi', async (c) => {
   })
 })
 
+app.get('/api/premium/arbitrage/kimchi/history', async (c) => {
+  const coinRaw = c.req.query('coin')
+  const coin = coinRaw ? requireSymbol(coinRaw, 'coin') : null
+
+  const hoursRaw = c.req.query('hours')
+  const hoursValue = hoursRaw ? Number(hoursRaw) : 24
+  if (!Number.isFinite(hoursValue) || !Number.isInteger(hoursValue)) {
+    throw new HTTPException(400, { message: 'hours must be an integer' })
+  }
+
+  const hours = Math.min(168, Math.max(1, hoursValue))
+
+  const rangeArg = `-${hours} hours`
+  const sql = `
+    WITH ranked AS (
+      SELECT
+        id,
+        coin,
+        bithumb_krw AS bithumbKrw,
+        binance_usd AS binanceUsd,
+        premium_pct AS premiumPct,
+        krw_usd_rate AS krwUsdRate,
+        volume_24h_usd AS volume24hUsd,
+        created_at AS createdAt,
+        strftime('%Y-%m-%dT%H:00:00Z', created_at) AS hour,
+        ROW_NUMBER() OVER (
+          PARTITION BY coin, strftime('%Y-%m-%d %H', created_at)
+          ORDER BY datetime(created_at) DESC
+        ) AS rn
+      FROM kimchi_snapshots
+      WHERE datetime(created_at) >= datetime('now', ?)
+        AND (? IS NULL OR coin = ?)
+    )
+    SELECT id, coin, bithumbKrw, binanceUsd, premiumPct, krwUsdRate, volume24hUsd, createdAt, hour
+    FROM ranked
+    WHERE rn = 1
+    ORDER BY datetime(createdAt) DESC
+  `
+
+  let results: Array<Record<string, unknown>> = []
+  try {
+    const res = await c.env.DB.prepare(sql).bind(rangeArg, coin, coin).all<Record<string, unknown>>()
+    results = res.results ?? []
+  } catch (err) {
+    console.error(err)
+    throw new HTTPException(500, { message: 'DB schema not migrated (kimchi_snapshots table missing)' })
+  }
+
+  const snapshots = results.map((r) => ({
+    id: String(r.id ?? ''),
+    coin: String(r.coin ?? ''),
+    bithumbKrw: r.bithumbKrw === null || r.bithumbKrw === undefined ? null : Number(r.bithumbKrw),
+    binanceUsd: r.binanceUsd === null || r.binanceUsd === undefined ? null : Number(r.binanceUsd),
+    premiumPct: r.premiumPct === null || r.premiumPct === undefined ? null : Number(r.premiumPct),
+    krwUsdRate: r.krwUsdRate === null || r.krwUsdRate === undefined ? null : Number(r.krwUsdRate),
+    volume24hUsd: r.volume24hUsd === null || r.volume24hUsd === undefined ? null : Number(r.volume24hUsd),
+    createdAt: String(r.createdAt ?? ''),
+    hour: String(r.hour ?? ''),
+  }))
+
+  const now = Date.now()
+  return c.json({
+    paid: true,
+    service: 'crossfin-kimchi-premium-history',
+    coin,
+    hours,
+    groupedBy: 'hour',
+    range: {
+      from: new Date(now - hours * 60 * 60 * 1000).toISOString(),
+      to: new Date(now).toISOString(),
+    },
+    snapshots,
+    count: snapshots.length,
+    at: new Date().toISOString(),
+  })
+})
+
 // === Arbitrage Opportunities (paid $0.10) ===
 
 app.get('/api/premium/arbitrage/opportunities', async (c) => {
@@ -2602,6 +2908,80 @@ app.get('/api/premium/bithumb/orderbook', async (c) => {
     bestBidUsd: Math.round(bestBid / krwRate * 100) / 100,
     bestAskUsd: Math.round(bestAsk / krwRate * 100) / 100,
     depth: { bids, asks },
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/bithumb/volume-analysis', async (c) => {
+  const [bithumbData, krwRate] = await Promise.all([
+    fetchBithumbAll(),
+    fetchKrwRate(),
+  ])
+
+  const coins: Array<{ coin: string; volume24hKrw: number; change24hPct: number }> = []
+  for (const [coin, data] of Object.entries(bithumbData)) {
+    if (coin === 'date' || typeof data !== 'object' || !data) continue
+    const d = data as Record<string, string>
+    if (!d.closing_price) continue
+
+    const volume24hKrw = parseFloat(d.acc_trade_value_24H || '0')
+    if (!Number.isFinite(volume24hKrw) || volume24hKrw <= 0) continue
+
+    const change24hPct = parseFloat(d.fluctate_rate_24H || '0')
+    coins.push({
+      coin,
+      volume24hKrw,
+      change24hPct: Number.isFinite(change24hPct) ? change24hPct : 0,
+    })
+  }
+
+  const totalVolume24hKrw = coins.reduce((s, c) => s + c.volume24hKrw, 0)
+  const totalCoins = coins.length
+  const avgVolume24hKrw = totalCoins > 0 ? totalVolume24hKrw / totalCoins : 0
+
+  const volumeWeightedChangePct = totalVolume24hKrw > 0
+    ? round2(coins.reduce((s, c) => s + (c.change24hPct * c.volume24hKrw), 0) / totalVolume24hKrw)
+    : 0
+
+  const sortedByVolume = [...coins].sort((a, b) => b.volume24hKrw - a.volume24hKrw)
+  const withShare = (row: { coin: string; volume24hKrw: number; change24hPct: number }) => {
+    const sharePct = totalVolume24hKrw > 0 ? (row.volume24hKrw / totalVolume24hKrw) * 100 : 0
+    return {
+      coin: row.coin,
+      volume24hKrw: row.volume24hKrw,
+      volume24hUsd: round2(row.volume24hKrw / krwRate),
+      change24hPct: round2(row.change24hPct),
+      volumeSharePct: round2(sharePct),
+    }
+  }
+
+  const top5 = sortedByVolume.slice(0, 5)
+  const top5Volume = top5.reduce((s, c) => s + c.volume24hKrw, 0)
+  const top5Pct = totalVolume24hKrw > 0 ? round2((top5Volume / totalVolume24hKrw) * 100) : 0
+
+  const unusualVolume = avgVolume24hKrw > 0
+    ? sortedByVolume
+        .filter((c) => c.volume24hKrw > avgVolume24hKrw * 2)
+        .slice(0, 50)
+        .map((c) => ({
+          ...withShare(c),
+          multipleOfAvg: round2(c.volume24hKrw / avgVolume24hKrw),
+        }))
+    : []
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-bithumb-volume',
+    totalVolume24hKrw: round2(totalVolume24hKrw),
+    totalVolume24hUsd: round2(totalVolume24hKrw / krwRate),
+    totalCoins,
+    volumeConcentration: {
+      top5Pct,
+      top5Coins: top5.map((c) => withShare(c)),
+    },
+    volumeWeightedChangePct,
+    unusualVolume,
+    topByVolume: sortedByVolume.slice(0, 15).map((c) => withShare(c)),
     at: new Date().toISOString(),
   })
 })
@@ -2737,6 +3117,121 @@ app.get('/api/premium/market/upbit/orderbook', async (c) => {
     bestAskUsd: Math.round(bestAskKrw / krwRate * 100) / 100,
     units,
     krwUsdRate: krwRate,
+    at: new Date().toISOString(),
+  })
+})
+
+type UpbitVolumeSignal = 'high' | 'normal' | 'low'
+type UpbitMomentum = 'strong-up' | 'up' | 'neutral' | 'down' | 'strong-down'
+type UpbitTradingSignal = 'bullish' | 'bearish' | 'neutral'
+type UpbitSignalConfidence = 'high' | 'medium' | 'low'
+
+function upbitMomentumBucket(change24hPct: number): UpbitMomentum {
+  if (change24hPct >= 4) return 'strong-up'
+  if (change24hPct >= 1) return 'up'
+  if (change24hPct <= -4) return 'strong-down'
+  if (change24hPct <= -1) return 'down'
+  return 'neutral'
+}
+
+function upbitVolumeBucket(volume24hKrw: number, avgVolume24hKrw: number): UpbitVolumeSignal {
+  if (!(avgVolume24hKrw > 0)) return 'normal'
+  if (volume24hKrw >= avgVolume24hKrw * 1.5) return 'high'
+  if (volume24hKrw <= avgVolume24hKrw * 0.5) return 'low'
+  return 'normal'
+}
+
+function upbitSignalFrom(
+  change24hPct: number,
+  momentum: UpbitMomentum,
+  volumeSignal: UpbitVolumeSignal,
+  volatilityPct: number,
+): { signal: UpbitTradingSignal; confidence: UpbitSignalConfidence } {
+  let signal: UpbitTradingSignal = 'neutral'
+  if ((momentum === 'up' || momentum === 'strong-up') && change24hPct > 1 && volumeSignal !== 'low') {
+    signal = 'bullish'
+  } else if ((momentum === 'down' || momentum === 'strong-down') && change24hPct < -1 && volumeSignal !== 'low') {
+    signal = 'bearish'
+  }
+
+  const absChange = Math.abs(change24hPct)
+  let confidence: UpbitSignalConfidence = 'low'
+  if (signal !== 'neutral') {
+    if (absChange >= 4 && volumeSignal === 'high' && volatilityPct <= 10) confidence = 'high'
+    else if (absChange >= 2 && volumeSignal !== 'low' && volatilityPct <= 15) confidence = 'medium'
+  }
+  return { signal, confidence }
+}
+
+app.get('/api/premium/market/upbit/signals', async (c) => {
+  const markets = ['KRW-BTC', 'KRW-ETH', 'KRW-XRP', 'KRW-SOL', 'KRW-DOGE', 'KRW-ADA'] as const
+
+  const tickers = await Promise.all(
+    markets.map(async (market) => ({ market, ticker: await fetchUpbitTicker(market) })),
+  )
+
+  const base = tickers.map(({ market, ticker }) => {
+    const tradePriceKrw = typeof ticker.trade_price === 'number' ? ticker.trade_price : Number(ticker.trade_price ?? 0)
+    const changeRate = typeof ticker.signed_change_rate === 'number' ? ticker.signed_change_rate : Number(ticker.signed_change_rate ?? 0)
+    const highPriceKrw = typeof ticker.high_price === 'number' ? ticker.high_price : Number(ticker.high_price ?? 0)
+    const lowPriceKrw = typeof ticker.low_price === 'number' ? ticker.low_price : Number(ticker.low_price ?? 0)
+    const volume24hKrw = typeof ticker.acc_trade_price_24h === 'number' ? ticker.acc_trade_price_24h : Number(ticker.acc_trade_price_24h ?? 0)
+
+    const change24hPct = round2((Number.isFinite(changeRate) ? changeRate : 0) * 100)
+    const price = Number.isFinite(tradePriceKrw) ? tradePriceKrw : 0
+    const hi = Number.isFinite(highPriceKrw) ? highPriceKrw : 0
+    const lo = Number.isFinite(lowPriceKrw) ? lowPriceKrw : 0
+    const vol = Number.isFinite(volume24hKrw) ? volume24hKrw : 0
+    const volatilityPct = price > 0 ? round2(((Math.max(hi, lo) - Math.min(hi, lo)) / price) * 100) : 0
+
+    return {
+      market,
+      priceKrw: round2(price),
+      change24hPct,
+      volume24hKrw: round2(vol),
+      volatilityPct,
+    }
+  })
+
+  const avgVolume24hKrw = base.length > 0 ? base.reduce((s, r) => s + r.volume24hKrw, 0) / base.length : 0
+
+  const signals = base.map((row) => {
+    const volumeSignal = upbitVolumeBucket(row.volume24hKrw, avgVolume24hKrw)
+    const momentum = upbitMomentumBucket(row.change24hPct)
+    const derived = upbitSignalFrom(row.change24hPct, momentum, volumeSignal, row.volatilityPct)
+    return {
+      market: row.market,
+      priceKrw: row.priceKrw,
+      change24hPct: row.change24hPct,
+      volume24hKrw: row.volume24hKrw,
+      volatilityPct: row.volatilityPct,
+      volumeSignal,
+      momentum,
+      signal: derived.signal,
+      confidence: derived.confidence,
+    }
+  })
+
+  const bullishCount = signals.filter((s) => s.signal === 'bullish').length
+  const bearishCount = signals.filter((s) => s.signal === 'bearish').length
+  const neutralCount = signals.length - bullishCount - bearishCount
+
+  const overallSentiment: UpbitTradingSignal = bullishCount >= bearishCount + 2
+    ? 'bullish'
+    : bearishCount >= bullishCount + 2
+      ? 'bearish'
+      : 'neutral'
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-upbit-signals',
+    signals,
+    marketSummary: {
+      bullishCount,
+      bearishCount,
+      neutralCount,
+      overallSentiment,
+    },
     at: new Date().toISOString(),
   })
 })
@@ -2994,6 +3489,41 @@ app.get('/api/arbitrage/demo', async (c) => {
       : 0,
     at: new Date().toISOString(),
   })
+})
+
+app.get('/api/cron/snapshot-kimchi', async (c) => {
+  const key = c.req.query('key')
+  if (key !== 'crossfin-cron-2026') throw new HTTPException(401, { message: 'Unauthorized' })
+
+  const [bithumbData, binancePrices, krwRate] = await Promise.all([
+    fetchBithumbAll(),
+    fetchGlobalPrices(),
+    fetchKrwRate(),
+  ])
+
+  const premiums = calcPremiums(bithumbData, binancePrices, krwRate)
+
+  const insertSql = 'INSERT INTO kimchi_snapshots (id, coin, bithumb_krw, binance_usd, premium_pct, krw_usd_rate, volume_24h_usd) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  const statements = premiums.map((p) => c.env.DB.prepare(insertSql).bind(
+    crypto.randomUUID(),
+    p.coin,
+    p.bithumbKrw,
+    p.binanceUsd,
+    p.premiumPct,
+    krwRate,
+    p.volume24hUsd,
+  ))
+
+  if (statements.length > 0) {
+    try {
+      await c.env.DB.batch(statements)
+    } catch (err) {
+      console.error(err)
+      throw new HTTPException(500, { message: 'DB schema not migrated (kimchi_snapshots table missing)' })
+    }
+  }
+
+  return c.json({ ok: true, snapshots: statements.length })
 })
 
 // === Existing Premium Endpoints ===

@@ -54,6 +54,80 @@ function App() {
   const [codeTab, setCodeTab] = useState<'curl' | 'python' | 'javascript'>('curl')
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
+  const [pgEndpoint, setPgEndpoint] = useState<string>('/api/health')
+  const [pgLoading, setPgLoading] = useState<boolean>(false)
+  const [pgResult, setPgResult] = useState<{
+    status: number
+    timeMs: number
+    body: string
+  } | null>(null)
+  const [pgError, setPgError] = useState<string | null>(null)
+
+  const pgEndpoints: { path: string; label: string }[] = [
+    { path: '/api/health', label: 'Health Check' },
+    { path: '/api/registry/stats', label: 'Registry Stats' },
+    { path: '/api/registry/categories', label: 'Categories' },
+    { path: '/api/arbitrage/demo', label: 'Kimchi Premium (Free Preview)' },
+    { path: '/api/analytics/overview', label: 'Analytics Overview' },
+    { path: '/api/stats', label: 'Agent Stats' },
+    { path: '/api/openapi.json', label: 'OpenAPI Spec' },
+  ]
+
+  function jsonSyntaxHighlight(json: string): string {
+    return json.replace(
+      /("(\\u[\dA-Fa-f]{4}|\\[^u]|[^"\\])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[Ee][+-]?\d+)?)/g,
+      (match) => {
+        let cls = 'pgJsonNumber'
+        if (match.startsWith('"')) {
+          if (match.endsWith(':')) {
+            cls = 'pgJsonKey'
+          } else {
+            cls = 'pgJsonString'
+          }
+        } else if (/^true|false$/.test(match)) {
+          cls = 'pgJsonBool'
+        } else if (match === 'null') {
+          cls = 'pgJsonNull'
+        }
+        return `<span class="${cls}">${match}</span>`
+      },
+    )
+  }
+
+  async function sendPlaygroundRequest() {
+    setPgLoading(true)
+    setPgResult(null)
+    setPgError(null)
+
+    const url = `${apiBase}${pgEndpoint}`
+    const t0 = performance.now()
+
+    try {
+      const res = await fetch(url)
+      const elapsed = Math.round(performance.now() - t0)
+      let body: string
+      const ct = res.headers.get('content-type') ?? ''
+      if (ct.includes('application/json')) {
+        const data: unknown = await res.json()
+        body = JSON.stringify(data, null, 2)
+      } else {
+        body = await res.text()
+        try {
+          const parsed: unknown = JSON.parse(body)
+          body = JSON.stringify(parsed, null, 2)
+        } catch {
+          // not json, keep as-is
+        }
+      }
+      setPgResult({ status: res.status, timeMs: elapsed, body })
+    } catch (err) {
+      const elapsed = Math.round(performance.now() - t0)
+      setPgError(`Request failed after ${elapsed}ms — ${err instanceof Error ? err.message : 'Network error'}`)
+    } finally {
+      setPgLoading(false)
+    }
+  }
+
   const [registerAgentKey, setRegisterAgentKey] = useState<string>('')
   const [registerName, setRegisterName] = useState<string>('')
   const [registerProvider, setRegisterProvider] = useState<string>('')
@@ -231,6 +305,7 @@ function App() {
             <a href="#live">Live</a>
             <a href="#register">Register</a>
             <a href="#get-started">Get Started</a>
+            <a href="#playground">Playground</a>
             <a
               href="https://github.com/bubilife1202/crossfin"
               target="_blank"
@@ -766,6 +841,74 @@ console.log(await res.json())`}</code></pre>
                 </div>
                 <pre className="codeBlockPre"><code>{`curl https://crossfin.dev/api/registry/search?q=crypto`}</code></pre>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="playground" className="section">
+          <div className="sectionHeader">
+            <h2>API Playground</h2>
+            <p className="sectionSub">Test endpoints live — no payment required</p>
+          </div>
+
+          <div className="pgPanel">
+            <div className="pgControls">
+              <div className="pgSelectWrap">
+                <label className="pgLabel">Endpoint</label>
+                <select
+                  className="pgSelect"
+                  value={pgEndpoint}
+                  onChange={(e) => setPgEndpoint(e.target.value)}
+                >
+                  {pgEndpoints.map((ep) => (
+                    <option key={ep.path} value={ep.path}>
+                      {ep.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                className="pgSendBtn"
+                disabled={pgLoading}
+                onClick={() => void sendPlaygroundRequest()}
+              >
+                {pgLoading ? 'Sending…' : 'Send Request'}
+              </button>
+            </div>
+
+            <div className="pgUrl">
+              <span className="pgUrlMethod">GET</span>
+              <span className="pgUrlPath">{apiBase}{pgEndpoint}</span>
+            </div>
+
+            <div className="pgResponse">
+              {pgLoading ? (
+                <div className="pgLoadingState">
+                  <div className="pgSpinner" />
+                  <span>Waiting for response…</span>
+                </div>
+              ) : pgError ? (
+                <div className="pgErrorState">{pgError}</div>
+              ) : pgResult ? (
+                <>
+                  <div className="pgMeta">
+                    <span className={`pgStatus ${pgResult.status < 300 ? 'pgStatus2xx' : pgResult.status < 500 ? 'pgStatus4xx' : 'pgStatus5xx'}`}>
+                      {pgResult.status}
+                    </span>
+                    <span className="pgTime">{pgResult.timeMs}ms</span>
+                  </div>
+                  <div className="pgBody">
+                    <pre
+                      className="pgPre"
+                      dangerouslySetInnerHTML={{ __html: jsonSyntaxHighlight(pgResult.body) }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="pgEmpty">Select an endpoint and click Send Request</div>
+              )}
             </div>
           </div>
         </section>
