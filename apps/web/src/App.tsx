@@ -694,16 +694,18 @@ console.log('Private Key:', wallet.privateKey)`}</code></pre>
                     <button
                       type="button"
                       className="codeBlockCopy"
-                      onClick={() => copyToClipboard('step3-python', `from x402 import Client\n\nclient = Client(private_key="YOUR_KEY")\ndata = client.get("https://crossfin.dev/api/premium/market/fx/usdkrw")\nprint(data)`)}
+                      onClick={() => copyToClipboard('step3-python', `from x402 import pay_for_response\n\nresponse = pay_for_response(\n    "https://crossfin.dev/api/premium/market/fx/usdkrw",\n    wallet=your_wallet\n)\nprint(response)`)}
                     >
                       {copiedId === 'step3-python' ? '✓ Copied' : 'Copy'}
                     </button>
                   </div>
-                  <pre className="codeBlockPre"><code>{`from x402 import Client
+                  <pre className="codeBlockPre"><code>{`from x402 import pay_for_response
 
-client = Client(private_key="YOUR_KEY")
-data = client.get("https://crossfin.dev/api/premium/market/fx/usdkrw")
-print(data)`}</code></pre>
+response = pay_for_response(
+    "https://crossfin.dev/api/premium/market/fx/usdkrw",
+    wallet=your_wallet
+)
+print(response)`}</code></pre>
                 </div>
               )}
               {codeTab === 'javascript' && (
@@ -713,18 +715,18 @@ print(data)`}</code></pre>
                     <button
                       type="button"
                       className="codeBlockCopy"
-                      onClick={() => copyToClipboard('step3-js', `import { paymentFetch } from '@x402/fetch'\n\nconst res = await paymentFetch(\n  'https://crossfin.dev/api/premium/market/fx/usdkrw',\n  { privateKey: 'YOUR_KEY' }\n)\nconsole.log(await res.json())`)}
+                      onClick={() => copyToClipboard('step3-js', `import { payForResponse } from '@x402/client';\n\nconst response = await payForResponse(\n  'https://crossfin.dev/api/premium/market/fx/usdkrw',\n  { wallet: yourWallet }\n);\nconsole.log(await response.json());`)}
                     >
                       {copiedId === 'step3-js' ? '✓ Copied' : 'Copy'}
                     </button>
                   </div>
-                  <pre className="codeBlockPre"><code>{`import { paymentFetch } from '@x402/fetch'
+                  <pre className="codeBlockPre"><code>{`import { payForResponse } from '@x402/client';
 
-const res = await paymentFetch(
+const response = await payForResponse(
   'https://crossfin.dev/api/premium/market/fx/usdkrw',
-  { privateKey: 'YOUR_KEY' }
-)
-console.log(await res.json())`}</code></pre>
+  { wallet: yourWallet }
+);
+console.log(await response.json());`}</code></pre>
                 </div>
               )}
             </div>
@@ -732,7 +734,9 @@ console.log(await res.json())`}</code></pre>
             <div className="stepCard">
               <div className="stepNumber">STEP 04</div>
               <h3 className="stepTitle">Browse &amp; Discover</h3>
-              <p className="stepDesc">Search 60+ services in the registry.</p>
+              <p className="stepDesc">
+                Search {registryStats.status === 'success' ? registryStats.data.total : '160+'} services in the registry.
+              </p>
               <div className="codeBlock">
                 <div className="codeBlockHeader">
                   <span className="codeBlockLang">bash</span>

@@ -152,7 +152,7 @@ SaaS가 아니다. 에이전트 시대의 비즈니스 모델은 아직 발명�
 ## 경쟁 환경 (2026.02 기준)
 
 ### 글로벌 — 결제 레일 (우리의 경쟁자가 아닌 인프라)
-- x402 (Coinbase): 오픈 프로토콜, USDC 기반, 3,500만 건 거래
+- x402 (Coinbase): 오픈 프로토콜, USDC 기반, 7,541만 건 거래
 - Stripe Agent Toolkit: 공식 MCP 서버
 - Sapiom: 에이전트 → API 결제 접근 레이어 ($1,575만 시드)
 - Coinbase Agentic Wallets: 에이전트 전용 크립토 지갑

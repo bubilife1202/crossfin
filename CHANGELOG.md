@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.1] - 2026-02-15
+
+### Changed
+
+**Versioning + doc sync**
+- Bumped public API version to 1.3.1 (health, OpenAPI, agent guide, discovery metadata)
+- Refreshed PRD to match shipped functionality and current service counts
+- Updated VISION x402 transaction count (3,500만 → 7,541만)
+
+**Frontend onboarding**
+- Developers tab snippets now match the agent guide: `@x402/client` (JS) + `pay_for_response` (Python)
+- Get Started copy now uses live registry stats (no hardcoded "60+")
+
 ## [1.3.0] - 2026-02-15
 
 ### Added
@@ -24,12 +37,12 @@
 ### Changed
 
 **Frontend — Tab-based navigation redesign**
-- Replaced linear 7-section scroll with 4-tab layout: Services (default), Live, Developers, Activity
+- Replaced linear 7-section scroll with 3-tab layout: Services (default), Developers, Activity (Live moved to external link)
 - Compact hero: single-line title, removed pills, CTAs now switch tabs
 - Stats ribbon always visible above tabs for at-a-glance metrics
-- Nav bar simplified: 6 links → 4 tab switches + GitHub
+- Nav bar simplified: 6 links → 3 tab switches + GitHub + Live Demo link
 - Developers tab combines Get Started, Playground, and Register sections
-- URL hash sync (#services, #live, #developers, #activity) with browser back/forward support
+- URL hash sync (#services, #developers, #activity) with browser back/forward support
 
 ## [1.1.0] - 2026-02-15
 

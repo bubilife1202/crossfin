@@ -47,13 +47,13 @@ app.onError((err, c) => {
   return c.json({ error: 'Internal server error' }, 500)
 })
 
-app.get('/', (c) => c.json({ name: 'crossfin-api', version: '1.3.0', status: 'ok' }))
-app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '1.3.0', status: 'ok' }))
+app.get('/', (c) => c.json({ name: 'crossfin-api', version: '1.3.1', status: 'ok' }))
+app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '1.3.1', status: 'ok' }))
 
 app.get('/api/docs/guide', (c) => {
   return c.json({
     name: 'CrossFin Agent Guide',
-    version: '1.3.0',
+    version: '1.3.1',
     overview: {
       what: 'CrossFin is a service gateway for AI agents. Discover, compare, and call x402/REST services through a single API.',
       services: 'Use GET /api/registry/stats for the current active service counts.',
@@ -241,7 +241,7 @@ app.get('/.well-known/crossfin.json', (c) => {
   const origin = new URL(c.req.url).origin
   return c.json({
     name: 'CrossFin',
-    version: '1.3.0',
+    version: '1.3.1',
     description: 'Agent-first directory and gateway for x402 services and Korean market data.',
     urls: {
       website: 'https://crossfin.dev',
@@ -282,7 +282,7 @@ app.get('/api/openapi.json', (c) => {
     openapi: '3.1.0',
     info: {
       title: 'CrossFin — x402 Agent Services Gateway (Korea)',
-      version: '1.3.0',
+      version: '1.3.1',
       description: 'Service registry + pay-per-request APIs for AI agents. Discover x402 services and access Korean market data. Payments via x402 protocol with USDC on Base mainnet.',
       contact: { url: 'https://crossfin.dev' },
       'x-logo': { url: 'https://crossfin.dev/logos/crossfin.png' },
