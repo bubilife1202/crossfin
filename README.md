@@ -202,7 +202,7 @@ Phase 3 (6 months) → Agent banking: wallet management, budget controls, fiat o
 
 ```
 apps/
-  api/          Cloudflare Workers API (v1.3.2)
+  api/          Cloudflare Workers API (v1.3.3)
     src/
       index.ts    Routes, x402 paywall, registry, guide, seeds, proxy, analytics
     migrations/

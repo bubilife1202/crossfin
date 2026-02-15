@@ -1,11 +1,11 @@
 # CrossFin PRD — x402 Agent Gateway
 
 > 최종 업데이트: 2026-02-15
-> 상태: MVP 배포 완료 (v1.3.2)
+> 상태: MVP 배포 완료 (v1.3.3)
 
 ---
 
-## 0. 현재 제품 상태 (v1.3.2)
+## 0. 현재 제품 상태 (v1.3.3)
 
 Live:
 - Dashboard: https://crossfin.dev
@@ -113,7 +113,7 @@ Live:
 | MCP Server | ✅ 라이브 | `apps/mcp-server` (12 tools) |
 | OpenAPI 스펙 | ✅ 라이브 | `/api/openapi.json` |
 | D1 DB | ✅ 배포 | agents, wallets, transactions, budgets, services, service_calls, kimchi_* |
-| Agent 등록/인증 | ✅ 배포 | `POST /api/agents`, `X-Agent-Key` |
+| Agent 등록/인증 | ✅ 배포 | `POST /api/agents` (admin token required), `X-Agent-Key` |
 | 예산 관리 | ✅ 배포 | daily/monthly limit, circuit breaker |
 | x402 생태계 PR | 🔄 리뷰중 | https://github.com/coinbase/x402/pull/1187 |
 | BlockRun 등록 | 🔄 오픈 | https://github.com/BlockRunAI/awesome-blockrun/issues/5 |
@@ -245,7 +245,7 @@ crossfin.dev는 "서비스 대시보드"로 동작한다.
 
 ## 10. 성공 지표
 
-### 현재 (v1.3.2)
+### 현재 (v1.3.3)
 - 라이브 URL: crossfin.dev
 - 등록 서비스: 162
 - CrossFin 자체 서비스: 13

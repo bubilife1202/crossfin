@@ -12,6 +12,7 @@ type Bindings = {
   FACILITATOR_URL: string
   X402_NETWORK: string
   PAYMENT_RECEIVER_ADDRESS: string
+  CROSSFIN_ADMIN_TOKEN?: string
 }
 
 type Variables = {
@@ -34,10 +35,28 @@ const app = new Hono<Env>()
 
 app.use('*', cors({
   origin: ['http://localhost:5173', 'https://crossfin.pages.dev', 'https://crossfin.dev', 'https://www.crossfin.dev', 'https://live.crossfin.dev', 'https://crossfin-live.pages.dev'],
-  allowHeaders: ['Content-Type', 'Authorization', 'X-Agent-Key', 'PAYMENT-SIGNATURE'],
+  allowHeaders: ['Content-Type', 'Authorization', 'X-Agent-Key', 'X-CrossFin-Admin-Token', 'PAYMENT-SIGNATURE'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   exposeHeaders: ['PAYMENT-REQUIRED', 'PAYMENT-RESPONSE'],
 }))
+
+function requireAdmin(c: Context<Env>): void {
+  const expected = (c.env.CROSSFIN_ADMIN_TOKEN ?? '').trim()
+
+  if (!expected) {
+    throw new HTTPException(404, { message: 'Not found' })
+  }
+
+  const headerToken = (c.req.header('X-CrossFin-Admin-Token') ?? '').trim()
+  const auth = (c.req.header('Authorization') ?? '').trim()
+  const bearer = auth.startsWith('Bearer ') ? auth.slice('Bearer '.length).trim() : ''
+  const queryToken = (c.req.query('token') ?? '').trim()
+
+  const provided = headerToken || bearer || queryToken
+  if (!provided || provided !== expected) {
+    throw new HTTPException(401, { message: 'Unauthorized' })
+  }
+}
 
 app.onError((err, c) => {
   if (err instanceof HTTPException) {
@@ -47,13 +66,13 @@ app.onError((err, c) => {
   return c.json({ error: 'Internal server error' }, 500)
 })
 
-app.get('/', (c) => c.json({ name: 'crossfin-api', version: '1.3.2', status: 'ok' }))
-app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '1.3.2', status: 'ok' }))
+app.get('/', (c) => c.json({ name: 'crossfin-api', version: '1.3.3', status: 'ok' }))
+app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '1.3.3', status: 'ok' }))
 
 app.get('/api/docs/guide', (c) => {
   return c.json({
     name: 'CrossFin Agent Guide',
-    version: '1.3.2',
+    version: '1.3.3',
     overview: {
       what: 'CrossFin is a service gateway for AI agents. Discover, compare, and call x402/REST services through a single API.',
       services: 'Use GET /api/registry/stats for the current active service counts.',
@@ -241,7 +260,7 @@ app.get('/.well-known/crossfin.json', (c) => {
   const origin = new URL(c.req.url).origin
   return c.json({
     name: 'CrossFin',
-    version: '1.3.2',
+    version: '1.3.3',
     description: 'Agent-first directory and gateway for x402 services and Korean market data.',
     urls: {
       website: 'https://crossfin.dev',
@@ -282,7 +301,7 @@ app.get('/api/openapi.json', (c) => {
     openapi: '3.1.0',
     info: {
       title: 'CrossFin — x402 Agent Services Gateway (Korea)',
-      version: '1.3.2',
+      version: '1.3.3',
       description: 'Service registry + pay-per-request APIs for AI agents. Discover x402 services and access Korean market data. Payments via x402 protocol with USDC on Base mainnet.',
       contact: { url: 'https://crossfin.dev' },
       'x-logo': { url: 'https://crossfin.dev/logos/crossfin.png' },
@@ -1107,6 +1126,8 @@ const agentAuth: MiddlewareHandler<Env> = async (c, next) => {
 }
 
 app.post('/api/agents', async (c) => {
+  requireAdmin(c)
+
   const body = await c.req.json<{ name: string }>()
   if (!body.name?.trim()) throw new HTTPException(400, { message: 'name is required' })
 
@@ -2976,6 +2997,8 @@ app.get('/api/registry/stats', async (c) => {
 })
 
 app.get('/api/registry/sync', async (c) => {
+  requireAdmin(c)
+
   const confirm = (c.req.query('confirm') ?? '').trim().toLowerCase()
   if (confirm !== 'yes') {
     throw new HTTPException(400, { message: 'Add ?confirm=yes to sync new registry seeds (insert-only)' })
@@ -2998,6 +3021,16 @@ app.get('/api/registry/sync', async (c) => {
   const afterTotal = Number(((after[0]?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0))
   const afterActive = Number(((after[1]?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0))
 
+  await audit(
+    c.env.DB,
+    null,
+    'admin.registry.sync',
+    'services',
+    null,
+    'success',
+    `before_total=${beforeTotal} before_active=${beforeActive} after_total=${afterTotal} after_active=${afterActive}`,
+  )
+
   return c.json({
     ok: true,
     services: {
@@ -3010,6 +3043,8 @@ app.get('/api/registry/sync', async (c) => {
 })
 
 app.get('/api/registry/reseed', async (c) => {
+  requireAdmin(c)
+
   const confirm = (c.req.query('confirm') ?? '').trim().toLowerCase()
   if (confirm !== 'yes') {
     throw new HTTPException(400, { message: 'Add ?confirm=yes to reseed the registry' })
@@ -3020,6 +3055,16 @@ app.get('/api/registry/reseed', async (c) => {
 
   const row = await c.env.DB.prepare('SELECT COUNT(*) as count FROM services').first<{ count: number | string }>()
   const count = row ? Number(row.count) : 0
+
+  await audit(
+    c.env.DB,
+    null,
+    'admin.registry.reseed',
+    'services',
+    null,
+    'success',
+    `services_total=${count}`,
+  )
 
   return c.json({
     ok: true,
@@ -4260,8 +4305,7 @@ app.get('/api/arbitrage/demo', async (c) => {
 })
 
 app.get('/api/cron/snapshot-kimchi', async (c) => {
-  const key = c.req.query('key')
-  if (key !== 'crossfin-cron-2026') throw new HTTPException(401, { message: 'Unauthorized' })
+  requireAdmin(c)
 
   const [bithumbData, binancePrices, krwRate] = await Promise.all([
     fetchBithumbAll(),
@@ -4290,6 +4334,16 @@ app.get('/api/cron/snapshot-kimchi', async (c) => {
       throw new HTTPException(500, { message: 'DB schema not migrated (kimchi_snapshots table missing)' })
     }
   }
+
+  await audit(
+    c.env.DB,
+    null,
+    'admin.cron.snapshot_kimchi',
+    'kimchi_snapshots',
+    null,
+    'success',
+    `snapshots=${statements.length}`,
+  )
 
   return c.json({ ok: true, snapshots: statements.length })
 })

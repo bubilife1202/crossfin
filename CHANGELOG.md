@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.3.3] - 2026-02-15
+
+### Changed
+
+**Security hardening**
+- Protected admin-only endpoints with `CROSSFIN_ADMIN_TOKEN` (header `X-CrossFin-Admin-Token` or `Authorization: Bearer ...`)
+- Disabled admin endpoints by default when no admin token is configured
+- Removed hardcoded cron key from `/api/cron/snapshot-kimchi`
+
 ## [1.3.2] - 2026-02-15
 
 ### Changed
@@ -25,7 +34,7 @@
 - Updated VISION x402 transaction count (3,500만 → 7,541만)
 
 **Frontend onboarding**
-- Developers tab snippets now match the agent guide: `@x402/client` (JS) + `pay_for_response` (Python)
+- Developers tab snippets synced with the agent guide
 - Get Started copy now uses live registry stats (no hardcoded "60+")
 
 ## [1.3.0] - 2026-02-15
