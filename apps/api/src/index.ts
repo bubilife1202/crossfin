@@ -261,6 +261,19 @@ app.get('/api/openapi.json', (c) => {
           },
         },
       },
+      '/api/premium/market/cross-exchange': {
+        get: {
+          operationId: 'crossExchangeComparison',
+          summary: 'Cross-Exchange Comparison (Bithumb vs Upbit vs Coinone vs Binance)',
+          description: 'Compare crypto prices across 4 exchanges. Shows kimchi premium per exchange and domestic arbitrage opportunities.',
+          parameters: [{ name: 'coins', in: 'query', schema: { type: 'string' }, description: 'Comma-separated coins (default: BTC,ETH,XRP,DOGE,ADA,SOL)' }],
+          tags: ['Premium — $0.08 USDC'],
+          responses: {
+            '200': { description: 'Cross-exchange comparison', content: { 'application/json': { schema: { type: 'object' } } } },
+            '402': { description: 'Payment required — $0.08 USDC on Base mainnet' },
+          },
+        },
+      },
       '/api/premium/news/korea/headlines': {
         get: {
           operationId: 'koreaHeadlines',
@@ -422,6 +435,7 @@ app.get('/api/openapi.json', (c) => {
         '/api/premium/market/upbit/ticker': '$0.02',
         '/api/premium/market/upbit/orderbook': '$0.02',
         '/api/premium/market/coinone/ticker': '$0.02',
+        '/api/premium/market/cross-exchange': '$0.08',
         '/api/premium/news/korea/headlines': '$0.03',
       },
     },
@@ -612,6 +626,17 @@ app.use(
               },
             }),
           },
+        },
+        'GET /api/premium/market/cross-exchange': {
+          accepts: {
+            scheme: 'exact',
+            price: '$0.08',
+            network,
+            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
+            maxTimeoutSeconds: 300,
+          },
+          description: 'Cross-exchange comparison across Bithumb, Upbit, Coinone vs Binance. Shows kimchi premium per exchange and domestic arbitrage opportunities.',
+          mimeType: 'application/json',
         },
         'GET /api/premium/news/korea/headlines': {
           accepts: {
@@ -952,6 +977,22 @@ async function ensureRegistrySeeded(db: D1Database, receiverAddress: string): Pr
       status: 'active',
       isCrossfin: true,
       tags: ['korea', 'crypto', 'coinone', 'ticker'],
+    },
+    {
+      id: 'crossfin_cross_exchange',
+      name: 'CrossFin Cross-Exchange Comparison',
+      description: 'Compare crypto prices across Bithumb, Upbit, Coinone, and Binance. Shows kimchi premium per exchange and domestic arbitrage opportunities.',
+      provider: 'crossfin',
+      category: 'korea-crypto',
+      endpoint: 'https://crossfin.dev/api/premium/market/cross-exchange',
+      method: 'GET',
+      price: '$0.08',
+      currency: 'USDC',
+      network: 'eip155:8453',
+      payTo: receiverAddress,
+      status: 'active',
+      isCrossfin: true,
+      tags: ['korea', 'x402', 'crossfin', 'exchange', 'comparison', 'arbitrage', 'kimchi-premium'],
     },
     {
       id: 'crossfin_korea_headlines',
@@ -2254,6 +2295,8 @@ const TRACKED_PAIRS: Record<string, string> = {
   EOS: 'EOSUSDT', TRX: 'TRXUSDT', MATIC: 'MATICUSDT',
 }
 
+const DEFAULT_CROSS_EXCHANGE_COINS = ['BTC', 'ETH', 'XRP', 'DOGE', 'ADA', 'SOL'] as const
+
 const BITHUMB_FEES_PCT = 0.25 // Bithumb maker/taker fee
 const BINANCE_FEES_PCT = 0.10 // Binance spot fee
 
@@ -2308,6 +2351,63 @@ function requireUpbitMarket(value: string): string {
   if (!/^[A-Z]{3,4}-[A-Z0-9]{2,16}$/.test(raw)) throw new HTTPException(400, { message: 'market is invalid (expected like KRW-BTC)' })
   return raw
 }
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
+function parseCoinsQueryParam(raw: string | undefined): string[] {
+  const allowed = new Set(Object.keys(TRACKED_PAIRS))
+  const source = raw
+    ? raw.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
+    : [...DEFAULT_CROSS_EXCHANGE_COINS]
+
+  const filtered: string[] = []
+  for (const coin of source) {
+    if (!allowed.has(coin)) continue
+    if (filtered.includes(coin)) continue
+    filtered.push(coin)
+  }
+
+  return filtered.length > 0 ? filtered : [...DEFAULT_CROSS_EXCHANGE_COINS]
+}
+
+type DomesticExchangeId = 'bithumb' | 'upbit' | 'coinone'
+
+type DomesticExchangeData = {
+  priceKrw: number
+  priceUsd: number
+  volume24hKrw: number
+  volume24hUsd: number
+  change24hPct: number
+}
+
+type BinanceExchangeData = {
+  priceUsd: number
+}
+
+type CrossExchangeExchanges = {
+  bithumb: DomesticExchangeData | null
+  upbit: DomesticExchangeData | null
+  coinone: DomesticExchangeData | null
+  binance: BinanceExchangeData | null
+}
+
+type CrossExchangeKimchiPremium = {
+  bithumb: number | null
+  upbit: number | null
+  coinone: number | null
+  average: number | null
+}
+
+type CrossExchangeDomesticArbitrage = {
+  lowestExchange: DomesticExchangeId
+  lowestPriceKrw: number
+  highestExchange: DomesticExchangeId
+  highestPriceKrw: number
+  spreadKrw: number
+  spreadPct: number
+} | null
 
 async function fetchUpbitTicker(market: string) {
   const res = await fetch(`https://api.upbit.com/v1/ticker?markets=${encodeURIComponent(market)}`)
@@ -2697,6 +2797,170 @@ app.get('/api/premium/news/korea/headlines', async (c) => {
     feed: 'google-news-rss',
     url: feedUrl,
     items,
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/market/cross-exchange', async (c) => {
+  const coins = parseCoinsQueryParam(c.req.query('coins'))
+
+  const [bithumbSet, binanceSet, krwSet] = await Promise.allSettled([
+    fetchBithumbAll(),
+    fetchGlobalPrices(),
+    fetchKrwRate(),
+  ])
+
+  const bithumbData: Record<string, Record<string, string>> = bithumbSet.status === 'fulfilled' ? bithumbSet.value : {}
+  const binancePrices: Record<string, number> = binanceSet.status === 'fulfilled' ? binanceSet.value : {}
+  const krwRate = krwSet.status === 'fulfilled' ? krwSet.value : 1450
+
+  const rows = await Promise.all(
+    coins.map(async (coin) => {
+      const binanceSymbol = TRACKED_PAIRS[coin]
+      const binancePriceRaw = binanceSymbol ? binancePrices[binanceSymbol] : undefined
+      const binance: BinanceExchangeData | null = typeof binancePriceRaw === 'number' && Number.isFinite(binancePriceRaw)
+        ? { priceUsd: round2(binancePriceRaw) }
+        : null
+
+      const bithumbRaw = bithumbData[coin]
+      const bithumbKrw = bithumbRaw?.closing_price ? parseFloat(bithumbRaw.closing_price) : 0
+      const bithumbVolumeKrw = bithumbRaw?.acc_trade_value_24H ? parseFloat(bithumbRaw.acc_trade_value_24H) : 0
+      const bithumbChangePct = bithumbRaw?.fluctate_rate_24H ? parseFloat(bithumbRaw.fluctate_rate_24H) : 0
+      const bithumb: DomesticExchangeData | null = Number.isFinite(bithumbKrw) && bithumbKrw > 0
+        ? {
+          priceKrw: bithumbKrw,
+          priceUsd: round2(bithumbKrw / krwRate),
+          volume24hKrw: Number.isFinite(bithumbVolumeKrw) ? bithumbVolumeKrw : 0,
+          volume24hUsd: round2((Number.isFinite(bithumbVolumeKrw) ? bithumbVolumeKrw : 0) / krwRate),
+          change24hPct: round2(Number.isFinite(bithumbChangePct) ? bithumbChangePct : 0),
+        }
+        : null
+
+      const market = `KRW-${coin}`
+      const [upbitRes, coinoneRes] = await Promise.allSettled([
+        fetchUpbitTicker(market),
+        fetchCoinoneTicker(coin),
+      ])
+
+      let upbit: DomesticExchangeData | null = null
+      if (upbitRes.status === 'fulfilled') {
+        const ticker = upbitRes.value
+        const tradePriceKrw = typeof ticker.trade_price === 'number' ? ticker.trade_price : Number(ticker.trade_price ?? 0)
+        const changeRate = typeof ticker.signed_change_rate === 'number' ? ticker.signed_change_rate : Number(ticker.signed_change_rate ?? 0)
+        const volume24hKrw = typeof ticker.acc_trade_price_24h === 'number' ? ticker.acc_trade_price_24h : Number(ticker.acc_trade_price_24h ?? 0)
+
+        if (Number.isFinite(tradePriceKrw) && tradePriceKrw > 0) {
+          const volumeKrw = Number.isFinite(volume24hKrw) ? volume24hKrw : 0
+          const changePct = Number.isFinite(changeRate) ? changeRate * 100 : 0
+          upbit = {
+            priceKrw: tradePriceKrw,
+            priceUsd: round2(tradePriceKrw / krwRate),
+            volume24hKrw: volumeKrw,
+            volume24hUsd: round2(volumeKrw / krwRate),
+            change24hPct: round2(changePct),
+          }
+        }
+      }
+
+      let coinone: DomesticExchangeData | null = null
+      if (coinoneRes.status === 'fulfilled') {
+        const ticker = coinoneRes.value
+        const lastKrw = Number(ticker.last ?? 0)
+        const firstKrw = Number(ticker.first ?? 0)
+        const volume24hKrw = Number(ticker.quote_volume ?? 0)
+
+        if (Number.isFinite(lastKrw) && lastKrw > 0) {
+          const open = Number.isFinite(firstKrw) ? firstKrw : 0
+          const changePct = open > 0 ? ((lastKrw - open) / open) * 100 : 0
+          const volumeKrw = Number.isFinite(volume24hKrw) ? volume24hKrw : 0
+          coinone = {
+            priceKrw: lastKrw,
+            priceUsd: round2(lastKrw / krwRate),
+            volume24hKrw: volumeKrw,
+            volume24hUsd: round2(volumeKrw / krwRate),
+            change24hPct: round2(changePct),
+          }
+        }
+      }
+
+      const exchanges: CrossExchangeExchanges = { bithumb, upbit, coinone, binance }
+
+      const kimchiPremium: CrossExchangeKimchiPremium = { bithumb: null, upbit: null, coinone: null, average: null }
+      if (binance?.priceUsd && binance.priceUsd > 0) {
+        const premiums: number[] = []
+        const compute = (ex: DomesticExchangeData | null): number | null => {
+          if (!ex) return null
+          const pct = ((ex.priceUsd - binance.priceUsd) / binance.priceUsd) * 100
+          const rounded = round2(pct)
+          premiums.push(rounded)
+          return rounded
+        }
+        kimchiPremium.bithumb = compute(bithumb)
+        kimchiPremium.upbit = compute(upbit)
+        kimchiPremium.coinone = compute(coinone)
+        kimchiPremium.average = premiums.length > 0 ? round2(premiums.reduce((s, p) => s + p, 0) / premiums.length) : null
+      }
+
+      const domesticPrices: Array<{ exchange: DomesticExchangeId; priceKrw: number }> = []
+      if (bithumb?.priceKrw) domesticPrices.push({ exchange: 'bithumb', priceKrw: bithumb.priceKrw })
+      if (upbit?.priceKrw) domesticPrices.push({ exchange: 'upbit', priceKrw: upbit.priceKrw })
+      if (coinone?.priceKrw) domesticPrices.push({ exchange: 'coinone', priceKrw: coinone.priceKrw })
+
+      let domesticArbitrage: CrossExchangeDomesticArbitrage = null
+      if (domesticPrices.length >= 2) {
+        domesticPrices.sort((a, b) => a.priceKrw - b.priceKrw)
+        const low = domesticPrices[0]
+        const high = domesticPrices[domesticPrices.length - 1]
+        if (low !== undefined && high !== undefined) {
+          const spreadKrw = high.priceKrw - low.priceKrw
+          const spreadPct = low.priceKrw > 0 ? round2((spreadKrw / low.priceKrw) * 100) : 0
+          domesticArbitrage = {
+            lowestExchange: low.exchange,
+            lowestPriceKrw: low.priceKrw,
+            highestExchange: high.exchange,
+            highestPriceKrw: high.priceKrw,
+            spreadKrw,
+            spreadPct,
+          }
+        }
+      }
+
+      return {
+        coin,
+        exchanges,
+        kimchiPremium,
+        domesticArbitrage,
+      }
+    }),
+  )
+
+  const avgPremiums = rows
+    .map((r) => r.kimchiPremium.average)
+    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+  const avgKimchiPremium = avgPremiums.length > 0
+    ? round2(avgPremiums.reduce((s, p) => s + p, 0) / avgPremiums.length)
+    : 0
+
+  const arbitrageCandidates = rows
+    .filter((r) => r.domesticArbitrage !== null)
+    .map((r) => ({
+      coin: r.coin,
+      buy: r.domesticArbitrage!.lowestExchange,
+      sell: r.domesticArbitrage!.highestExchange,
+      spreadPct: r.domesticArbitrage!.spreadPct,
+    }))
+    .sort((a, b) => b.spreadPct - a.spreadPct)
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-cross-exchange',
+    coinsCompared: coins.length,
+    krwUsdRate: round2(krwRate),
+    coins: rows,
+    summary: {
+      avgKimchiPremium,
+      bestDomesticArbitrage: arbitrageCandidates[0] ?? null,
+    },
     at: new Date().toISOString(),
   })
 })

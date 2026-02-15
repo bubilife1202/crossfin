@@ -10,7 +10,7 @@ CrossFin is a **marketplace and gateway for AI agent services**, built on the x4
 
 - **Service Registry:** 112+ x402 services — agents search, discover, and call APIs from one gateway
 - **Proxy Layer:** Call any registered service through CrossFin (`/api/proxy/:serviceId`) — 5% fee, automatic call logging
-- **Korea-First APIs:** 9 proprietary endpoints (Kimchi Premium, Bithumb, Upbit, Coinone, FX, headlines)
+- **Korea-First APIs:** 10 proprietary endpoints (Kimchi Premium, Bithumb, Upbit, Coinone, FX, headlines)
 - **Analytics:** Real-time service usage stats (`/api/analytics/overview`)
 - **Onboarding:** Get Started guide with Python/JS/cURL code snippets
 
@@ -22,7 +22,7 @@ CrossFin is a **marketplace and gateway for AI agent services**, built on the x4
 |---------|-------------------|
 | x402 services are scattered across the internet | Unified registry with 112+ services |
 | Agents can't discover available APIs | Search API: `/api/registry/search?q=translate` |
-| No Korean market data for agents | 9 proprietary Korea APIs (Bithumb, Upbit, Coinone) |
+| No Korean market data for agents | 10 proprietary Korea APIs (Bithumb, Upbit, Coinone) |
 | No revenue model for gateway operators | 5% proxy fee on every call through CrossFin |
 | Crypto is hard for end users | Roadmap: fiat on-ramp (KRW → USDC auto-conversion) |
 
@@ -35,7 +35,7 @@ CrossFin is a **marketplace and gateway for AI agent services**, built on the x4
 | `GET /api/registry` | List all services (filterable by category, provider) |
 | `GET /api/registry/search?q=...` | Full-text search across services |
 | `GET /api/registry/categories` | Category breakdown with counts |
-| `GET /api/registry/stats` | Total services: 112 (9 CrossFin + 103 external) |
+| `GET /api/registry/stats` | Total services: 113 (10 CrossFin + 103 external) |
 | `GET /api/registry/:id` | Service detail by ID |
 | `POST /api/registry` | Register a new service (requires `X-Agent-Key`) |
 
@@ -66,6 +66,7 @@ CrossFin is a **marketplace and gateway for AI agent services**, built on the x4
 | `GET /api/premium/market/upbit/ticker?market=KRW-BTC` | $0.02 | Upbit ticker |
 | `GET /api/premium/market/upbit/orderbook?market=KRW-BTC` | $0.02 | Upbit orderbook |
 | `GET /api/premium/market/coinone/ticker?currency=BTC` | $0.02 | Coinone ticker |
+| `GET /api/premium/market/cross-exchange` | $0.08 | Cross-exchange comparison (Bithumb vs Upbit vs Coinone vs Binance) |
 | `GET /api/premium/news/korea/headlines` | $0.03 | Korean headlines (Google News RSS) |
 
 ### Other (Free)
@@ -117,7 +118,7 @@ print(data)
 ## Revenue Model
 
 ```
-Phase 1 (Now)      → Own API revenue: $0.01–$0.10 per call (9 Korean market APIs)
+Phase 1 (Now)      → Own API revenue: $0.01–$0.10 per call (10 Korean market APIs)
 Phase 2 (3 months) → Proxy fee: 5% on every call through /api/proxy/:serviceId
 Phase 3 (6 months) → Agent banking: wallet management, budget controls, fiat on-ramp
 ```
