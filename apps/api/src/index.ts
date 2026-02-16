@@ -1481,6 +1481,36 @@ app.use(
             }),
           },
         },
+        'GET /api/premium/crypto/korea/upbit-candles': {
+          accepts: { scheme: 'exact', price: '$0.02', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
+          description: 'Upbit OHLCV candle data for any KRW-listed crypto. Supports minutes (1/3/5/10/15/30/60/240), daily, weekly, monthly intervals. Up to 200 candles per request.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              input: { coin: 'BTC', type: 'days', count: '30' },
+              inputSchema: { properties: { coin: { type: 'string', description: 'Coin symbol (e.g., BTC, ETH, XRP)' }, type: { type: 'string', description: 'Candle type: minutes/1, minutes/5, minutes/15, minutes/60, minutes/240, days, weeks, months' }, count: { type: 'string', description: 'Number of candles (max 200)' } } },
+              output: {
+                example: { paid: true, service: 'crossfin-upbit-candles', market: 'KRW-BTC', type: 'days', count: 30, candles: [{ date: '2026-02-16T00:00:00', open: 102158000, high: 103120000, low: 100795000, close: 102776000, volume: 694.1 }] },
+                schema: { properties: { paid: { type: 'boolean' }, market: { type: 'string' }, type: { type: 'string' }, count: { type: 'number' }, candles: { type: 'array' } }, required: ['paid', 'market', 'type', 'candles'] },
+              },
+            }),
+          },
+        },
+        'GET /api/premium/market/global/indices-chart': {
+          accepts: { scheme: 'exact', price: '$0.02', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
+          description: 'Global stock index OHLCV chart data — Dow Jones (.DJI), NASDAQ (.IXIC), Hang Seng (.HSI), Nikkei (.N225) and more. Monthly aggregated history.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              input: { index: '.DJI', period: 'month' },
+              inputSchema: { properties: { index: { type: 'string', description: 'Naver index code: .DJI (Dow), .IXIC (NASDAQ), .HSI (Hang Seng), .N225 (Nikkei)' }, period: { type: 'string', description: 'month (monthly aggregation)' } } },
+              output: {
+                example: { paid: true, service: 'crossfin-global-indices-chart', index: '.DJI', period: 'month', candles: [{ date: '20260201', open: 48777.77, high: 50512.79, low: 48673.58, close: 49500.93, volume: 6697887 }] },
+                schema: { properties: { paid: { type: 'boolean' }, index: { type: 'string' }, period: { type: 'string' }, candles: { type: 'array' } }, required: ['paid', 'index', 'candles'] },
+              },
+            }),
+          },
+        },
         'GET /api/premium/news/korea/headlines': {
           accepts: {
             scheme: 'exact',
@@ -5243,6 +5273,71 @@ app.get('/api/premium/market/korea/etf', async (c) => {
       prevClose: e.quant,
       threeMonthReturn: e.threeMonthEarnRate,
       marketCap: e.marketSum,
+    })),
+    source: 'naver-finance',
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/crypto/korea/upbit-candles', async (c) => {
+  const coin = (c.req.query('coin') ?? 'BTC').toUpperCase().trim()
+  const type = (c.req.query('type') ?? 'days').trim()
+  const count = Math.min(200, Math.max(1, Number(c.req.query('count') ?? '30')))
+
+  const validTypes = ['minutes/1', 'minutes/3', 'minutes/5', 'minutes/10', 'minutes/15', 'minutes/30', 'minutes/60', 'minutes/240', 'days', 'weeks', 'months']
+  if (!validTypes.includes(type)) throw new HTTPException(400, { message: `type must be one of: ${validTypes.join(', ')}` })
+
+  const market = `KRW-${coin}`
+  const res = await fetch(`https://api.upbit.com/v1/candles/${type}?market=${market}&count=${count}`)
+  if (!res.ok) throw new HTTPException(502, { message: 'Upbit candle data unavailable' })
+  const raw = await res.json() as any[]
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-upbit-candles',
+    market,
+    type,
+    count: raw.length,
+    candles: raw.map((r: any) => ({
+      date: r.candle_date_time_kst,
+      open: r.opening_price,
+      high: r.high_price,
+      low: r.low_price,
+      close: r.trade_price,
+      volume: r.candle_acc_trade_volume,
+      tradeAmount: r.candle_acc_trade_price,
+    })),
+    source: 'upbit',
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/market/global/indices-chart', async (c) => {
+  const index = (c.req.query('index') ?? '.DJI').trim()
+  const period = (c.req.query('period') ?? 'month').trim()
+
+  if (!['month'].includes(period)) throw new HTTPException(400, { message: 'period must be: month' })
+
+  const res = await fetch(`https://api.stock.naver.com/chart/foreign/index/${encodeURIComponent(index)}/${period}`)
+  if (!res.ok) throw new HTTPException(502, { message: 'Global index chart data unavailable' })
+  const raw = await res.json() as any
+
+  if (Array.isArray(raw) && raw.length === 0) throw new HTTPException(404, { message: `No data for index ${index}. Available: .DJI, .IXIC, .HSI, .N225` })
+  const data = Array.isArray(raw) ? raw : []
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-global-indices-chart',
+    index,
+    period,
+    count: data.length,
+    candles: data.map((r: any) => ({
+      date: r.localDate,
+      open: r.openPrice,
+      high: r.highPrice,
+      low: r.lowPrice,
+      close: r.closePrice,
+      volume: r.accumulatedTradingVolume,
     })),
     source: 'naver-finance',
     at: new Date().toISOString(),
