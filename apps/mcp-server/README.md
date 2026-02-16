@@ -1,6 +1,6 @@
 # CrossFin MCP Server
 
-Local MCP server that exposes a minimal agent ledger as tools.
+MCP server for CrossFin — 13 tools for service discovery, local ledger, and paid API execution.
 
 ## Tools
 
@@ -21,6 +21,10 @@ Local MCP server that exposes a minimal agent ledger as tools.
 - `get_kimchi_premium`
 - `get_analytics`
 - `get_guide`
+
+### Paid execution
+
+- `call_paid_service` — call any CrossFin paid endpoint with automatic x402 USDC payment on Base (requires `EVM_PRIVATE_KEY`)
 
 ## Run (dev)
 
@@ -64,7 +68,8 @@ Point Claude Desktop to the built output:
       "args": ["/ABS/PATH/TO/crossfin/apps/mcp-server/dist/index.js"],
       "env": {
         "CROSSFIN_LEDGER_PATH": "/ABS/PATH/TO/ledger.json",
-        "CROSSFIN_API_URL": "https://crossfin.dev"
+        "CROSSFIN_API_URL": "https://crossfin.dev",
+        "EVM_PRIVATE_KEY": "0x..."
       }
     }
   }

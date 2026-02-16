@@ -11,7 +11,7 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 - **Service Registry:** 162 verified services from multiple x402 providers (CrossFin, Einstein AI, x402engine)
 - **Agent Guide API:** Structured JSON guide at `/api/docs/guide` — service catalog, payment flow, code examples, MCP setup
 - **Agent Discovery:** `/.well-known/crossfin.json` for automatic service detection
-- **MCP Server:** 12 tools for Claude Desktop and other MCP clients — search, browse, and call services
+- **MCP Server:** 13 tools for Claude Desktop and other MCP clients — search, browse, call, and pay for services
 - **Korea-First APIs:** 13 proprietary endpoints (Kimchi Premium, Bithumb, Upbit, Coinone, FX, headlines, trading signals)
 - **Proxy Layer:** Call any registered service through CrossFin (`/api/proxy/:serviceId`) — requires `X-Agent-Key`, 5% fee header, automatic call logging
 - **Analytics:** Real-time service usage stats (`/api/analytics/overview`)
@@ -93,7 +93,7 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 
 ## MCP Server
 
-CrossFin includes an MCP (Model Context Protocol) server for Claude Desktop and other MCP clients. 12 tools available:
+CrossFin includes an MCP (Model Context Protocol) server for Claude Desktop and other MCP clients. 13 tools available:
 
 | Tool | Description |
 |------|-------------|
@@ -109,6 +109,7 @@ CrossFin includes an MCP (Model Context Protocol) server for Claude Desktop and 
 | `transfer` | Transfer funds between wallets |
 | `list_transactions` | List recent transactions |
 | `set_budget` | Set daily spend limit |
+| `call_paid_service` | Call a paid API with automatic x402 USDC payment (returns data + txHash + basescan link) |
 
 ### Claude Desktop Config
 
@@ -119,7 +120,8 @@ CrossFin includes an MCP (Model Context Protocol) server for Claude Desktop and 
       "command": "node",
       "args": ["/path/to/crossfin/apps/mcp-server/dist/index.js"],
       "env": {
-        "CROSSFIN_API_URL": "https://crossfin.dev"
+        "CROSSFIN_API_URL": "https://crossfin.dev",
+        "EVM_PRIVATE_KEY": "0x..."
       }
     }
   }
@@ -193,7 +195,7 @@ Phase 3 (6 months) → Agent banking: wallet management, budget controls, fiat o
 | Database | Cloudflare D1 (SQLite) |
 | Payments | x402 protocol (@x402/hono, @x402/extensions/bazaar) |
 | Network | Base mainnet, USDC |
-| MCP Server | @modelcontextprotocol/sdk (12 tools) |
+| MCP Server | @modelcontextprotocol/sdk (13 tools) |
 | Frontend | React + Vite → Cloudflare Pages |
 | Live Demo | React + Vite → Cloudflare Pages (live.crossfin.dev) |
 | Domain | crossfin.dev + live.crossfin.dev |
@@ -202,7 +204,7 @@ Phase 3 (6 months) → Agent banking: wallet management, budget controls, fiat o
 
 ```
 apps/
-    api/          Cloudflare Workers API (v1.3.4)
+    api/          Cloudflare Workers API (v1.4.0)
     src/
       index.ts    Routes, x402 paywall, registry, guide, seeds, proxy, analytics
     migrations/
@@ -214,7 +216,7 @@ apps/
       x402-funds-check.mjs   Check Base wallet balance
       x402-usdc-balance.mjs  Check USDC balance
       x402-gen-wallet.mjs    Generate EVM wallet
-  mcp-server/   MCP Server (12 tools)
+  mcp-server/   MCP Server (13 tools)
     src/
       index.ts       MCP tool definitions + CrossFin API integration
       ledgerStore.ts Local ledger for wallet/budget tools

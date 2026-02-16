@@ -236,6 +236,7 @@ app.get('/api/docs/guide', (c) => {
         { name: 'transfer', description: 'Transfer funds between wallets' },
         { name: 'list_transactions', description: 'List recent transactions' },
         { name: 'set_budget', description: 'Set daily spend limit' },
+        { name: 'call_paid_service', description: 'Call a paid API with automatic x402 USDC payment (returns data + txHash + basescan link)' },
       ],
       claudeDesktopConfig: {
         mcpServers: {
@@ -244,6 +245,7 @@ app.get('/api/docs/guide', (c) => {
             args: ['/path/to/crossfin/apps/mcp-server/dist/index.js'],
             env: {
               CROSSFIN_API_URL: 'https://crossfin.dev',
+              EVM_PRIVATE_KEY: '0x...',
             },
           },
         },
@@ -290,6 +292,7 @@ app.get('/.well-known/crossfin.json', (c) => {
         'get_kimchi_premium',
         'get_analytics',
         'get_guide',
+        'call_paid_service',
       ],
     },
     updatedAt: new Date().toISOString(),

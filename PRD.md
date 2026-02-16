@@ -21,7 +21,7 @@ Current capabilities:
 - Analytics: `GET /api/analytics/overview`
 - Agent auth: admin-created agent key + API protection
 - D1 schema: `agents`, `wallets`, `transactions`, `budgets`, `services`, `service_calls`, `audit_logs`, `kimchi_snapshots`
-- MCP server: 12 tools (registry/docs/analytics + local ledger)
+- MCP server: 13 tools (registry/docs/analytics + local ledger + paid call execution)
 
 Known gap:
 - No unattended autonomous loop yet (no Cloudflare scheduled handler for operations)
