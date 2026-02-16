@@ -31,6 +31,20 @@ function requireCaip2(value: string): Caip2 {
   return trimmed as Caip2
 }
 
+function timingSafeEqual(a: string, b: string): boolean {
+  const encoder = new TextEncoder()
+  const aBytes = encoder.encode(a)
+  const bBytes = encoder.encode(b)
+  const maxLength = Math.max(aBytes.length, bBytes.length)
+
+  let diff = aBytes.length === bBytes.length ? 0 : 1
+  for (let i = 0; i < maxLength; i += 1) {
+    diff |= (aBytes[i] ?? 0) ^ (bBytes[i] ?? 0)
+  }
+
+  return diff === 0
+}
+
 const app = new Hono<Env>()
 
 app.use('*', cors({
@@ -52,7 +66,7 @@ function requireAdmin(c: Context<Env>): void {
   const bearer = auth.startsWith('Bearer ') ? auth.slice('Bearer '.length).trim() : ''
 
   const provided = headerToken || bearer
-  if (!provided || provided !== expected) {
+  if (!provided || !timingSafeEqual(provided, expected)) {
     throw new HTTPException(401, { message: 'Unauthorized' })
   }
 }

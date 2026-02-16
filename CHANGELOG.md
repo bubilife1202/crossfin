@@ -6,6 +6,7 @@
 - `/api/survival/status` returning 401 — moved route before `agentAuth` middleware on the `api` sub-router so it's publicly accessible
 - Wallet transfer race condition (TOCTOU) in `POST /api/transfers` — switched to conditional debit update (`balance_cents >= amount`) and rollback-safe finalization to prevent concurrent overdraw
 - Proxy response hardening in `/api/proxy/:serviceId` — block upstream redirects and allowlist passthrough response headers to prevent header injection
+- Admin token auth now uses constant-time comparison to reduce timing side-channel risk
 
 ### Added
 - **Live Dashboard — Agent Survival panel** (`live.crossfin.dev`)
