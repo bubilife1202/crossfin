@@ -45,6 +45,16 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0
 }
 
+function toHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const data = new TextEncoder().encode(value)
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return toHex(new Uint8Array(digest))
+}
+
 const app = new Hono<Env>()
 
 const PUBLIC_RATE_LIMIT_WINDOW_MS = 60_000
@@ -1236,15 +1246,34 @@ app.use(
 )
 
 const agentAuth: MiddlewareHandler<Env> = async (c, next) => {
-  const apiKey = c.req.header('X-Agent-Key')
+  const apiKey = (c.req.header('X-Agent-Key') ?? '').trim()
   if (!apiKey) throw new HTTPException(401, { message: 'Missing X-Agent-Key header' })
 
-  const agent = await c.env.DB.prepare(
+  const apiKeyHash = await sha256Hex(apiKey)
+  let agent = await c.env.DB.prepare(
     'SELECT id, status FROM agents WHERE api_key = ?'
-  ).bind(apiKey).first<{ id: string; status: string }>()
+  ).bind(apiKeyHash).first<{ id: string; status: string }>()
+
+  let usedLegacyPlaintextKey = false
+  if (!agent) {
+    agent = await c.env.DB.prepare(
+      'SELECT id, status FROM agents WHERE api_key = ?'
+    ).bind(apiKey).first<{ id: string; status: string }>()
+    usedLegacyPlaintextKey = agent !== null
+  }
 
   if (!agent) throw new HTTPException(401, { message: 'Invalid API key' })
   if (agent.status !== 'active') throw new HTTPException(403, { message: 'Agent suspended' })
+
+  if (usedLegacyPlaintextKey) {
+    c.executionCtx.waitUntil(
+      c.env.DB.prepare(
+        'UPDATE agents SET api_key = ?, updated_at = datetime("now") WHERE id = ?'
+      ).bind(apiKeyHash, agent.id).run().catch((error) => {
+        console.error('Failed to migrate legacy agent API key', error)
+      })
+    )
+  }
 
   c.set('agentId', agent.id)
   await next()
@@ -1258,10 +1287,11 @@ app.post('/api/agents', async (c) => {
 
   const id = crypto.randomUUID()
   const apiKey = `cf_${crypto.randomUUID().replace(/-/g, '')}`
+  const apiKeyHash = await sha256Hex(apiKey)
 
   await c.env.DB.prepare(
     'INSERT INTO agents (id, name, api_key) VALUES (?, ?, ?)'
-  ).bind(id, body.name.trim(), apiKey).run()
+  ).bind(id, body.name.trim(), apiKeyHash).run()
 
   await audit(c.env.DB, id, 'agent.create', 'agents', id, 'success')
 

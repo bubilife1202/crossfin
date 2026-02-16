@@ -9,6 +9,7 @@
 - Admin token auth now uses constant-time comparison to reduce timing side-channel risk
 - Added public endpoint rate limiting middleware (per-IP + per-route window) to reduce unauthenticated D1 abuse risk
 - `ensureRegistrySeeded()` now uses in-memory TTL + in-flight lock to avoid repeated seed checks/fetch bursts on concurrent requests
+- Agent API keys are now stored as SHA-256 hashes; legacy plaintext keys auto-migrate to hashed form on first successful auth
 
 ### Added
 - **Live Dashboard — Agent Survival panel** (`live.crossfin.dev`)
