@@ -3211,7 +3211,7 @@ app.get('/api/registry/search', async (c) => {
   const offset = Math.max(0, Number(c.req.query('offset') ?? '0'))
   const q = `%${qRaw.replace(/[\\%_]/g, (match) => `\\${match}`)}%`
 
-  const whereSql = "status = 'active' AND (name LIKE ? ESCAPE '\\\\' OR description LIKE ? ESCAPE '\\\\' OR provider LIKE ? ESCAPE '\\\\' OR category LIKE ? ESCAPE '\\\\' OR endpoint LIKE ? ESCAPE '\\\\' OR tags LIKE ? ESCAPE '\\\\')"
+  const whereSql = "status = 'active' AND (name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\' OR provider LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\' OR endpoint LIKE ? ESCAPE '\\' OR tags LIKE ? ESCAPE '\\')"
   const params = [q, q, q, q, q, q]
 
   const countRow = await c.env.DB.prepare(

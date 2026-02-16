@@ -14,6 +14,7 @@
 - `/api/stats` now returns rounded counters for privacy instead of exact internal totals
 - `/api/registry/search` now escapes `%`, `_`, and `\` in LIKE queries (`ESCAPE '\\'`) to prevent wildcard abuse
 - CORS allow-methods removed unused `DELETE`
+- Corrected SQL `ESCAPE` clause in `/api/registry/search` to keep search endpoint functional after wildcard hardening
 
 ### Added
 - **Live Dashboard — Agent Survival panel** (`live.crossfin.dev`)
