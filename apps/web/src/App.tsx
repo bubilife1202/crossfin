@@ -86,8 +86,16 @@ function App() {
     { path: '/api/openapi.json', label: 'OpenAPI Spec' },
   ]
 
+  function escapeHtml(value: string): string {
+    return value
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+  }
+
   function jsonSyntaxHighlight(json: string): string {
-    return json.replace(
+    const escaped = escapeHtml(json)
+    return escaped.replace(
       /("(\\u[\dA-Fa-f]{4}|\\[^u]|[^"\\])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[Ee][+-]?\d+)?)/g,
       (match) => {
         let cls = 'pgJsonNumber'
@@ -97,7 +105,7 @@ function App() {
           } else {
             cls = 'pgJsonString'
           }
-        } else if (/^true|false$/.test(match)) {
+        } else if (/^(true|false)$/.test(match)) {
           cls = 'pgJsonBool'
         } else if (match === 'null') {
           cls = 'pgJsonNull'

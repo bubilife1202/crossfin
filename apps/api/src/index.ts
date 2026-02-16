@@ -60,6 +60,8 @@ const app = new Hono<Env>()
 const PUBLIC_RATE_LIMIT_WINDOW_MS = 60_000
 const PUBLIC_RATE_LIMIT_PER_WINDOW = 120
 const PUBLIC_RATE_LIMIT_MAX_BUCKETS = 20_000
+const HOST_RESOLUTION_CACHE_TTL_MS = 5 * 60_000
+const HOST_RESOLUTION_CACHE_MAX_SIZE = 20_000
 
 type RateLimitBucket = {
   count: number
@@ -67,6 +69,7 @@ type RateLimitBucket = {
 }
 
 const publicRateLimitBuckets = new Map<string, RateLimitBucket>()
+const hostResolutionCache = new Map<string, number>()
 
 function trimTrailingSlash(path: string): string {
   if (path.length > 1 && path.endsWith('/')) return path.slice(0, -1)
@@ -114,6 +117,21 @@ function pruneRateLimitBuckets(now: number): void {
     if (now - bucket.windowStartedAt >= PUBLIC_RATE_LIMIT_WINDOW_MS) {
       publicRateLimitBuckets.delete(key)
     }
+  }
+}
+
+function pruneHostResolutionCache(now: number): void {
+  if (hostResolutionCache.size < HOST_RESOLUTION_CACHE_MAX_SIZE) return
+
+  for (const [hostname, checkedAt] of hostResolutionCache.entries()) {
+    if (now - checkedAt >= HOST_RESOLUTION_CACHE_TTL_MS) {
+      hostResolutionCache.delete(hostname)
+    }
+  }
+
+  if (hostResolutionCache.size >= HOST_RESOLUTION_CACHE_MAX_SIZE) {
+    const oldest = hostResolutionCache.keys().next().value
+    if (typeof oldest === 'string') hostResolutionCache.delete(oldest)
   }
 }
 
@@ -2065,23 +2083,89 @@ function isPrivateIpv4(hostname: string): boolean {
   if (parts.length !== 4) return false
   const a = Number(parts[0])
   const b = Number(parts[1])
+  const c = Number(parts[2])
   if (a === 0) return true
   if (a === 10) return true
   if (a === 127) return true
+  if (a === 100 && b >= 64 && b <= 127) return true
   if (a === 169 && b === 254) return true
   if (a === 172 && b >= 16 && b <= 31) return true
+  if (a === 192 && b === 0 && c === 0) return true
+  if (a === 192 && b === 0 && c === 2) return true
   if (a === 192 && b === 168) return true
+  if (a === 198 && (b === 18 || b === 19)) return true
+  if (a === 198 && b === 51 && c === 100) return true
+  if (a === 203 && b === 0 && c === 113) return true
   if (a >= 224) return true
   return false
 }
 
+function normalizeIpLiteral(hostname: string): string {
+  const trimmed = hostname.trim().toLowerCase()
+  const unbracketed = trimmed.startsWith('[') && trimmed.endsWith(']')
+    ? trimmed.slice(1, -1)
+    : trimmed
+  const zoneIdIndex = unbracketed.indexOf('%')
+  return zoneIdIndex === -1 ? unbracketed : unbracketed.slice(0, zoneIdIndex)
+}
+
 function isIpv6Address(hostname: string): boolean {
-  return hostname.includes(':')
+  return normalizeIpLiteral(hostname).includes(':')
+}
+
+function isPrivateIpv6(hostname: string): boolean {
+  const normalized = normalizeIpLiteral(hostname)
+  if (!normalized.includes(':')) return false
+  if (normalized === '::' || normalized === '::1') return true
+  if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true
+  if (
+    normalized.startsWith('fe8') ||
+    normalized.startsWith('fe9') ||
+    normalized.startsWith('fea') ||
+    normalized.startsWith('feb')
+  ) {
+    return true
+  }
+  if (normalized.startsWith('ff')) return true
+  if (normalized.startsWith('2001:db8')) return true
+
+  const mapped = normalized.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/)
+  if (mapped && typeof mapped[1] === 'string' && isPrivateIpv4(mapped[1])) return true
+
+  return false
+}
+
+function requireRegistryProvider(value: string | undefined): string {
+  const raw = (value ?? '').trim()
+  if (!raw) throw new HTTPException(400, { message: 'provider is required' })
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(raw)) {
+    throw new HTTPException(400, { message: 'provider is invalid' })
+  }
+  return raw
+}
+
+function requireRegistryCategory(value: string | undefined): string {
+  const raw = (value ?? 'other').trim().toLowerCase()
+  if (!raw) return 'other'
+  if (!/^[a-z0-9][a-z0-9:_-]{0,47}$/.test(raw)) {
+    throw new HTTPException(400, { message: 'category is invalid' })
+  }
+  return raw
 }
 
 function assertPublicHostname(url: URL): void {
   const hostname = url.hostname.trim().toLowerCase()
   if (!hostname) throw new HTTPException(400, { message: 'endpoint hostname is required' })
+
+  if (url.protocol !== 'https:') {
+    throw new HTTPException(400, { message: 'endpoint must start with https://' })
+  }
+  if (url.username || url.password) {
+    throw new HTTPException(400, { message: 'endpoint must not contain credentials' })
+  }
+  if (url.port && url.port !== '443') {
+    throw new HTTPException(400, { message: 'endpoint must use default HTTPS port' })
+  }
 
   if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
     throw new HTTPException(400, { message: 'endpoint hostname is not allowed' })
@@ -2101,6 +2185,74 @@ function assertPublicHostname(url: URL): void {
   }
 }
 
+async function resolveDnsAnswers(hostname: string, recordType: 'A' | 'AAAA'): Promise<string[]> {
+  const dnsUrl = new URL('https://cloudflare-dns.com/dns-query')
+  dnsUrl.searchParams.set('name', hostname)
+  dnsUrl.searchParams.set('type', recordType)
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 4_000)
+  try {
+    const res = await fetch(dnsUrl.toString(), {
+      headers: { accept: 'application/dns-json' },
+      signal: controller.signal,
+    })
+    if (!res.ok) return []
+
+    const payload: unknown = await res.json()
+    if (!isRecord(payload) || !Array.isArray(payload.Answer)) return []
+
+    const out: string[] = []
+    for (const answer of payload.Answer) {
+      if (!isRecord(answer) || typeof answer.data !== 'string') continue
+      const type = Number(answer.type ?? 0)
+      if (type !== 1 && type !== 28) continue
+      out.push(answer.data.trim().toLowerCase())
+    }
+
+    return out
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+async function assertHostnameResolvesToPublicIp(hostnameRaw: string): Promise<void> {
+  const hostname = hostnameRaw.trim().toLowerCase()
+  if (!hostname) throw new HTTPException(400, { message: 'endpoint hostname is required' })
+
+  const now = Date.now()
+  const cachedAt = hostResolutionCache.get(hostname)
+  if (cachedAt && now - cachedAt < HOST_RESOLUTION_CACHE_TTL_MS) return
+
+  pruneHostResolutionCache(now)
+
+  let addresses: string[] = []
+  try {
+    const [v4, v6] = await Promise.all([
+      resolveDnsAnswers(hostname, 'A'),
+      resolveDnsAnswers(hostname, 'AAAA'),
+    ])
+    addresses = [...v4, ...v6]
+  } catch {
+    throw new HTTPException(400, { message: 'endpoint hostname DNS verification failed' })
+  }
+
+  if (addresses.length === 0) {
+    throw new HTTPException(400, { message: 'endpoint hostname is not resolvable' })
+  }
+
+  for (const address of addresses) {
+    if (isIpv4Address(address) && isPrivateIpv4(address)) {
+      throw new HTTPException(400, { message: 'endpoint resolves to a private IP address' })
+    }
+    if (isIpv6Address(address) && isPrivateIpv6(address)) {
+      throw new HTTPException(400, { message: 'endpoint resolves to a private IP address' })
+    }
+  }
+
+  hostResolutionCache.set(hostname, now)
+}
+
 function requireHttpsUrl(value: string): string {
   const raw = value.trim()
   let url: URL
@@ -2109,16 +2261,15 @@ function requireHttpsUrl(value: string): string {
   } catch {
     throw new HTTPException(400, { message: 'endpoint must be a valid URL' })
   }
-  if (url.protocol !== 'https:') {
-    throw new HTTPException(400, { message: 'endpoint must start with https://' })
-  }
+  if (url.protocol !== 'https:') throw new HTTPException(400, { message: 'endpoint must start with https://' })
   return url.toString()
 }
 
-function requirePublicHttpsUrl(value: string): string {
+async function requirePublicHttpsUrl(value: string): Promise<string> {
   const raw = requireHttpsUrl(value)
   const url = new URL(raw)
   assertPublicHostname(url)
+  await assertHostnameResolvesToPublicIp(url.hostname)
   return url.toString()
 }
 
@@ -3422,8 +3573,21 @@ async function ensureRegistrySeeded(
     })
 
     const allSeeds = [...crossfinSeeds, ...normalizedExternalSeeds, ...x402engineSeeds, ...einsteinSeeds]
+    const sanitizedSeeds: ServiceSeed[] = []
 
-    const statements = allSeeds.map((seed) => {
+    for (const seed of allSeeds) {
+      try {
+        const endpoint = requireHttpsUrl(seed.endpoint)
+        const url = new URL(endpoint)
+        assertPublicHostname(url)
+        const status: ServiceStatus = seed.status === 'disabled' ? 'disabled' : 'active'
+        sanitizedSeeds.push({ ...seed, endpoint, status })
+      } catch {
+        console.warn('Skipping registry seed with invalid endpoint', seed.id)
+      }
+    }
+
+    const statements = sanitizedSeeds.map((seed) => {
       const tags = seed.tags ? JSON.stringify(seed.tags) : null
       const inputSchema = seed.inputSchema ? JSON.stringify(seed.inputSchema) : null
       const outputExample = seed.outputExample ? JSON.stringify(seed.outputExample) : null
@@ -3453,7 +3617,9 @@ async function ensureRegistrySeeded(
       )
     })
 
-    await db.batch(statements)
+    if (statements.length > 0) {
+      await db.batch(statements)
+    }
     registrySeedCheckedUntil = Date.now() + REGISTRY_SEED_CHECK_TTL_MS
   }
 
@@ -3699,14 +3865,13 @@ app.post('/api/registry', agentAuth, async (c) => {
   }>()
 
   const name = body.name?.trim() ?? ''
-  const provider = body.provider?.trim() ?? ''
-  const category = (body.category?.trim() ?? 'other') || 'other'
-  const endpoint = body.endpoint ? requirePublicHttpsUrl(body.endpoint) : ''
+  const provider = requireRegistryProvider(body.provider)
+  const category = requireRegistryCategory(body.category)
+  const endpoint = body.endpoint ? await requirePublicHttpsUrl(body.endpoint) : ''
   const price = body.price?.trim() ?? ''
   const currency = (body.currency?.trim() ?? 'USDC') || 'USDC'
 
   if (!name) throw new HTTPException(400, { message: 'name is required' })
-  if (!provider) throw new HTTPException(400, { message: 'provider is required' })
   if (!endpoint) throw new HTTPException(400, { message: 'endpoint is required' })
   if (!price) throw new HTTPException(400, { message: 'price is required' })
 
@@ -3765,6 +3930,7 @@ async function proxyToService(c: Context<Env>, method: 'GET' | 'POST'): Promise<
   const PROXY_MAX_BODY_BYTES = 512 * 1024
   const PROXY_RATE_LIMIT_PER_MINUTE_PER_SERVICE = 60
   const PROXY_RATE_LIMIT_PER_MINUTE_PER_AGENT = 240
+  const PROXY_UPSTREAM_TIMEOUT_MS = 10_000
 
   const [serviceWindowRow, agentWindowRow] = await c.env.DB.batch([
     c.env.DB.prepare(
@@ -3790,6 +3956,7 @@ async function proxyToService(c: Context<Env>, method: 'GET' | 'POST'): Promise<
 
   try {
     assertPublicHostname(upstreamUrl)
+    await assertHostnameResolvesToPublicIp(upstreamUrl.hostname)
   } catch {
     throw new HTTPException(502, { message: 'Service endpoint blocked' })
   }
@@ -3807,7 +3974,9 @@ async function proxyToService(c: Context<Env>, method: 'GET' | 'POST'): Promise<
     const accept = c.req.header('accept')
     if (accept) headers.accept = accept
 
-    const init: RequestInit = { method, headers, redirect: 'manual' }
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), PROXY_UPSTREAM_TIMEOUT_MS)
+    const init: RequestInit = { method, headers, redirect: 'manual', signal: controller.signal }
     if (method === 'POST') {
       const contentLength = Number(c.req.header('content-length') ?? '0')
       if (contentLength > PROXY_MAX_BODY_BYTES) {
@@ -3822,7 +3991,12 @@ async function proxyToService(c: Context<Env>, method: 'GET' | 'POST'): Promise<
       init.body = body
     }
 
-    const upstreamRes = await fetch(upstreamUrl.toString(), init)
+    let upstreamRes: Response
+    try {
+      upstreamRes = await fetch(upstreamUrl.toString(), init)
+    } finally {
+      clearTimeout(timeoutId)
+    }
     const responseTimeMs = Date.now() - start
     const isRedirectResponse = upstreamRes.status >= 300 && upstreamRes.status < 400
     const status = upstreamRes.ok && !isRedirectResponse ? 'success' : 'error'
@@ -3852,6 +4026,10 @@ async function proxyToService(c: Context<Env>, method: 'GET' | 'POST'): Promise<
       ).bind(callId, service.id, agentId, 'error', responseTimeMs).run()
     } catch (logErr) {
       console.error('Failed to log service call', logErr)
+    }
+
+    if (err instanceof Error && err.name === 'AbortError') {
+      return c.json({ error: 'Upstream request timed out' }, 504)
     }
 
     console.error('Proxy upstream request failed', err)
@@ -5667,8 +5845,8 @@ app.get('/api/premium/report', async (c) => {
   ).first<{ count: number }>()
 
   const { results: recentTransactions } = await c.env.DB.prepare(
-    'SELECT id, rail, amount_cents, currency, memo, status, created_at FROM transactions ORDER BY created_at DESC LIMIT 10'
-  ).all()
+    'SELECT rail, status, COUNT(*) as count FROM transactions GROUP BY rail, status ORDER BY count DESC LIMIT 10'
+  ).all<{ rail: string; status: string; count: number | string }>()
 
   return c.json({
     paid: true,
@@ -5679,7 +5857,11 @@ app.get('/api/premium/report', async (c) => {
       transactions: (txns?.results?.[0] as { count: number } | undefined)?.count ?? 0,
       blocked: blocked?.count ?? 0,
     },
-    recentTransactions,
+    recentTransactions: (recentTransactions ?? []).map((row) => ({
+      rail: String(row.rail ?? ''),
+      status: String(row.status ?? ''),
+      count: Number(row.count ?? 0),
+    })),
     at: new Date().toISOString(),
   })
 })

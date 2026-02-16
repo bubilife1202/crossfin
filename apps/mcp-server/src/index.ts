@@ -20,6 +20,31 @@ import {
 const LEDGER_PATH = process.env.CROSSFIN_LEDGER_PATH?.trim() || defaultLedgerPath()
 const API_BASE = (process.env.CROSSFIN_API_URL?.trim() || 'https://crossfin.dev').replace(/\/$/, '')
 const EVM_PRIVATE_KEY = process.env.EVM_PRIVATE_KEY?.trim() ?? ''
+const API_ORIGIN = new URL(API_BASE).origin
+
+function ensureCrossfinPaidUrl(raw: string): string {
+  let url: URL
+  try {
+    url = new URL(raw.trim())
+  } catch {
+    throw new Error('Invalid URL')
+  }
+
+  if (url.protocol !== 'https:') {
+    throw new Error('Only https:// URLs are allowed')
+  }
+  if (url.username || url.password) {
+    throw new Error('Credentials in URL are not allowed')
+  }
+  if (url.origin !== API_ORIGIN) {
+    throw new Error(`Only ${API_ORIGIN} URLs are allowed`)
+  }
+  if (!url.pathname.startsWith('/api/premium/')) {
+    throw new Error('Only /api/premium/* endpoints are allowed')
+  }
+
+  return url.toString()
+}
 
 /* ── x402 paid fetch setup ── */
 let paidFetch: typeof fetch | null = null
@@ -374,17 +399,36 @@ server.registerTool(
       }
     }
 
+    if (serviceId && url) {
+      return { content: [{ type: 'text', text: 'Provide serviceId or url, not both' }], isError: true }
+    }
+
     let targetUrl: string
 
     if (url) {
-      targetUrl = url
-    } else if (serviceId) {
       try {
-        const svc = await apiFetch<{ endpoint?: string }>(`/api/registry/${encodeURIComponent(serviceId)}`)
-        if (!svc.endpoint) {
+        targetUrl = ensureCrossfinPaidUrl(url)
+      } catch (e) {
+        return {
+          content: [{ type: 'text', text: `Invalid url: ${e instanceof Error ? e.message : String(e)}` }],
+          isError: true,
+        }
+      }
+    } else if (serviceId) {
+      if (!serviceId.startsWith('crossfin_')) {
+        return {
+          content: [{ type: 'text', text: 'Only crossfin_* serviceId values are allowed for paid calls' }],
+          isError: true,
+        }
+      }
+
+      try {
+        const svc = await apiFetch<{ data?: { endpoint?: string } }>(`/api/registry/${encodeURIComponent(serviceId)}`)
+        const endpoint = typeof svc.data?.endpoint === 'string' ? svc.data.endpoint : ''
+        if (!endpoint) {
           return { content: [{ type: 'text', text: `Service ${serviceId} has no endpoint` }], isError: true }
         }
-        targetUrl = svc.endpoint
+        targetUrl = ensureCrossfinPaidUrl(endpoint)
       } catch (e) {
         return {
           content: [{ type: 'text', text: `Registry lookup failed: ${e instanceof Error ? e.message : String(e)}` }],
