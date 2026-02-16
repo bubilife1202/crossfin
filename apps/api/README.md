@@ -5,7 +5,7 @@ Live API:
 
 Key endpoints:
 - `GET /api/health` health
-- `GET /api/stats` public counters
+- `GET /api/stats` public-safe rounded counters
 - `GET /api/arbitrage/demo` free preview (top 3 pairs)
 - `GET /api/premium/arbitrage/kimchi` x402-paywalled (USDC) kimchi premium index ($0.05)
 - `GET /api/premium/arbitrage/opportunities` x402-paywalled (USDC) arbitrage routes ($0.10)

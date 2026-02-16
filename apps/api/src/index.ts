@@ -153,7 +153,7 @@ const publicRateLimit: MiddlewareHandler<Env> = async (c, next) => {
 app.use('*', cors({
   origin: ['http://localhost:5173', 'https://crossfin.pages.dev', 'https://crossfin.dev', 'https://www.crossfin.dev', 'https://live.crossfin.dev', 'https://crossfin-live.pages.dev'],
   allowHeaders: ['Content-Type', 'Authorization', 'X-Agent-Key', 'X-CrossFin-Admin-Token', 'PAYMENT-SIGNATURE'],
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'],
   exposeHeaders: ['PAYMENT-REQUIRED', 'PAYMENT-RESPONSE'],
 }))
 
@@ -227,7 +227,7 @@ app.get('/api/docs/guide', (c) => {
       { path: '/api/registry/{id}', description: 'Service details by ID' },
       { path: '/api/arbitrage/demo', description: 'Free kimchi premium preview (top 3 pairs)' },
       { path: '/api/analytics/overview', description: 'Gateway usage analytics' },
-      { path: '/api/stats', description: 'Agent/wallet/transaction counts' },
+      { path: '/api/stats', description: 'Public-safe summary (sensitive counts redacted)' },
       { path: '/api/openapi.json', description: 'OpenAPI 3.1 specification' },
       { path: '/api/docs/guide', description: 'This guide' },
     ],
@@ -3209,9 +3209,9 @@ app.get('/api/registry/search', async (c) => {
 
   const limit = Math.min(200, Math.max(1, Number(c.req.query('limit') ?? '50')))
   const offset = Math.max(0, Number(c.req.query('offset') ?? '0'))
-  const q = `%${qRaw.replace(/%/g, '')}%`
+  const q = `%${qRaw.replace(/[\\%_]/g, (match) => `\\${match}`)}%`
 
-  const whereSql = "status = 'active' AND (name LIKE ? OR description LIKE ? OR provider LIKE ? OR category LIKE ? OR endpoint LIKE ? OR tags LIKE ?)"
+  const whereSql = "status = 'active' AND (name LIKE ? ESCAPE '\\\\' OR description LIKE ? ESCAPE '\\\\' OR provider LIKE ? ESCAPE '\\\\' OR category LIKE ? ESCAPE '\\\\' OR endpoint LIKE ? ESCAPE '\\\\' OR tags LIKE ? ESCAPE '\\\\')"
   const params = [q, q, q, q, q, q]
 
   const countRow = await c.env.DB.prepare(
@@ -4716,21 +4716,14 @@ api.get('/survival/status', async (c) => {
   const day = now.toISOString().slice(0, 10)
   const weekAgo = new Date(now.getTime() - 7 * 86400000).toISOString()
 
-  const [totalCalls, todayCalls, recentCalls, weekCalls] = await Promise.all([
+  const [totalCalls, todayCalls, weekCalls] = await Promise.all([
     c.env.DB.prepare('SELECT COUNT(*) as cnt FROM service_calls').first<{ cnt: number }>(),
     c.env.DB.prepare('SELECT COUNT(*) as cnt FROM service_calls WHERE created_at >= ?').bind(day).first<{ cnt: number }>(),
-    c.env.DB.prepare(
-      "SELECT sc.id, sc.service_id, s.name as service_name, sc.status, sc.response_time_ms, sc.created_at FROM service_calls sc LEFT JOIN services s ON sc.service_id = s.id ORDER BY sc.created_at DESC LIMIT 20"
-    ).all<{ id: string; service_id: string; service_name: string | null; status: string; response_time_ms: number; created_at: string }>(),
     c.env.DB.prepare('SELECT COUNT(*) as cnt FROM service_calls WHERE created_at >= ?').bind(weekAgo).first<{ cnt: number }>(),
   ])
 
   const activeServices = await c.env.DB.prepare(
     "SELECT COUNT(*) as cnt FROM services WHERE status = 'active'"
-  ).first<{ cnt: number }>()
-
-  const agents = await c.env.DB.prepare(
-    "SELECT COUNT(*) as cnt FROM agents WHERE status = 'active'"
   ).first<{ cnt: number }>()
 
   const callsToday = todayCalls?.cnt ?? 0
@@ -4746,16 +4739,7 @@ api.get('/survival/status', async (c) => {
       callsToday,
       callsThisWeek: callsWeek,
       activeServices: activeServices?.cnt ?? 0,
-      registeredAgents: agents?.cnt ?? 0,
     },
-    recentEvents: (recentCalls?.results ?? []).map((r) => ({
-      id: r.id,
-      serviceId: r.service_id,
-      serviceName: r.service_name,
-      status: r.status,
-      responseTimeMs: r.response_time_ms,
-      at: r.created_at,
-    })),
     at: now.toISOString(),
   })
 })
@@ -4972,19 +4956,28 @@ app.get('/api/stats', async (c) => {
     c.env.DB.prepare('SELECT COUNT(*) as count FROM transactions'),
   ])
 
-  const agents = results[0]
-  const wallets = results[1]
-  const txns = results[2]
+  const agents = Number((results[0]?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
+  const wallets = Number((results[1]?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
+  const transactions = Number((results[2]?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
 
   const blocked = await c.env.DB.prepare(
     "SELECT COUNT(*) as count FROM audit_logs WHERE result = 'blocked'"
-  ).first<{ count: number }>()
+  ).first<{ count: number | string }>()
+
+  const bucket = (value: number): number => {
+    if (!Number.isFinite(value) || value <= 0) return 0
+    if (value < 10) return 10
+    if (value < 100) return Math.ceil(value / 10) * 10
+    return Math.ceil(value / 100) * 100
+  }
 
   return c.json({
-    agents: (agents?.results?.[0] as { count: number } | undefined)?.count ?? 0,
-    wallets: (wallets?.results?.[0] as { count: number } | undefined)?.count ?? 0,
-    transactions: (txns?.results?.[0] as { count: number } | undefined)?.count ?? 0,
-    blocked: blocked?.count ?? 0,
+    agents: bucket(agents),
+    wallets: bucket(wallets),
+    transactions: bucket(transactions),
+    blocked: bucket(Number(blocked?.count ?? 0)),
+    note: 'Public counters are rounded for privacy',
+    at: new Date().toISOString(),
   })
 })
 

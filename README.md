@@ -88,7 +88,7 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/health` | Health check (includes version) |
-| `GET /api/stats` | Agent/wallet/transaction counts |
+| `GET /api/stats` | Public-safe rounded counters |
 | `GET /api/openapi.json` | OpenAPI 3.1 spec (agent-readable) |
 
 ## MCP Server

@@ -10,11 +10,15 @@
 - Added public endpoint rate limiting middleware (per-IP + per-route window) to reduce unauthenticated D1 abuse risk
 - `ensureRegistrySeeded()` now uses in-memory TTL + in-flight lock to avoid repeated seed checks/fetch bursts on concurrent requests
 - Agent API keys are now stored as SHA-256 hashes; legacy plaintext keys auto-migrate to hashed form on first successful auth
+- `/api/survival/status` now returns aggregate-only public metrics (removed agent counts and per-call event feed)
+- `/api/stats` now returns rounded counters for privacy instead of exact internal totals
+- `/api/registry/search` now escapes `%`, `_`, and `\` in LIKE queries (`ESCAPE '\\'`) to prevent wildcard abuse
+- CORS allow-methods removed unused `DELETE`
 
 ### Added
 - **Live Dashboard — Agent Survival panel** (`live.crossfin.dev`)
   - ALIVE/STOPPED status badge with pulsing indicator
-  - Mini metric cards: Calls Today, Calls This Week, Registered Agents
+  - Mini metric cards: Calls Today, Calls This Week, Active Services
   - Scrollable recent events feed (service name, status, response time, relative timestamp)
   - Responsive layout matching existing dark trading-terminal theme
 

@@ -79,15 +79,6 @@ interface FxData {
   rates: Record<string, number>;
 }
 
-interface SurvivalEvent {
-  id: string;
-  serviceId: string;
-  serviceName: string | null;
-  status: string;
-  responseTimeMs: number;
-  at: string;
-}
-
 interface SurvivalData {
   alive: boolean;
   state: 'ALIVE' | 'STOPPED';
@@ -97,9 +88,7 @@ interface SurvivalData {
     callsToday: number;
     callsThisWeek: number;
     activeServices: number;
-    registeredAgents: number;
   };
-  recentEvents: SurvivalEvent[];
   at: string;
 }
 
@@ -366,8 +355,8 @@ export default function App() {
                 <span className="metricValue neutral">{survival.metrics.callsThisWeek.toLocaleString()}</span>
               </div>
               <div className="survivalMiniCard">
-                <span className="metricLabel">Registered Agents</span>
-                <span className="metricValue neutral">{survival.metrics.registeredAgents.toLocaleString()}</span>
+                <span className="metricLabel">Active Services</span>
+                <span className="metricValue neutral">{survival.metrics.activeServices.toLocaleString()}</span>
               </div>
             </div>
             <div className="survivalFeed">
@@ -377,20 +366,20 @@ export default function App() {
                 <span>Time</span>
                 <span>When</span>
               </div>
-              {survival.recentEvents.length === 0 && (
+              {recentCalls.length === 0 && (
                 <p className="emptyText">No recent events</p>
               )}
-              {survival.recentEvents.slice(0, 8).map((evt) => (
-                <div key={evt.id} className="survivalEvent fadeIn">
-                  <span className="survivalEventName">{evt.serviceName ?? evt.serviceId}</span>
+              {recentCalls.slice(0, 8).map((evt, index) => (
+                <div key={`${evt.service}-${index}`} className="survivalEvent fadeIn">
+                  <span className="survivalEventName">{evt.service}</span>
                   <span className="survivalEventStatus">
                     <span className={`statusDotSmall ${evt.status === "success" ? "green" : "red"}`} />
                     {evt.status}
                   </span>
-                  <span className={`recentRt ${rtClass(evt.responseTimeMs)}`}>
-                    {evt.responseTimeMs}ms
+                  <span className={`recentRt ${rtClass(evt.responseTime)}`}>
+                    {evt.responseTime}ms
                   </span>
-                  <span className="recentWhen">{timeAgo(evt.at)}</span>
+                  <span className="recentWhen">{evt.when}</span>
                 </div>
               ))}
             </div>
