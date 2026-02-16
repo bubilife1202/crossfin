@@ -13,6 +13,7 @@ import {
   type RegistryCategory,
   type RegistryService,
 } from './lib/api'
+import { CROSSFIN_PLAYGROUND_ENDPOINTS } from './lib/catalog.generated'
 
 type TabId = 'services' | 'developers' | 'activity'
 
@@ -76,45 +77,7 @@ function App() {
   } | null>(null)
   const [pgError, setPgError] = useState<string | null>(null)
 
-  const pgEndpoints: { path: string; label: string }[] = [
-    { path: '/api/health', label: '[Free] Health Check' },
-    { path: '/api/registry/stats', label: '[Free] Registry Stats' },
-    { path: '/api/registry/categories', label: '[Free] Categories' },
-    { path: '/api/arbitrage/demo', label: '[Free] Kimchi Premium Preview' },
-    { path: '/api/analytics/overview', label: '[Free] Analytics Overview' },
-    { path: '/api/stats', label: '[Free] Agent Stats' },
-    { path: '/api/openapi.json', label: '[Free] OpenAPI Spec' },
-    { path: '/api/premium/report', label: '[Paid] Premium Report ($0.001)' },
-    { path: '/api/premium/enterprise', label: '[Paid] Enterprise Receipt ($20.00)' },
-    { path: '/api/premium/arbitrage/kimchi', label: '[Paid] Kimchi Premium ($0.05)' },
-    { path: '/api/premium/arbitrage/kimchi/history?hours=24', label: '[Paid] Kimchi History ($0.05)' },
-    { path: '/api/premium/arbitrage/opportunities', label: '[Paid] Arbitrage Opportunities ($0.10)' },
-    { path: '/api/premium/bithumb/orderbook?pair=BTC', label: '[Paid] Bithumb Orderbook ($0.02)' },
-    { path: '/api/premium/bithumb/volume-analysis', label: '[Paid] Bithumb Volume Analysis ($0.03)' },
-    { path: '/api/premium/market/korea', label: '[Paid] Korea Market Sentiment ($0.03)' },
-    { path: '/api/premium/market/fx/usdkrw', label: '[Paid] USD/KRW (FX) ($0.01)' },
-    { path: '/api/premium/market/upbit/ticker?market=KRW-BTC', label: '[Paid] Upbit Ticker ($0.02)' },
-    { path: '/api/premium/market/upbit/orderbook?market=KRW-BTC', label: '[Paid] Upbit Orderbook ($0.02)' },
-    { path: '/api/premium/market/upbit/signals', label: '[Paid] Upbit Signals ($0.05)' },
-    { path: '/api/premium/market/coinone/ticker?currency=BTC', label: '[Paid] Coinone Ticker ($0.02)' },
-    { path: '/api/premium/market/cross-exchange', label: '[Paid] Cross-Exchange Decision ($0.08)' },
-    { path: '/api/premium/market/korea/indices', label: '[Paid] Korea Indices ($0.03)' },
-    { path: '/api/premium/market/korea/indices/history?index=KOSPI&days=20', label: '[Paid] Korea Indices History ($0.05)' },
-    { path: '/api/premium/market/korea/stocks/momentum?market=KOSPI', label: '[Paid] Korea Stocks Momentum ($0.05)' },
-    { path: '/api/premium/market/korea/investor-flow?stock=005930', label: '[Paid] Korea Investor Flow ($0.05)' },
-    { path: '/api/premium/market/korea/index-flow?index=KOSPI', label: '[Paid] Korea Index Flow ($0.03)' },
-    { path: '/api/premium/crypto/korea/5exchange?coin=BTC', label: '[Paid] Korea 5-Exchange Compare ($0.08)' },
-    { path: '/api/premium/crypto/korea/exchange-status', label: '[Paid] Korea Exchange Status ($0.03)' },
-    { path: '/api/premium/market/korea/stock-detail?stock=005930', label: '[Paid] Korea Stock Detail ($0.05)' },
-    { path: '/api/premium/market/korea/stock-news?stock=005930', label: '[Paid] Korea Stock News ($0.03)' },
-    { path: '/api/premium/market/korea/themes', label: '[Paid] Korea Themes ($0.05)' },
-    { path: '/api/premium/market/korea/disclosure?stock=005930', label: '[Paid] Korea Disclosure ($0.03)' },
-    { path: '/api/premium/crypto/korea/fx-rate', label: '[Paid] Korea FX Rate (CRIX) ($0.01)' },
-    { path: '/api/premium/market/korea/etf', label: '[Paid] Korea ETF ($0.03)' },
-    { path: '/api/premium/crypto/korea/upbit-candles?coin=BTC&type=days&count=30', label: '[Paid] Upbit Candles ($0.02)' },
-    { path: '/api/premium/market/global/indices-chart?index=.DJI&period=month', label: '[Paid] Global Indices Chart ($0.02)' },
-    { path: '/api/premium/news/korea/headlines', label: '[Paid] Korea Headlines ($0.03)' },
-  ]
+  const pgEndpoints = CROSSFIN_PLAYGROUND_ENDPOINTS
 
   function escapeHtml(value: string): string {
     return value

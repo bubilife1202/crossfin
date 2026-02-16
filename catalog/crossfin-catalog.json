@@ -1,0 +1,339 @@
+{
+  "apiVersion": "1.7.0",
+  "mcpTools": [
+    "search_services",
+    "list_services",
+    "get_service",
+    "list_categories",
+    "get_kimchi_premium",
+    "get_analytics",
+    "get_guide",
+    "call_paid_service"
+  ],
+  "freePlaygroundEndpoints": [
+    { "path": "/api/health", "label": "Health Check" },
+    { "path": "/api/registry/stats", "label": "Registry Stats" },
+    { "path": "/api/registry/categories", "label": "Categories" },
+    { "path": "/api/arbitrage/demo", "label": "Kimchi Premium Preview" },
+    { "path": "/api/analytics/overview", "label": "Analytics Overview" },
+    { "path": "/api/stats", "label": "Agent Stats" },
+    { "path": "/api/openapi.json", "label": "OpenAPI Spec" }
+  ],
+  "paidEndpoints": [
+    {
+      "id": "crossfin_premium_report",
+      "name": "CrossFin Premium Report (x402 Check)",
+      "description": "Low-cost premium receipt endpoint for payment flow verification.",
+      "category": "utility",
+      "path": "/api/premium/report",
+      "price": "$0.001",
+      "tags": ["x402", "premium", "health-check"],
+      "playgroundLabel": "Premium Report"
+    },
+    {
+      "id": "crossfin_premium_enterprise",
+      "name": "CrossFin Enterprise Receipt",
+      "description": "High-value settlement receipt endpoint for compliance and enterprise audit trails.",
+      "category": "enterprise",
+      "path": "/api/premium/enterprise",
+      "price": "$20.00",
+      "tags": ["x402", "premium", "enterprise", "compliance"],
+      "playgroundLabel": "Enterprise Receipt"
+    },
+    {
+      "id": "crossfin_kimchi_premium",
+      "name": "CrossFin Kimchi Premium Index",
+      "description": "Real-time price spread between Korean exchange (Bithumb) and global markets.",
+      "category": "korea-crypto",
+      "path": "/api/premium/arbitrage/kimchi",
+      "price": "$0.05",
+      "tags": ["korea", "crypto", "arbitrage", "kimchi-premium"],
+      "playgroundLabel": "Kimchi Premium"
+    },
+    {
+      "id": "crossfin_kimchi_premium_history",
+      "name": "CrossFin Kimchi Premium History (Hourly)",
+      "description": "Historical hourly snapshots of kimchi premium data captured by CrossFin cron.",
+      "category": "korea-crypto",
+      "path": "/api/premium/arbitrage/kimchi/history",
+      "sampleQuery": "hours=24",
+      "price": "$0.05",
+      "tags": ["korea", "crypto", "arbitrage", "kimchi-premium", "history"],
+      "playgroundLabel": "Kimchi History"
+    },
+    {
+      "id": "crossfin_arbitrage_opportunities",
+      "name": "CrossFin Arbitrage Decision Service",
+      "description": "AI-ready arbitrage decision service with EXECUTE/WAIT/SKIP recommendations.",
+      "category": "korea-crypto",
+      "path": "/api/premium/arbitrage/opportunities",
+      "price": "$0.10",
+      "tags": ["korea", "crypto", "arbitrage", "decision-service", "agent-ready"],
+      "playgroundLabel": "Arbitrage Opportunities"
+    },
+    {
+      "id": "crossfin_bithumb_orderbook",
+      "name": "CrossFin Bithumb Orderbook",
+      "description": "Live orderbook depth from Bithumb for any KRW pair.",
+      "category": "korea-crypto",
+      "path": "/api/premium/bithumb/orderbook",
+      "sampleQuery": "pair=BTC",
+      "price": "$0.02",
+      "tags": ["korea", "crypto", "orderbook", "bithumb"],
+      "playgroundLabel": "Bithumb Orderbook"
+    },
+    {
+      "id": "crossfin_bithumb_volume",
+      "name": "CrossFin Bithumb Volume Analysis",
+      "description": "Bithumb-wide 24h volume analysis with concentration and unusual volume detection.",
+      "category": "korea-crypto",
+      "path": "/api/premium/bithumb/volume-analysis",
+      "price": "$0.03",
+      "tags": ["korea", "crypto", "bithumb", "volume", "analysis"],
+      "playgroundLabel": "Bithumb Volume Analysis"
+    },
+    {
+      "id": "crossfin_korea_sentiment",
+      "name": "CrossFin Korea Market Sentiment",
+      "description": "Top movers and volume leaders on Bithumb.",
+      "category": "korea-crypto",
+      "path": "/api/premium/market/korea",
+      "price": "$0.03",
+      "tags": ["korea", "crypto", "sentiment"],
+      "playgroundLabel": "Korea Market Sentiment"
+    },
+    {
+      "id": "crossfin_usdkrw",
+      "name": "CrossFin USD/KRW Rate",
+      "description": "USD to KRW exchange rate used for converting Korean exchange prices.",
+      "category": "fx",
+      "path": "/api/premium/market/fx/usdkrw",
+      "price": "$0.01",
+      "tags": ["fx", "krw", "usd"],
+      "playgroundLabel": "USD/KRW (FX)"
+    },
+    {
+      "id": "crossfin_upbit_ticker",
+      "name": "CrossFin Upbit Ticker",
+      "description": "Upbit spot ticker (KRW market).",
+      "category": "korea-crypto",
+      "path": "/api/premium/market/upbit/ticker",
+      "sampleQuery": "market=KRW-BTC",
+      "price": "$0.02",
+      "tags": ["korea", "crypto", "upbit", "ticker"],
+      "playgroundLabel": "Upbit Ticker"
+    },
+    {
+      "id": "crossfin_upbit_orderbook",
+      "name": "CrossFin Upbit Orderbook",
+      "description": "Upbit orderbook snapshot (KRW market).",
+      "category": "korea-crypto",
+      "path": "/api/premium/market/upbit/orderbook",
+      "sampleQuery": "market=KRW-BTC",
+      "price": "$0.02",
+      "tags": ["korea", "crypto", "upbit", "orderbook"],
+      "playgroundLabel": "Upbit Orderbook"
+    },
+    {
+      "id": "crossfin_upbit_signals",
+      "name": "CrossFin Upbit Trading Signals",
+      "description": "Upbit momentum + relative volume + volatility trading signals for major KRW markets.",
+      "category": "korea-crypto",
+      "path": "/api/premium/market/upbit/signals",
+      "price": "$0.05",
+      "tags": ["korea", "crypto", "upbit", "signals", "momentum"],
+      "playgroundLabel": "Upbit Signals"
+    },
+    {
+      "id": "crossfin_coinone_ticker",
+      "name": "CrossFin Coinone Ticker",
+      "description": "Coinone spot ticker (KRW market).",
+      "category": "korea-crypto",
+      "path": "/api/premium/market/coinone/ticker",
+      "sampleQuery": "currency=BTC",
+      "price": "$0.02",
+      "tags": ["korea", "crypto", "coinone", "ticker"],
+      "playgroundLabel": "Coinone Ticker"
+    },
+    {
+      "id": "crossfin_cross_exchange",
+      "name": "CrossFin Cross-Exchange Decision Service",
+      "description": "Cross-exchange decision service with ARBITRAGE/HOLD/MONITOR signals.",
+      "category": "korea-crypto",
+      "path": "/api/premium/market/cross-exchange",
+      "price": "$0.08",
+      "tags": ["korea", "crypto", "exchange", "comparison", "arbitrage", "decision-service"],
+      "playgroundLabel": "Cross-Exchange Decision"
+    },
+    {
+      "id": "crossfin_korea_indices",
+      "name": "CrossFin Korea Indices",
+      "description": "Real-time KOSPI/KOSDAQ index snapshots from Korean market data.",
+      "category": "korea-stocks",
+      "path": "/api/premium/market/korea/indices",
+      "price": "$0.03",
+      "tags": ["korea", "stocks", "indices", "kospi", "kosdaq"],
+      "playgroundLabel": "Korea Indices"
+    },
+    {
+      "id": "crossfin_korea_indices_history",
+      "name": "CrossFin Korea Indices History",
+      "description": "Historical daily OHLC index history for KOSPI/KOSDAQ.",
+      "category": "korea-stocks",
+      "path": "/api/premium/market/korea/indices/history",
+      "sampleQuery": "index=KOSPI&days=20",
+      "price": "$0.05",
+      "tags": ["korea", "stocks", "indices", "history"],
+      "playgroundLabel": "Korea Indices History"
+    },
+    {
+      "id": "crossfin_korea_stocks_momentum",
+      "name": "CrossFin Korea Stocks Momentum",
+      "description": "Top Korean market-cap names plus daily gainers/losers momentum view.",
+      "category": "korea-stocks",
+      "path": "/api/premium/market/korea/stocks/momentum",
+      "sampleQuery": "market=KOSPI",
+      "price": "$0.05",
+      "tags": ["korea", "stocks", "momentum", "leaders"],
+      "playgroundLabel": "Korea Stocks Momentum"
+    },
+    {
+      "id": "crossfin_korea_investor_flow",
+      "name": "CrossFin Korea Investor Flow",
+      "description": "Foreign/institutional/individual net buying flow for a Korean stock.",
+      "category": "korea-stocks",
+      "path": "/api/premium/market/korea/investor-flow",
+      "sampleQuery": "stock=005930",
+      "price": "$0.05",
+      "tags": ["korea", "stocks", "investor-flow"],
+      "playgroundLabel": "Korea Investor Flow"
+    },
+    {
+      "id": "crossfin_korea_index_flow",
+      "name": "CrossFin Korea Index Flow",
+      "description": "Index-level investor flow (KOSPI/KOSDAQ/KPI200).",
+      "category": "korea-stocks",
+      "path": "/api/premium/market/korea/index-flow",
+      "sampleQuery": "index=KOSPI",
+      "price": "$0.03",
+      "tags": ["korea", "stocks", "index-flow"],
+      "playgroundLabel": "Korea Index Flow"
+    },
+    {
+      "id": "crossfin_crypto_korea_5exchange",
+      "name": "CrossFin Korea 5-Exchange Price Compare",
+      "description": "Compare coin prices across Upbit, Bithumb, Korbit, Coinone, and GoPax.",
+      "category": "korea-crypto",
+      "path": "/api/premium/crypto/korea/5exchange",
+      "sampleQuery": "coin=BTC",
+      "price": "$0.08",
+      "tags": ["korea", "crypto", "exchange", "arbitrage"],
+      "playgroundLabel": "Korea 5-Exchange Compare"
+    },
+    {
+      "id": "crossfin_crypto_korea_exchange_status",
+      "name": "CrossFin Korea Exchange Status",
+      "description": "Deposit/withdraw availability status across Korean exchange assets.",
+      "category": "korea-crypto",
+      "path": "/api/premium/crypto/korea/exchange-status",
+      "price": "$0.03",
+      "tags": ["korea", "crypto", "risk", "status"],
+      "playgroundLabel": "Korea Exchange Status"
+    },
+    {
+      "id": "crossfin_korea_stock_detail",
+      "name": "CrossFin Korea Stock Detail",
+      "description": "Detailed valuation/fundamentals and peer context for a Korean stock.",
+      "category": "korea-stocks",
+      "path": "/api/premium/market/korea/stock-detail",
+      "sampleQuery": "stock=005930",
+      "price": "$0.05",
+      "tags": ["korea", "stocks", "fundamentals", "valuation"],
+      "playgroundLabel": "Korea Stock Detail"
+    },
+    {
+      "id": "crossfin_korea_stock_news",
+      "name": "CrossFin Korea Stock News",
+      "description": "Stock-specific Korean news feed with article metadata.",
+      "category": "korea-stocks",
+      "path": "/api/premium/market/korea/stock-news",
+      "sampleQuery": "stock=005930",
+      "price": "$0.03",
+      "tags": ["korea", "stocks", "news"],
+      "playgroundLabel": "Korea Stock News"
+    },
+    {
+      "id": "crossfin_korea_themes",
+      "name": "CrossFin Korea Market Themes",
+      "description": "Korean stock themes and sector grouping performance.",
+      "category": "korea-stocks",
+      "path": "/api/premium/market/korea/themes",
+      "price": "$0.05",
+      "tags": ["korea", "stocks", "themes", "sector"],
+      "playgroundLabel": "Korea Themes"
+    },
+    {
+      "id": "crossfin_korea_disclosure",
+      "name": "CrossFin Korea Disclosure Feed",
+      "description": "Recent regulatory disclosures for Korean listed companies.",
+      "category": "korea-stocks",
+      "path": "/api/premium/market/korea/disclosure",
+      "sampleQuery": "stock=005930",
+      "price": "$0.03",
+      "tags": ["korea", "stocks", "disclosure", "regulatory"],
+      "playgroundLabel": "Korea Disclosure"
+    },
+    {
+      "id": "crossfin_crypto_korea_fx_rate",
+      "name": "CrossFin Korea FX Rate (CRIX)",
+      "description": "KRW/USD forex quote from Upbit CRIX feed.",
+      "category": "fx",
+      "path": "/api/premium/crypto/korea/fx-rate",
+      "price": "$0.01",
+      "tags": ["korea", "fx", "krw", "usd"],
+      "playgroundLabel": "Korea FX Rate (CRIX)"
+    },
+    {
+      "id": "crossfin_korea_etf",
+      "name": "CrossFin Korea ETF Universe",
+      "description": "Top Korean ETFs with NAV/returns and market cap.",
+      "category": "korea-stocks",
+      "path": "/api/premium/market/korea/etf",
+      "price": "$0.03",
+      "tags": ["korea", "stocks", "etf"],
+      "playgroundLabel": "Korea ETF"
+    },
+    {
+      "id": "crossfin_upbit_candles",
+      "name": "CrossFin Upbit Candles",
+      "description": "Upbit OHLCV candles for KRW-listed crypto markets.",
+      "category": "korea-crypto",
+      "path": "/api/premium/crypto/korea/upbit-candles",
+      "sampleQuery": "coin=BTC&type=days&count=30",
+      "price": "$0.02",
+      "tags": ["korea", "crypto", "upbit", "candles", "ohlcv"],
+      "playgroundLabel": "Upbit Candles"
+    },
+    {
+      "id": "crossfin_global_indices_chart",
+      "name": "CrossFin Global Indices Chart",
+      "description": "Monthly OHLCV chart data for major global indices.",
+      "category": "global-markets",
+      "path": "/api/premium/market/global/indices-chart",
+      "sampleQuery": "index=.DJI&period=month",
+      "price": "$0.02",
+      "tags": ["global", "indices", "ohlcv", "markets"],
+      "playgroundLabel": "Global Indices Chart"
+    },
+    {
+      "id": "crossfin_korea_headlines",
+      "name": "CrossFin Korea Headlines (RSS)",
+      "description": "Top headlines feed for Korean market context (Google News RSS).",
+      "category": "news",
+      "path": "/api/premium/news/korea/headlines",
+      "price": "$0.03",
+      "tags": ["korea", "news", "rss"],
+      "playgroundLabel": "Korea Headlines"
+    }
+  ]
+}

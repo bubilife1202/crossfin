@@ -1,0 +1,45 @@
+name: Catalog Guard
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  verify-catalog-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify catalog sync rules
+        run: node apps/api/scripts/catalog-guard.mjs
+
+      - name: Install API deps
+        run: npm ci
+        working-directory: apps/api
+
+      - name: Install web deps
+        run: npm ci
+        working-directory: apps/web
+
+      - name: Install live deps
+        run: npm ci
+        working-directory: apps/live
+
+      - name: Typecheck API
+        run: npx tsc --noEmit -p apps/api/tsconfig.json
+
+      - name: Build web
+        run: npm run build
+        working-directory: apps/web
+
+      - name: Build live
+        run: npm run build
+        working-directory: apps/live

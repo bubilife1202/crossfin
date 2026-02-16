@@ -6,6 +6,13 @@ import { paymentMiddleware, x402ResourceServer } from '@x402/hono'
 import { ExactEvmScheme } from '@x402/evm/exact/server'
 import { HTTPFacilitatorClient } from '@x402/core/server'
 import { bazaarResourceServerExtension, declareDiscoveryExtension } from '@x402/extensions/bazaar'
+import {
+  CROSSFIN_API_VERSION,
+  CROSSFIN_MCP_TOOLS,
+  CROSSFIN_PAID_ENDPOINTS,
+  CROSSFIN_PAID_PRICING,
+  withSampleQuery,
+} from './catalog'
 
 type Bindings = {
   DB: D1Database
@@ -202,13 +209,13 @@ app.onError((err, c) => {
   return c.json({ error: 'Internal server error' }, 500)
 })
 
-app.get('/', (c) => c.json({ name: 'crossfin-api', version: '1.7.0', status: 'ok' }))
-app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '1.7.0', status: 'ok' }))
+app.get('/', (c) => c.json({ name: 'crossfin-api', version: CROSSFIN_API_VERSION, status: 'ok' }))
+app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: CROSSFIN_API_VERSION, status: 'ok' }))
 
 app.get('/api/docs/guide', (c) => {
   return c.json({
     name: 'CrossFin Agent Guide',
-    version: '1.7.0',
+    version: CROSSFIN_API_VERSION,
     overview: {
       what: 'CrossFin is a service gateway for AI agents. Discover, compare, and call x402/REST services through a single API.',
       services: 'Use GET /api/registry/stats for the current active service counts.',
@@ -401,7 +408,7 @@ app.get('/.well-known/crossfin.json', (c) => {
   const origin = new URL(c.req.url).origin
   return c.json({
     name: 'CrossFin',
-    version: '1.7.0',
+    version: CROSSFIN_API_VERSION,
     description: 'Agent-first directory and gateway for x402 services and Korean market data.',
     urls: {
       website: 'https://crossfin.dev',
@@ -421,16 +428,7 @@ app.get('/.well-known/crossfin.json', (c) => {
       name: 'crossfin',
       repo: 'https://github.com/bubilife1202/crossfin/tree/main/apps/mcp-server',
       env: { CROSSFIN_API_URL: origin },
-      tools: [
-        'search_services',
-        'list_services',
-        'get_service',
-        'list_categories',
-        'get_kimchi_premium',
-        'get_analytics',
-        'get_guide',
-        'call_paid_service',
-      ],
+      tools: CROSSFIN_MCP_TOOLS,
     },
     updatedAt: new Date().toISOString(),
   })
@@ -443,7 +441,7 @@ app.get('/api/openapi.json', (c) => {
     openapi: '3.1.0',
     info: {
       title: 'CrossFin — x402 Agent Services Gateway (Korea)',
-      version: '1.7.0',
+      version: CROSSFIN_API_VERSION,
       description: 'Service registry + pay-per-request APIs for AI agents. Discover x402 services and access Korean market data. Payments via x402 protocol with USDC on Base mainnet.',
       contact: { url: 'https://crossfin.dev' },
       'x-logo': { url: 'https://crossfin.dev/logos/crossfin.png' },
@@ -957,38 +955,7 @@ app.get('/api/openapi.json', (c) => {
       asset: 'USDC',
       payTo: '0xe4E79Ce6a1377C58f0Bb99D023908858A4DB5779',
       facilitator: 'https://facilitator.payai.network',
-      pricing: {
-        '/api/premium/report': '$0.001',
-        '/api/premium/enterprise': '$20.00',
-        '/api/premium/arbitrage/kimchi': '$0.05',
-        '/api/premium/arbitrage/kimchi/history': '$0.05',
-        '/api/premium/arbitrage/opportunities': '$0.10',
-        '/api/premium/bithumb/orderbook': '$0.02',
-        '/api/premium/bithumb/volume-analysis': '$0.03',
-        '/api/premium/market/korea': '$0.03',
-        '/api/premium/market/fx/usdkrw': '$0.01',
-        '/api/premium/market/upbit/ticker': '$0.02',
-        '/api/premium/market/upbit/orderbook': '$0.02',
-        '/api/premium/market/upbit/signals': '$0.05',
-        '/api/premium/market/coinone/ticker': '$0.02',
-        '/api/premium/market/cross-exchange': '$0.08',
-        '/api/premium/market/korea/indices': '$0.03',
-        '/api/premium/market/korea/indices/history': '$0.05',
-        '/api/premium/market/korea/stocks/momentum': '$0.05',
-        '/api/premium/market/korea/investor-flow': '$0.05',
-        '/api/premium/market/korea/index-flow': '$0.03',
-        '/api/premium/crypto/korea/5exchange': '$0.08',
-        '/api/premium/crypto/korea/exchange-status': '$0.03',
-        '/api/premium/market/korea/stock-detail': '$0.05',
-        '/api/premium/market/korea/stock-news': '$0.03',
-        '/api/premium/market/korea/themes': '$0.05',
-        '/api/premium/market/korea/disclosure': '$0.03',
-        '/api/premium/crypto/korea/fx-rate': '$0.01',
-        '/api/premium/market/korea/etf': '$0.03',
-        '/api/premium/crypto/korea/upbit-candles': '$0.02',
-        '/api/premium/market/global/indices-chart': '$0.02',
-        '/api/premium/news/korea/headlines': '$0.03',
-      },
+      pricing: CROSSFIN_PAID_PRICING,
     },
   })
 })
@@ -2515,286 +2482,15 @@ async function ensureRegistrySeeded(
       throw new HTTPException(500, { message: 'DB schema not migrated (services table missing)' })
     }
 
-    const crossfinSeedSpecs: Array<{
-      id: string
-      name: string
-      description: string
-      category: string
-      endpoint: string
-      price: string
-      tags: string[]
-    }> = [
-      {
-        id: 'crossfin_premium_report',
-        name: 'CrossFin Premium Report (x402 Check)',
-        description: 'Low-cost premium receipt endpoint for payment flow verification.',
-        category: 'utility',
-        endpoint: 'https://crossfin.dev/api/premium/report',
-        price: '$0.001',
-        tags: ['x402', 'premium', 'health-check'],
-      },
-      {
-        id: 'crossfin_premium_enterprise',
-        name: 'CrossFin Enterprise Receipt',
-        description: 'High-value settlement receipt endpoint for compliance and enterprise audit trails.',
-        category: 'enterprise',
-        endpoint: 'https://crossfin.dev/api/premium/enterprise',
-        price: '$20.00',
-        tags: ['x402', 'premium', 'enterprise', 'compliance'],
-      },
-      {
-        id: 'crossfin_kimchi_premium',
-        name: 'CrossFin Kimchi Premium Index',
-        description: 'Real-time price spread between Korean exchange (Bithumb) and global markets.',
-        category: 'korea-crypto',
-        endpoint: 'https://crossfin.dev/api/premium/arbitrage/kimchi',
-        price: '$0.05',
-        tags: ['korea', 'crypto', 'arbitrage', 'kimchi-premium'],
-      },
-      {
-        id: 'crossfin_kimchi_premium_history',
-        name: 'CrossFin Kimchi Premium History (Hourly)',
-        description: 'Historical hourly snapshots of kimchi premium data captured by CrossFin cron.',
-        category: 'korea-crypto',
-        endpoint: 'https://crossfin.dev/api/premium/arbitrage/kimchi/history?hours=24',
-        price: '$0.05',
-        tags: ['korea', 'crypto', 'arbitrage', 'kimchi-premium', 'history'],
-      },
-      {
-        id: 'crossfin_arbitrage_opportunities',
-        name: 'CrossFin Arbitrage Decision Service',
-        description: 'AI-ready arbitrage decision service with EXECUTE/WAIT/SKIP recommendations.',
-        category: 'korea-crypto',
-        endpoint: 'https://crossfin.dev/api/premium/arbitrage/opportunities',
-        price: '$0.10',
-        tags: ['korea', 'crypto', 'arbitrage', 'decision-service', 'agent-ready'],
-      },
-      {
-        id: 'crossfin_bithumb_orderbook',
-        name: 'CrossFin Bithumb Orderbook',
-        description: 'Live orderbook depth from Bithumb for any KRW pair.',
-        category: 'korea-crypto',
-        endpoint: 'https://crossfin.dev/api/premium/bithumb/orderbook?pair=BTC',
-        price: '$0.02',
-        tags: ['korea', 'crypto', 'orderbook', 'bithumb'],
-      },
-      {
-        id: 'crossfin_bithumb_volume',
-        name: 'CrossFin Bithumb Volume Analysis',
-        description: 'Bithumb-wide 24h volume analysis with concentration and unusual volume detection.',
-        category: 'korea-crypto',
-        endpoint: 'https://crossfin.dev/api/premium/bithumb/volume-analysis',
-        price: '$0.03',
-        tags: ['korea', 'crypto', 'bithumb', 'volume', 'analysis'],
-      },
-      {
-        id: 'crossfin_korea_sentiment',
-        name: 'CrossFin Korea Market Sentiment',
-        description: 'Top movers and volume leaders on Bithumb.',
-        category: 'korea-crypto',
-        endpoint: 'https://crossfin.dev/api/premium/market/korea',
-        price: '$0.03',
-        tags: ['korea', 'crypto', 'sentiment'],
-      },
-      {
-        id: 'crossfin_usdkrw',
-        name: 'CrossFin USD/KRW Rate',
-        description: 'USD to KRW exchange rate used for converting Korean exchange prices.',
-        category: 'fx',
-        endpoint: 'https://crossfin.dev/api/premium/market/fx/usdkrw',
-        price: '$0.01',
-        tags: ['fx', 'krw', 'usd'],
-      },
-      {
-        id: 'crossfin_upbit_ticker',
-        name: 'CrossFin Upbit Ticker',
-        description: 'Upbit spot ticker (KRW market).',
-        category: 'korea-crypto',
-        endpoint: 'https://crossfin.dev/api/premium/market/upbit/ticker?market=KRW-BTC',
-        price: '$0.02',
-        tags: ['korea', 'crypto', 'upbit', 'ticker'],
-      },
-      {
-        id: 'crossfin_upbit_orderbook',
-        name: 'CrossFin Upbit Orderbook',
-        description: 'Upbit orderbook snapshot (KRW market).',
-        category: 'korea-crypto',
-        endpoint: 'https://crossfin.dev/api/premium/market/upbit/orderbook?market=KRW-BTC',
-        price: '$0.02',
-        tags: ['korea', 'crypto', 'upbit', 'orderbook'],
-      },
-      {
-        id: 'crossfin_upbit_signals',
-        name: 'CrossFin Upbit Trading Signals',
-        description: 'Upbit momentum + relative volume + volatility trading signals for major KRW markets.',
-        category: 'korea-crypto',
-        endpoint: 'https://crossfin.dev/api/premium/market/upbit/signals',
-        price: '$0.05',
-        tags: ['korea', 'crypto', 'upbit', 'signals', 'momentum'],
-      },
-      {
-        id: 'crossfin_coinone_ticker',
-        name: 'CrossFin Coinone Ticker',
-        description: 'Coinone spot ticker (KRW market).',
-        category: 'korea-crypto',
-        endpoint: 'https://crossfin.dev/api/premium/market/coinone/ticker?currency=BTC',
-        price: '$0.02',
-        tags: ['korea', 'crypto', 'coinone', 'ticker'],
-      },
-      {
-        id: 'crossfin_cross_exchange',
-        name: 'CrossFin Cross-Exchange Decision Service',
-        description: 'Cross-exchange decision service with ARBITRAGE/HOLD/MONITOR signals.',
-        category: 'korea-crypto',
-        endpoint: 'https://crossfin.dev/api/premium/market/cross-exchange',
-        price: '$0.08',
-        tags: ['korea', 'crypto', 'exchange', 'comparison', 'arbitrage', 'decision-service'],
-      },
-      {
-        id: 'crossfin_korea_indices',
-        name: 'CrossFin Korea Indices',
-        description: 'Real-time KOSPI/KOSDAQ index snapshots from Korean market data.',
-        category: 'korea-stocks',
-        endpoint: 'https://crossfin.dev/api/premium/market/korea/indices',
-        price: '$0.03',
-        tags: ['korea', 'stocks', 'indices', 'kospi', 'kosdaq'],
-      },
-      {
-        id: 'crossfin_korea_indices_history',
-        name: 'CrossFin Korea Indices History',
-        description: 'Historical daily OHLC index history for KOSPI/KOSDAQ.',
-        category: 'korea-stocks',
-        endpoint: 'https://crossfin.dev/api/premium/market/korea/indices/history?index=KOSPI&days=20',
-        price: '$0.05',
-        tags: ['korea', 'stocks', 'indices', 'history'],
-      },
-      {
-        id: 'crossfin_korea_stocks_momentum',
-        name: 'CrossFin Korea Stocks Momentum',
-        description: 'Top Korean market-cap names plus daily gainers/losers momentum view.',
-        category: 'korea-stocks',
-        endpoint: 'https://crossfin.dev/api/premium/market/korea/stocks/momentum?market=KOSPI',
-        price: '$0.05',
-        tags: ['korea', 'stocks', 'momentum', 'leaders'],
-      },
-      {
-        id: 'crossfin_korea_investor_flow',
-        name: 'CrossFin Korea Investor Flow',
-        description: 'Foreign/institutional/individual net buying flow for a Korean stock.',
-        category: 'korea-stocks',
-        endpoint: 'https://crossfin.dev/api/premium/market/korea/investor-flow?stock=005930',
-        price: '$0.05',
-        tags: ['korea', 'stocks', 'investor-flow'],
-      },
-      {
-        id: 'crossfin_korea_index_flow',
-        name: 'CrossFin Korea Index Flow',
-        description: 'Index-level investor flow (KOSPI/KOSDAQ/KPI200).',
-        category: 'korea-stocks',
-        endpoint: 'https://crossfin.dev/api/premium/market/korea/index-flow?index=KOSPI',
-        price: '$0.03',
-        tags: ['korea', 'stocks', 'index-flow'],
-      },
-      {
-        id: 'crossfin_crypto_korea_5exchange',
-        name: 'CrossFin Korea 5-Exchange Price Compare',
-        description: 'Compare coin prices across Upbit, Bithumb, Korbit, Coinone, and GoPax.',
-        category: 'korea-crypto',
-        endpoint: 'https://crossfin.dev/api/premium/crypto/korea/5exchange?coin=BTC',
-        price: '$0.08',
-        tags: ['korea', 'crypto', 'exchange', 'arbitrage'],
-      },
-      {
-        id: 'crossfin_crypto_korea_exchange_status',
-        name: 'CrossFin Korea Exchange Status',
-        description: 'Deposit/withdraw availability status across Korean exchange assets.',
-        category: 'korea-crypto',
-        endpoint: 'https://crossfin.dev/api/premium/crypto/korea/exchange-status',
-        price: '$0.03',
-        tags: ['korea', 'crypto', 'risk', 'status'],
-      },
-      {
-        id: 'crossfin_korea_stock_detail',
-        name: 'CrossFin Korea Stock Detail',
-        description: 'Detailed valuation/fundamentals and peer context for a Korean stock.',
-        category: 'korea-stocks',
-        endpoint: 'https://crossfin.dev/api/premium/market/korea/stock-detail?stock=005930',
-        price: '$0.05',
-        tags: ['korea', 'stocks', 'fundamentals', 'valuation'],
-      },
-      {
-        id: 'crossfin_korea_stock_news',
-        name: 'CrossFin Korea Stock News',
-        description: 'Stock-specific Korean news feed with article metadata.',
-        category: 'korea-stocks',
-        endpoint: 'https://crossfin.dev/api/premium/market/korea/stock-news?stock=005930',
-        price: '$0.03',
-        tags: ['korea', 'stocks', 'news'],
-      },
-      {
-        id: 'crossfin_korea_themes',
-        name: 'CrossFin Korea Market Themes',
-        description: 'Korean stock themes and sector grouping performance.',
-        category: 'korea-stocks',
-        endpoint: 'https://crossfin.dev/api/premium/market/korea/themes',
-        price: '$0.05',
-        tags: ['korea', 'stocks', 'themes', 'sector'],
-      },
-      {
-        id: 'crossfin_korea_disclosure',
-        name: 'CrossFin Korea Disclosure Feed',
-        description: 'Recent regulatory disclosures for Korean listed companies.',
-        category: 'korea-stocks',
-        endpoint: 'https://crossfin.dev/api/premium/market/korea/disclosure?stock=005930',
-        price: '$0.03',
-        tags: ['korea', 'stocks', 'disclosure', 'regulatory'],
-      },
-      {
-        id: 'crossfin_crypto_korea_fx_rate',
-        name: 'CrossFin Korea FX Rate (CRIX)',
-        description: 'KRW/USD forex quote from Upbit CRIX feed.',
-        category: 'fx',
-        endpoint: 'https://crossfin.dev/api/premium/crypto/korea/fx-rate',
-        price: '$0.01',
-        tags: ['korea', 'fx', 'krw', 'usd'],
-      },
-      {
-        id: 'crossfin_korea_etf',
-        name: 'CrossFin Korea ETF Universe',
-        description: 'Top Korean ETFs with NAV/returns and market cap.',
-        category: 'korea-stocks',
-        endpoint: 'https://crossfin.dev/api/premium/market/korea/etf',
-        price: '$0.03',
-        tags: ['korea', 'stocks', 'etf'],
-      },
-      {
-        id: 'crossfin_upbit_candles',
-        name: 'CrossFin Upbit Candles',
-        description: 'Upbit OHLCV candles for KRW-listed crypto markets.',
-        category: 'korea-crypto',
-        endpoint: 'https://crossfin.dev/api/premium/crypto/korea/upbit-candles?coin=BTC&type=days&count=30',
-        price: '$0.02',
-        tags: ['korea', 'crypto', 'upbit', 'candles', 'ohlcv'],
-      },
-      {
-        id: 'crossfin_global_indices_chart',
-        name: 'CrossFin Global Indices Chart',
-        description: 'Monthly OHLCV chart data for major global indices.',
-        category: 'global-markets',
-        endpoint: 'https://crossfin.dev/api/premium/market/global/indices-chart?index=.DJI&period=month',
-        price: '$0.02',
-        tags: ['global', 'indices', 'ohlcv', 'markets'],
-      },
-      {
-        id: 'crossfin_korea_headlines',
-        name: 'CrossFin Korea Headlines (RSS)',
-        description: 'Top headlines feed for Korean market context (Google News RSS).',
-        category: 'news',
-        endpoint: 'https://crossfin.dev/api/premium/news/korea/headlines',
-        price: '$0.03',
-        tags: ['korea', 'news', 'rss'],
-      },
-    ]
+    const crossfinSeedSpecs = CROSSFIN_PAID_ENDPOINTS.map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      description: entry.description,
+      category: entry.category,
+      endpoint: `https://crossfin.dev${withSampleQuery(entry.path, entry.sampleQuery)}`,
+      price: entry.price,
+      tags: entry.tags,
+    }))
 
     const expectedCrossfinSeedCount = crossfinSeedSpecs.length
     const count = row ? Number(row.count) : 0
@@ -2820,7 +2516,7 @@ async function ensureRegistrySeeded(
       isCrossfin: true,
     }))
 
-  const externalSeeds: ServiceSeed[] = [
+    const externalSeeds: ServiceSeed[] = [
     {
       id: 'invy_wallet_holdings',
       name: 'invy.bot Wallet Holdings Lookup',
@@ -6007,7 +5703,7 @@ api.get('/survival/status', async (c) => {
   return c.json({
     alive,
     state: alive ? 'ALIVE' : 'STOPPED',
-    version: '1.7.0',
+    version: CROSSFIN_API_VERSION,
     metrics: {
       totalCalls: totalCalls?.cnt ?? 0,
       callsToday,
