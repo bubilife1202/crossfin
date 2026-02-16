@@ -1339,6 +1339,79 @@ app.use(
             }),
           },
         },
+        'GET /api/premium/market/korea/investor-flow': {
+          accepts: { scheme: 'exact', price: '$0.05', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
+          description: 'Korean stock investor flow — 10-day history of foreign, institutional, and individual net buying for any KOSPI/KOSDAQ stock. Data unavailable outside Bloomberg Terminal ($24K/yr).',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              input: { stock: '005930' },
+              inputSchema: { properties: { stock: { type: 'string', description: '6-digit Korean stock code (e.g., 005930 for Samsung Electronics)' } } },
+              output: {
+                example: { paid: true, service: 'crossfin-korea-investor-flow', stock: '005930', days: 10, flow: [{ date: '20260213', foreignNetBuy: '-4,715,928', foreignHoldRatio: '51.44%', institutionNetBuy: '+556,164', individualNetBuy: '+3,099,928', closePrice: '181,200' }] },
+                schema: { properties: { paid: { type: 'boolean' }, stock: { type: 'string' }, days: { type: 'number' }, flow: { type: 'array' } }, required: ['paid', 'stock', 'days', 'flow'] },
+              },
+            }),
+          },
+        },
+        'GET /api/premium/market/korea/index-flow': {
+          accepts: { scheme: 'exact', price: '$0.03', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
+          description: 'KOSPI/KOSDAQ index-level investor flow — foreign, institutional, individual net buying in billions of KRW for today.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              input: { index: 'KOSPI' },
+              inputSchema: { properties: { index: { type: 'string', description: 'KOSPI, KOSDAQ, or KPI200' } } },
+              output: {
+                example: { paid: true, service: 'crossfin-korea-index-flow', index: 'KOSPI', date: '20260213', foreignNetBuyBillionKrw: '-9,220', institutionNetBuyBillionKrw: '+831', individualNetBuyBillionKrw: '+7,141' },
+                schema: { properties: { paid: { type: 'boolean' }, index: { type: 'string' }, foreignNetBuyBillionKrw: { type: 'string' }, institutionNetBuyBillionKrw: { type: 'string' }, individualNetBuyBillionKrw: { type: 'string' } }, required: ['paid', 'index'] },
+              },
+            }),
+          },
+        },
+        'GET /api/premium/crypto/korea/5exchange': {
+          accepts: { scheme: 'exact', price: '$0.08', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
+          description: 'Compare crypto prices across ALL 5 Korean exchanges (Upbit, Bithumb, Korbit, Coinone, GoPax) for any coin. Shows inter-exchange spread for arbitrage.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              input: { coin: 'BTC' },
+              inputSchema: { properties: { coin: { type: 'string', description: 'Crypto symbol (BTC, ETH, XRP, etc.)' } } },
+              output: {
+                example: { paid: true, service: 'crossfin-crypto-5exchange', coin: 'BTC', exchangeCount: 5, exchanges: [{ exchange: 'Upbit', priceKrw: 102130000, volume24h: 1579 }], spread: { minPriceKrw: 102072000, maxPriceKrw: 102890000, spreadPct: 0.8 } },
+                schema: { properties: { paid: { type: 'boolean' }, coin: { type: 'string' }, exchangeCount: { type: 'number' }, exchanges: { type: 'array' }, spread: { type: 'object' } }, required: ['paid', 'coin', 'exchanges', 'spread'] },
+              },
+            }),
+          },
+        },
+        'GET /api/premium/crypto/korea/exchange-status': {
+          accepts: { scheme: 'exact', price: '$0.03', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
+          description: 'Bithumb deposit/withdrawal status for ALL 600+ coins. Disabled deposits/withdrawals signal exchange risk, regulatory action, or chain issues. Unique risk monitoring data.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              output: {
+                example: { paid: true, service: 'crossfin-crypto-exchange-status', exchange: 'Bithumb', totalCoins: 668, disabledCount: 230, coins: [{ symbol: 'BTC', withdrawalEnabled: true, depositEnabled: true }] },
+                schema: { properties: { paid: { type: 'boolean' }, exchange: { type: 'string' }, totalCoins: { type: 'number' }, disabledCount: { type: 'number' }, coins: { type: 'array' } }, required: ['paid', 'totalCoins', 'disabledCount', 'coins'] },
+              },
+            }),
+          },
+        },
+        'GET /api/premium/market/korea/stock-detail': {
+          accepts: { scheme: 'exact', price: '$0.05', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
+          description: 'Comprehensive Korean stock analysis — PER, PBR, EPS, dividend yield, 52-week range, market cap, analyst consensus target price, and same-industry peer comparison.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              input: { stock: '005930' },
+              inputSchema: { properties: { stock: { type: 'string', description: '6-digit Korean stock code' } } },
+              output: {
+                example: { paid: true, service: 'crossfin-korea-stock-detail', stock: '005930', name: 'Samsung Electronics', metrics: { 'PER': '37.62배', 'PBR': '2.99배', '배당수익률': '0.92%' }, consensus: { targetPrice: '216,417', recommendation: '4.00' }, industryPeers: [{ code: '000660', name: 'SK Hynix' }] },
+                schema: { properties: { paid: { type: 'boolean' }, stock: { type: 'string' }, name: { type: 'string' }, metrics: { type: 'object' }, consensus: { type: 'object' }, industryPeers: { type: 'array' } }, required: ['paid', 'stock', 'metrics'] },
+              },
+            }),
+          },
+        },
         'GET /api/premium/news/korea/headlines': {
           accepts: {
             scheme: 'exact',
@@ -4811,6 +4884,182 @@ app.get('/api/premium/market/korea/stocks/momentum', async (c) => {
   })
 })
 
+app.get('/api/premium/market/korea/investor-flow', async (c) => {
+  const stock = (c.req.query('stock') ?? '005930').trim()
+  if (!/^\d{6}$/.test(stock)) throw new HTTPException(400, { message: 'stock must be 6-digit code (e.g., 005930)' })
+
+  const res = await fetch(`https://m.stock.naver.com/api/stock/${stock}/trend`)
+  if (!res.ok) throw new HTTPException(502, { message: 'Investor flow data unavailable' })
+  const rawData = await res.json() as any[]
+
+  const flow = rawData.map((d: any) => ({
+    date: d.bizdate,
+    foreignNetBuy: d.foreignerPureBuyQuant,
+    foreignHoldRatio: d.foreignerHoldRatio,
+    institutionNetBuy: d.organPureBuyQuant,
+    individualNetBuy: d.individualPureBuyQuant,
+    closePrice: d.closePrice,
+    direction: d.compareToPreviousPrice?.name ?? 'UNCHANGED',
+    volume: d.accumulatedTradingVolume,
+  }))
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-korea-investor-flow',
+    stock,
+    days: flow.length,
+    flow,
+    source: 'naver-finance',
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/market/korea/index-flow', async (c) => {
+  const index = (c.req.query('index') ?? 'KOSPI').toUpperCase()
+  if (index !== 'KOSPI' && index !== 'KOSDAQ' && index !== 'KPI200') {
+    throw new HTTPException(400, { message: 'index must be KOSPI, KOSDAQ, or KPI200' })
+  }
+
+  const res = await fetch(`https://m.stock.naver.com/api/index/${index}/trend`)
+  if (!res.ok) throw new HTTPException(502, { message: 'Index investor flow data unavailable' })
+  const raw = await res.json() as any
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-korea-index-flow',
+    index,
+    date: raw.bizdate,
+    foreignNetBuyBillionKrw: raw.foreignValue,
+    institutionNetBuyBillionKrw: raw.institutionalValue,
+    individualNetBuyBillionKrw: raw.personalValue,
+    source: 'naver-finance',
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/crypto/korea/5exchange', async (c) => {
+  const coin = (c.req.query('coin') ?? 'BTC').toUpperCase()
+
+  const [upbitRes, bithumbRes, korbitRes, coinoneRes, gopaxRes] = await Promise.allSettled([
+    fetch(`https://api.upbit.com/v1/ticker?markets=KRW-${coin}`).then(r => r.json()),
+    fetch(`https://api.bithumb.com/public/ticker/${coin}_KRW`).then(r => r.json()),
+    fetch(`https://api.korbit.co.kr/v1/ticker/detailed?currency_pair=${coin.toLowerCase()}_krw`).then(r => r.json()),
+    fetch(`https://api.coinone.co.kr/ticker?currency=${coin.toLowerCase()}`).then(r => r.json()),
+    fetch(`https://api.gopax.co.kr/trading-pairs/${coin}-KRW/ticker`).then(r => r.json()),
+  ])
+
+  const exchanges: any[] = []
+  if (upbitRes.status === 'fulfilled' && Array.isArray(upbitRes.value) && upbitRes.value[0]) {
+    const d = upbitRes.value[0]
+    exchanges.push({ exchange: 'Upbit', priceKrw: d.trade_price, volume24h: d.acc_trade_volume_24h, change24hPct: d.signed_change_rate ? d.signed_change_rate * 100 : null })
+  }
+  if (bithumbRes.status === 'fulfilled' && (bithumbRes.value as any)?.data?.closing_price) {
+    const d = (bithumbRes.value as any).data
+    exchanges.push({ exchange: 'Bithumb', priceKrw: Number(d.closing_price), volume24h: Number(d.units_traded_24H || 0), change24hPct: Number(d.fluctate_rate_24H || 0) })
+  }
+  if (korbitRes.status === 'fulfilled' && (korbitRes.value as any)?.last) {
+    const d = korbitRes.value as any
+    exchanges.push({ exchange: 'Korbit', priceKrw: Number(d.last), volume24h: Number(d.volume || 0), change24hPct: null })
+  }
+  if (coinoneRes.status === 'fulfilled' && (coinoneRes.value as any)?.last) {
+    const d = coinoneRes.value as any
+    exchanges.push({ exchange: 'Coinone', priceKrw: Number(d.last), volume24h: Number(d.volume || 0), change24hPct: null })
+  }
+  if (gopaxRes.status === 'fulfilled' && (gopaxRes.value as any)?.price) {
+    const d = gopaxRes.value as any
+    exchanges.push({ exchange: 'GoPax', priceKrw: d.price, volume24h: d.volume || 0, change24hPct: null })
+  }
+
+  const prices = exchanges.map(e => e.priceKrw).filter(p => p > 0)
+  const minPrice = Math.min(...prices)
+  const maxPrice = Math.max(...prices)
+  const spreadPct = minPrice > 0 ? Math.round((maxPrice - minPrice) / minPrice * 10000) / 100 : 0
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-crypto-5exchange',
+    coin,
+    exchangeCount: exchanges.length,
+    exchanges,
+    spread: { minPriceKrw: minPrice, maxPriceKrw: maxPrice, spreadPct },
+    source: 'upbit+bithumb+korbit+coinone+gopax',
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/crypto/korea/exchange-status', async (c) => {
+  const res = await fetch('https://api.bithumb.com/public/assetsstatus/ALL')
+  if (!res.ok) throw new HTTPException(502, { message: 'Exchange status data unavailable' })
+  const raw = await res.json() as any
+  const data = raw.data ?? {}
+
+  const coins: any[] = []
+  let disabledCount = 0
+  for (const [symbol, status] of Object.entries(data)) {
+    const s = status as any
+    const withdrawalOk = s.withdrawal_status === 1
+    const depositOk = s.deposit_status === 1
+    if (!withdrawalOk || !depositOk) disabledCount++
+    coins.push({ symbol, withdrawalEnabled: withdrawalOk, depositEnabled: depositOk })
+  }
+
+  coins.sort((a: any, b: any) => {
+    const aDisabled = !a.withdrawalEnabled || !a.depositEnabled ? 0 : 1
+    const bDisabled = !b.withdrawalEnabled || !b.depositEnabled ? 0 : 1
+    return aDisabled - bDisabled
+  })
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-crypto-exchange-status',
+    exchange: 'Bithumb',
+    totalCoins: coins.length,
+    disabledCount,
+    coins,
+    source: 'bithumb-public-api',
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/market/korea/stock-detail', async (c) => {
+  const stock = (c.req.query('stock') ?? '005930').trim()
+  if (!/^\d{6}$/.test(stock)) throw new HTTPException(400, { message: 'stock must be 6-digit code' })
+
+  const res = await fetch(`https://m.stock.naver.com/api/stock/${stock}/integration`)
+  if (!res.ok) throw new HTTPException(502, { message: 'Stock detail data unavailable' })
+  const raw = await res.json() as any
+
+  const infos: Record<string, string> = {}
+  for (const item of (raw.totalInfos ?? [])) {
+    infos[item.key] = item.value
+  }
+
+  const consensus = raw.consensusInfo ?? null
+  const industryPeers = (raw.industryCompareInfo ?? []).map((s: any) => ({
+    code: s.itemCode,
+    name: s.stockName,
+    price: s.closePrice,
+    changePct: s.fluctuationsRatio,
+    direction: s.compareToPreviousPrice?.name ?? 'UNCHANGED',
+  }))
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-korea-stock-detail',
+    stock,
+    name: raw.stockName,
+    metrics: infos,
+    consensus: consensus ? {
+      targetPrice: consensus.priceTargetMean,
+      recommendation: consensus.recommMean,
+      date: consensus.createDate,
+    } : null,
+    industryPeers,
+    source: 'naver-finance',
+    at: new Date().toISOString(),
+  })
+})
+
 app.get('/api/premium/news/korea/headlines', async (c) => {
   const limit = Math.min(20, Math.max(1, Number(c.req.query('limit') ?? '10')))
   const feedUrl = 'https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko'
@@ -5035,23 +5284,36 @@ app.get('/api/arbitrage/demo', async (c) => {
   ])
 
   const premiums = calcPremiums(bithumbData, binancePrices, krwRate)
-  // Demo: only show top 3, hide detailed numbers
-  const preview = premiums.slice(0, 3).map((p) => ({
-    coin: p.coin,
-    premiumPct: p.premiumPct,
-    direction: p.premiumPct > 0 ? 'Korea premium' : 'Korea discount',
-  }))
+  // Demo: top 3 with decision layer preview
+  const preview = premiums.slice(0, 3).map((p) => {
+    const netProfitPct = Math.abs(p.premiumPct) - BITHUMB_FEES_PCT - 0.1
+    const transferTime = getTransferTime(p.coin)
+    const slippage = 0.15
+    const volatility = Math.abs(p.premiumPct) * 0.3
+    const decision = computeAction(netProfitPct, slippage, transferTime, volatility)
+    return {
+      coin: p.coin,
+      premiumPct: p.premiumPct,
+      direction: p.premiumPct > 0 ? 'Korea premium' : 'Korea discount',
+      decision: { action: decision.action, confidence: decision.confidence, reason: decision.reason },
+    }
+  })
+
+  const avgPremium = premiums.length > 0
+    ? Math.round(premiums.reduce((s, p) => s + p.premiumPct, 0) / premiums.length * 100) / 100
+    : 0
+  const executeCandidates = preview.filter((p) => p.decision.action === 'EXECUTE').length
 
   return c.json({
     demo: true,
-    note: 'Free preview — limited to top 3 pairs. Pay $0.05 USDC via x402 for full real-time data on all pairs.',
-    paidEndpoint: '/api/premium/arbitrage/kimchi',
+    note: 'Free preview — top 3 pairs with AI decision layer. Pay $0.10 USDC for full analysis.',
+    paidEndpoint: '/api/premium/arbitrage/opportunities',
     pairsShown: preview.length,
     totalPairsAvailable: premiums.length,
     preview,
-    avgPremiumPct: premiums.length > 0
-      ? Math.round(premiums.reduce((s, p) => s + p.premiumPct, 0) / premiums.length * 100) / 100
-      : 0,
+    avgPremiumPct: avgPremium,
+    executeCandidates,
+    marketCondition: executeCandidates >= 2 ? 'favorable' : executeCandidates === 1 ? 'neutral' : 'unfavorable',
     at: new Date().toISOString(),
   })
 })
