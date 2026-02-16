@@ -89,10 +89,6 @@ interface HealthData {
   version?: string;
 }
 
-interface FxData {
-  rates: Record<string, number>;
-}
-
 interface SurvivalData {
   alive: boolean;
   state: "ALIVE" | "STOPPED";
@@ -183,7 +179,6 @@ export default function App() {
   const [stats, setStats] = useState<RegistryStats | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
   const [health, setHealth] = useState<HealthData | null>(null);
-  const [_fxRate, setFxRate] = useState<number | null>(null);
   const [survival, setSurvival] = useState<SurvivalData | null>(null);
   const [onChainTxs, setOnChainTxs] = useState<OnChainTx[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
@@ -197,7 +192,6 @@ export default function App() {
       fetchJson<RegistryStatsRaw>(`${API}/api/registry/stats`),
       fetchJson<AnalyticsRaw>(`${API}/api/analytics/overview`),
       fetchJson<HealthData>(`${API}/api/health`),
-      fetchJson<FxData>("https://open.er-api.com/v6/latest/USD"),
       fetchJson<SurvivalData>(`${API}/api/survival/status`),
       fetchOnChainTxs(),
     ]);
@@ -206,13 +200,12 @@ export default function App() {
       r.status === "fulfilled" ? r.value : null,
     );
 
-    const [arbRaw, statsRaw, analyticsRaw, healthVal, fxVal, survivalVal, txsVal] =
+    const [arbRaw, statsRaw, analyticsRaw, healthVal, survivalVal, txsVal] =
       vals as [
         ArbitrageRaw | null,
         RegistryStatsRaw | null,
         AnalyticsRaw | null,
         HealthData | null,
-        FxData | null,
         SurvivalData | null,
         OnChainTx[] | null,
       ];
@@ -257,7 +250,6 @@ export default function App() {
     setStats(statsVal);
     setAnalytics(analyticsVal);
     setHealth(healthVal);
-    if (fxVal?.rates?.KRW) setFxRate(fxVal.rates.KRW);
     setSurvival(survivalVal);
     if (txsVal && txsVal.length > 0) setOnChainTxs(txsVal);
 
