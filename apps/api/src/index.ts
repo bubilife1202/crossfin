@@ -78,6 +78,22 @@ type RateLimitBucket = {
 const publicRateLimitBuckets = new Map<string, RateLimitBucket>()
 const hostResolutionCache = new Map<string, number>()
 
+const FUNNEL_EVENT_NAMES = [
+  'mcp_quickstart_view',
+  'mcp_command_copy',
+  'mcp_config_view',
+  'mcp_config_copy',
+  'mcp_guide_open',
+  'mcp_install_verify',
+] as const
+
+type FunnelEventName = (typeof FUNNEL_EVENT_NAMES)[number]
+
+const FUNNEL_EVENT_NAME_SET = new Set<string>(FUNNEL_EVENT_NAMES)
+const MAX_FUNNEL_SOURCE_LENGTH = 64
+const MAX_FUNNEL_METADATA_LENGTH = 2000
+const MAX_FUNNEL_USER_AGENT_LENGTH = 180
+
 function trimTrailingSlash(path: string): string {
   if (path.length > 1 && path.endsWith('/')) return path.slice(0, -1)
   return path
@@ -92,12 +108,16 @@ function getPublicRateLimitRouteKey(path: string): string | null {
     normalized === '/api/openapi.json' ||
     normalized === '/api/arbitrage/demo' ||
     normalized === '/api/analytics/overview' ||
+    normalized === '/api/analytics/funnel/overview' ||
+    normalized === '/api/analytics/funnel/events' ||
     normalized === '/api/survival/status' ||
     normalized === '/api/stats' ||
     normalized === '/api/registry' ||
     normalized === '/api/registry/search' ||
     normalized === '/api/registry/categories' ||
-    normalized === '/api/registry/stats'
+    normalized === '/api/registry/stats' ||
+    normalized === '/api/guardian/status' ||
+    normalized === '/api/guardian/rules'
   ) {
     return normalized
   }
@@ -178,7 +198,7 @@ const publicRateLimit: MiddlewareHandler<Env> = async (c, next) => {
 app.use('*', cors({
   origin: ['http://localhost:5173', 'https://crossfin.pages.dev', 'https://crossfin.dev', 'https://www.crossfin.dev', 'https://live.crossfin.dev', 'https://crossfin-live.pages.dev'],
   allowHeaders: ['Content-Type', 'Authorization', 'X-Agent-Key', 'X-CrossFin-Admin-Token', 'PAYMENT-SIGNATURE'],
-  allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'],
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   exposeHeaders: ['PAYMENT-REQUIRED', 'PAYMENT-RESPONSE'],
 }))
 
@@ -252,6 +272,8 @@ app.get('/api/docs/guide', (c) => {
       { path: '/api/registry/{id}', description: 'Service details by ID' },
       { path: '/api/arbitrage/demo', description: 'Free kimchi premium preview (top 3 pairs)' },
       { path: '/api/analytics/overview', description: 'Gateway usage analytics' },
+      { path: '/api/analytics/funnel/overview', description: 'Web onboarding conversion funnel analytics' },
+      { path: '/api/analytics/funnel/events', description: 'Track web onboarding events (POST)' },
       { path: '/api/stats', description: 'Public-safe summary (sensitive counts redacted)' },
       { path: '/api/openapi.json', description: 'OpenAPI 3.1 specification' },
       { path: '/api/docs/guide', description: 'This guide' },
@@ -962,6 +984,44 @@ app.get('/api/openapi.json', (c) => {
           responses: {
             '200': { description: 'Service stats', content: { 'application/json': { schema: { type: 'object' } } } },
             '404': { description: 'Service not found' },
+          },
+        },
+      },
+
+      '/api/analytics/funnel/overview': {
+        get: {
+          operationId: 'analyticsFunnelOverview',
+          summary: 'Web conversion funnel overview (free)',
+          tags: ['Free'],
+          responses: { '200': { description: 'Funnel stats', content: { 'application/json': { schema: { type: 'object' } } } } },
+        },
+      },
+
+      '/api/analytics/funnel/events': {
+        post: {
+          operationId: 'analyticsFunnelTrack',
+          summary: 'Track web conversion event (free)',
+          tags: ['Free'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    eventName: { type: 'string', enum: [...FUNNEL_EVENT_NAMES] },
+                    source: { type: 'string' },
+                    metadata: { type: 'object' },
+                  },
+                  required: ['eventName'],
+                },
+              },
+            },
+          },
+          responses: {
+            '202': { description: 'Accepted' },
+            '400': { description: 'Invalid request body' },
+            '429': { description: 'Rate limited' },
           },
         },
       },
@@ -3859,6 +3919,173 @@ app.get('/api/proxy/:serviceId', agentAuth, async (c) => proxyToService(c, 'GET'
 
 app.post('/api/proxy/:serviceId', agentAuth, async (c) => proxyToService(c, 'POST'))
 
+function parseFunnelEventName(value: unknown): FunnelEventName {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  if (!FUNNEL_EVENT_NAME_SET.has(raw)) {
+    throw new HTTPException(400, { message: `eventName must be one of: ${FUNNEL_EVENT_NAMES.join(', ')}` })
+  }
+  return raw as FunnelEventName
+}
+
+function normalizeFunnelSource(value: unknown): string {
+  const raw = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  const sanitized = raw.replace(/[^a-z0-9._:/-]/g, '')
+  if (!sanitized) return 'web'
+  return sanitized.slice(0, MAX_FUNNEL_SOURCE_LENGTH)
+}
+
+function normalizeFunnelMetadata(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+
+  let serialized = ''
+  try {
+    serialized = JSON.stringify(value)
+  } catch {
+    return null
+  }
+
+  if (!serialized || serialized === '{}' || serialized === '[]') return null
+  if (serialized.length <= MAX_FUNNEL_METADATA_LENGTH) return serialized
+
+  const fallback = JSON.stringify({ truncated: true, originalLength: serialized.length })
+  return fallback.length <= MAX_FUNNEL_METADATA_LENGTH ? fallback : null
+}
+
+async function ensureFunnelEventsTable(db: D1Database): Promise<void> {
+  await db.batch([
+    db.prepare(
+      `CREATE TABLE IF NOT EXISTS funnel_events (
+         id TEXT PRIMARY KEY,
+         event_name TEXT NOT NULL,
+         source TEXT NOT NULL DEFAULT 'web',
+         metadata TEXT,
+         ip_hash TEXT,
+         user_agent TEXT,
+         created_at TEXT NOT NULL DEFAULT (datetime('now'))
+       )`
+    ),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_funnel_events_event_created ON funnel_events(event_name, created_at)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_funnel_events_source_created ON funnel_events(source, created_at)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_funnel_events_ip_created ON funnel_events(ip_hash, created_at)'),
+  ])
+}
+
+async function hashClientKey(c: Context<Env>): Promise<string> {
+  const clientKey = getClientRateLimitKey(c)
+  return sha256Hex(clientKey)
+}
+
+app.post('/api/analytics/funnel/events', async (c) => {
+  const contentLengthRaw = c.req.header('Content-Length')
+  if (contentLengthRaw) {
+    const contentLength = Number(contentLengthRaw)
+    if (Number.isFinite(contentLength) && contentLength > 4096) {
+      throw new HTTPException(413, { message: 'Payload too large' })
+    }
+  }
+
+  let body: unknown
+  try {
+    body = await c.req.json()
+  } catch {
+    throw new HTTPException(400, { message: 'Invalid JSON body' })
+  }
+
+  const payload = (body && typeof body === 'object' && !Array.isArray(body)) ? body as Record<string, unknown> : null
+  if (!payload) throw new HTTPException(400, { message: 'JSON object body is required' })
+
+  const eventName = parseFunnelEventName(payload.eventName)
+  const source = normalizeFunnelSource(payload.source)
+  const metadata = normalizeFunnelMetadata(payload.metadata)
+  const userAgent = (c.req.header('User-Agent') ?? '').slice(0, MAX_FUNNEL_USER_AGENT_LENGTH)
+  const ipHash = await hashClientKey(c)
+
+  await ensureFunnelEventsTable(c.env.DB)
+  await c.env.DB.prepare(
+    'INSERT INTO funnel_events (id, event_name, source, metadata, ip_hash, user_agent) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(`funnel_${crypto.randomUUID()}`, eventName, source, metadata, ipHash, userAgent).run()
+
+  return c.json({ ok: true, eventName, source, at: new Date().toISOString() }, 202)
+})
+
+app.get('/api/analytics/funnel/overview', async (c) => {
+  await ensureFunnelEventsTable(c.env.DB)
+
+  const [byEventRes, bySourceRes, uniqueRes] = await c.env.DB.batch([
+    c.env.DB.prepare(
+      `SELECT event_name as eventName, COUNT(*) as count
+       FROM funnel_events
+       WHERE created_at >= datetime('now', '-7 day')
+       GROUP BY event_name`
+    ),
+    c.env.DB.prepare(
+      `SELECT source, COUNT(*) as count
+       FROM funnel_events
+       WHERE created_at >= datetime('now', '-7 day')
+       GROUP BY source
+       ORDER BY count DESC
+       LIMIT 8`
+    ),
+    c.env.DB.prepare(
+      `SELECT COUNT(DISTINCT ip_hash) as count
+       FROM funnel_events
+       WHERE created_at >= datetime('now', '-7 day')`
+    ),
+  ])
+
+  const counts: Record<FunnelEventName, number> = {
+    mcp_quickstart_view: 0,
+    mcp_command_copy: 0,
+    mcp_config_view: 0,
+    mcp_config_copy: 0,
+    mcp_guide_open: 0,
+    mcp_install_verify: 0,
+  }
+
+  for (const row of (byEventRes?.results ?? []) as Array<{ eventName?: string; count?: number | string }>) {
+    const eventName = typeof row.eventName === 'string' ? row.eventName : ''
+    if (!FUNNEL_EVENT_NAME_SET.has(eventName)) continue
+    counts[eventName as FunnelEventName] = Number(row.count ?? 0)
+  }
+
+  const quickstartViews = counts.mcp_quickstart_view
+  const commandCopies = counts.mcp_command_copy
+  const configViews = counts.mcp_config_view
+  const configCopies = counts.mcp_config_copy
+  const guideOpens = counts.mcp_guide_open
+  const installVerifies = counts.mcp_install_verify
+
+  const conversion = quickstartViews > 0
+    ? {
+        commandCopyPct: Math.round((commandCopies / quickstartViews) * 1000) / 10,
+        configViewPct: Math.round((configViews / quickstartViews) * 1000) / 10,
+        configCopyPct: Math.round((configCopies / quickstartViews) * 1000) / 10,
+        guideOpenPct: Math.round((guideOpens / quickstartViews) * 1000) / 10,
+        installVerifyPct: Math.round((installVerifies / quickstartViews) * 1000) / 10,
+      }
+    : {
+        commandCopyPct: 0,
+        configViewPct: 0,
+        configCopyPct: 0,
+        guideOpenPct: 0,
+        installVerifyPct: 0,
+      }
+
+  const uniqueVisitors = Number((uniqueRes?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
+
+  return c.json({
+    window: { days: 7 },
+    counts,
+    conversion,
+    uniqueVisitors,
+    topSources: (bySourceRes?.results ?? []).map((row) => ({
+      source: String((row as { source?: string }).source ?? ''),
+      count: Number((row as { count?: number | string }).count ?? 0),
+    })),
+    at: new Date().toISOString(),
+  })
+})
+
 app.get('/api/analytics/overview', async (c) => {
   await ensureRegistrySeeded(c.env.DB, c.env.PAYMENT_RECEIVER_ADDRESS)
 
@@ -5645,6 +5872,293 @@ app.get('/api/cron/snapshot-kimchi', async (c) => {
   return c.json({ ok: true, snapshots: statements.length })
 })
 
+// === Guardian Rules CRUD ===
+
+app.get('/api/guardian/rules', async (c) => {
+  const agentId = c.req.query('agent_id')
+  let query = "SELECT * FROM guardian_rules WHERE active = 1"
+  const binds: string[] = []
+  if (agentId) {
+    query += " AND (agent_id IS NULL OR agent_id = ?)"
+    binds.push(agentId)
+  }
+  query += " ORDER BY type, created_at DESC"
+  const stmt = binds.length ? c.env.DB.prepare(query).bind(...binds) : c.env.DB.prepare(query)
+  const { results } = await stmt.all()
+  return c.json({
+    rules: (results ?? []).map((r: any) => ({
+      ...r,
+      params: JSON.parse(r.params || '{}'),
+    })),
+    at: new Date().toISOString(),
+  })
+})
+
+app.post('/api/guardian/rules', async (c) => {
+  requireAdmin(c)
+  const body = await c.req.json<{
+    agent_id?: string | null
+    type: string
+    params?: Record<string, unknown>
+  }>()
+
+  const validTypes = ['SPEND_CAP', 'FAIL_STREAK', 'CIRCUIT_BREAKER', 'KILL_SWITCH']
+  if (!validTypes.includes(body.type)) {
+    throw new HTTPException(400, { message: `type must be one of: ${validTypes.join(', ')}` })
+  }
+
+  const id = crypto.randomUUID()
+  await c.env.DB.prepare(
+    'INSERT INTO guardian_rules (id, agent_id, type, params) VALUES (?, ?, ?, ?)'
+  ).bind(id, body.agent_id ?? null, body.type, JSON.stringify(body.params ?? {})).run()
+
+  await audit(c.env.DB, null, 'guardian.rule.create', 'guardian_rules', id, 'success', `type=${body.type}`)
+  return c.json({ id, type: body.type, params: body.params ?? {} }, 201)
+})
+
+app.delete('/api/guardian/rules/:id', async (c) => {
+  requireAdmin(c)
+  const ruleId = c.req.param('id')
+  await c.env.DB.prepare(
+    'UPDATE guardian_rules SET active = 0, updated_at = datetime(\'now\') WHERE id = ?'
+  ).bind(ruleId).run()
+  await audit(c.env.DB, null, 'guardian.rule.deactivate', 'guardian_rules', ruleId, 'success')
+  return c.json({ ok: true, deactivated: ruleId })
+})
+
+// === Guardian Status (public, for live dashboard) ===
+
+app.get('/api/guardian/status', async (c) => {
+  const [rules, recentActions, spendToday] = await Promise.all([
+    c.env.DB.prepare("SELECT id, agent_id, type, params, created_at FROM guardian_rules WHERE active = 1 ORDER BY created_at DESC LIMIT 20").all(),
+    c.env.DB.prepare("SELECT id, agent_id, action_type, decision, confidence, cost_usd, rule_applied, details, created_at FROM autonomous_actions ORDER BY created_at DESC LIMIT 30").all(),
+    c.env.DB.prepare("SELECT agent_id, SUM(amount_usd) as total FROM agent_spend WHERE created_at >= datetime('now', '-1 day') GROUP BY agent_id").all(),
+  ])
+
+  const blockedCount = await c.env.DB.prepare(
+    "SELECT COUNT(*) as cnt FROM autonomous_actions WHERE decision = 'BLOCK' AND created_at >= datetime('now', '-1 day')"
+  ).first<{ cnt: number }>()
+
+  return c.json({
+    guardian: {
+      activeRules: (rules.results ?? []).length,
+      rules: (rules.results ?? []).map((r: any) => ({
+        id: r.id,
+        agentId: r.agent_id,
+        type: r.type,
+        params: JSON.parse(r.params || '{}'),
+        createdAt: r.created_at,
+      })),
+      blockedToday: blockedCount?.cnt ?? 0,
+      agentSpendToday: (spendToday.results ?? []).map((s: any) => ({
+        agentId: s.agent_id,
+        totalUsd: s.total,
+      })),
+    },
+    recentActions: (recentActions.results ?? []).map((a: any) => ({
+      id: a.id,
+      agentId: a.agent_id,
+      actionType: a.action_type,
+      decision: a.decision,
+      confidence: a.confidence,
+      costUsd: a.cost_usd,
+      ruleApplied: a.rule_applied,
+      details: JSON.parse(a.details || '{}'),
+      createdAt: a.created_at,
+    })),
+    at: new Date().toISOString(),
+  })
+})
+
+// === Autonomous Actions Log ===
+
+app.get('/api/agents/:agentId/actions', async (c) => {
+  const agentId = c.req.param('agentId')
+  const limit = Math.min(parseInt(c.req.query('limit') ?? '50', 10), 200)
+
+  const { results } = await c.env.DB.prepare(
+    'SELECT * FROM autonomous_actions WHERE agent_id = ? ORDER BY created_at DESC LIMIT ?'
+  ).bind(agentId, limit).all()
+
+  return c.json({
+    agentId,
+    actions: (results ?? []).map((a: any) => ({
+      ...a,
+      details: JSON.parse(a.details || '{}'),
+    })),
+    at: new Date().toISOString(),
+  })
+})
+
+// === Deposit Verification ===
+
+const CROSSFIN_WALLET = '0xe4E79Ce6a1377C58f0Bb99D023908858A4DB5779'
+const USDC_BASE_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
+
+app.post('/api/deposits', async (c) => {
+  const body = await c.req.json<{
+    tx_hash: string
+    agent_id?: string
+  }>()
+
+  if (!body.tx_hash?.trim()) {
+    throw new HTTPException(400, { message: 'tx_hash is required' })
+  }
+
+  const txHash = body.tx_hash.trim().toLowerCase()
+
+  // Check for duplicate
+  const existing = await c.env.DB.prepare(
+    'SELECT id, status FROM deposits WHERE tx_hash = ?'
+  ).bind(txHash).first()
+  if (existing) {
+    return c.json({ id: existing.id, status: existing.status, message: 'Deposit already processed' })
+  }
+
+  // Verify on Basescan
+  const basescanUrl = `https://api.basescan.org/api?module=proxy&action=eth_getTransactionReceipt&txhash=${txHash}`
+  const receipt = await fetch(basescanUrl).then((r) => r.json()).catch(() => null) as any
+
+  if (!receipt?.result?.status || receipt.result.status !== '0x1') {
+    throw new HTTPException(400, { message: 'Transaction not found or not confirmed on Base mainnet' })
+  }
+
+  // Parse USDC transfer amount from logs
+  let amountUsd = 0
+  let fromAddress = ''
+  const transferTopic = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef' // Transfer event
+
+  for (const log of (receipt.result.logs ?? [])) {
+    if (
+      log.address?.toLowerCase() === USDC_BASE_ADDRESS.toLowerCase() &&
+      log.topics?.[0] === transferTopic &&
+      log.topics?.[2]?.toLowerCase().includes(CROSSFIN_WALLET.toLowerCase().slice(2))
+    ) {
+      amountUsd = parseInt(log.data, 16) / 1e6 // USDC has 6 decimals
+      fromAddress = '0x' + (log.topics[1]?.slice(26) ?? '')
+      break
+    }
+  }
+
+  if (amountUsd <= 0) {
+    throw new HTTPException(400, { message: 'No USDC transfer to CrossFin wallet found in transaction' })
+  }
+
+  const depositId = crypto.randomUUID()
+  await c.env.DB.prepare(
+    "INSERT INTO deposits (id, agent_id, tx_hash, amount_usd, from_address, status, verified_at) VALUES (?, ?, ?, ?, ?, 'verified', datetime('now'))"
+  ).bind(depositId, body.agent_id ?? null, txHash, amountUsd, fromAddress).run()
+
+  // Credit agent wallet if agent_id provided
+  if (body.agent_id) {
+    const wallet = await c.env.DB.prepare(
+      'SELECT id, balance_cents FROM wallets WHERE agent_id = ? LIMIT 1'
+    ).bind(body.agent_id).first<{ id: string; balance_cents: number }>()
+
+    if (wallet) {
+      const creditCents = Math.round(amountUsd * 100)
+      await c.env.DB.prepare(
+        'UPDATE wallets SET balance_cents = balance_cents + ? WHERE id = ?'
+      ).bind(creditCents, wallet.id).run()
+
+      await c.env.DB.prepare(
+        "INSERT INTO transactions (id, to_wallet_id, amount_cents, rail, memo, status) VALUES (?, ?, ?, 'usdc_base', ?, 'completed')"
+      ).bind(crypto.randomUUID(), wallet.id, creditCents, `Deposit via ${txHash.slice(0, 10)}...`).run()
+    }
+  }
+
+  await logAutonomousAction(c.env.DB, body.agent_id ?? null, 'DEPOSIT_VERIFY', null, 'EXECUTE', 1.0, amountUsd, null, {
+    txHash,
+    amountUsd,
+    fromAddress,
+    basescan: `https://basescan.org/tx/${txHash}`,
+  })
+
+  await audit(c.env.DB, body.agent_id ?? null, 'deposit.verify', 'deposits', depositId, 'success', `$${amountUsd.toFixed(2)} USDC from ${fromAddress.slice(0, 10)}...`)
+
+  return c.json({
+    id: depositId,
+    status: 'verified',
+    amountUsd,
+    fromAddress,
+    txHash,
+    basescan: `https://basescan.org/tx/${txHash}`,
+    credited: !!body.agent_id,
+  }, 201)
+})
+
+app.get('/api/deposits', async (c) => {
+  const agentId = c.req.query('agent_id')
+  const limit = Math.min(parseInt(c.req.query('limit') ?? '20', 10), 100)
+  let query = 'SELECT * FROM deposits'
+  const binds: (string | number)[] = []
+  if (agentId) {
+    query += ' WHERE agent_id = ?'
+    binds.push(agentId)
+  }
+  query += ' ORDER BY created_at DESC LIMIT ?'
+  binds.push(limit)
+  const stmt = binds.length === 1 ? c.env.DB.prepare(query).bind(binds[0]) : c.env.DB.prepare(query).bind(...binds)
+  const { results } = await stmt.all()
+  return c.json({
+    deposits: (results ?? []).map((d: any) => ({
+      ...d,
+      basescan: `https://basescan.org/tx/${d.tx_hash}`,
+    })),
+    at: new Date().toISOString(),
+  })
+})
+
+// === Agent Self-Registration ===
+
+app.post('/api/agents/register', async (c) => {
+  const body = await c.req.json<{
+    name: string
+    evm_address?: string
+  }>()
+
+  if (!body.name?.trim()) {
+    throw new HTTPException(400, { message: 'name is required' })
+  }
+
+  const id = crypto.randomUUID()
+  const rawApiKey = `cf_${crypto.randomUUID().replace(/-/g, '')}`
+  const keyHash = await sha256Hex(rawApiKey)
+
+  await c.env.DB.prepare(
+    "INSERT INTO agents (id, name, api_key, status) VALUES (?, ?, ?, 'active')"
+  ).bind(id, body.name.trim(), keyHash).run()
+
+  // Create default wallet
+  const walletId = crypto.randomUUID()
+  await c.env.DB.prepare(
+    'INSERT INTO wallets (id, agent_id, label, balance_cents) VALUES (?, ?, ?, 0)'
+  ).bind(walletId, id, 'Default Wallet').run()
+
+  // Set default Guardian rules
+  const defaultRules = [
+    { type: 'SPEND_CAP', params: { dailyLimitUsd: 10.0 } },
+    { type: 'FAIL_STREAK', params: { maxConsecutiveFails: 10 } },
+    { type: 'CIRCUIT_BREAKER', params: { failRatePct: 60, windowMinutes: 30 } },
+  ]
+  for (const rule of defaultRules) {
+    await c.env.DB.prepare(
+      'INSERT INTO guardian_rules (id, agent_id, type, params) VALUES (?, ?, ?, ?)'
+    ).bind(crypto.randomUUID(), id, rule.type, JSON.stringify(rule.params)).run()
+  }
+
+  await audit(c.env.DB, id, 'agent.self_register', 'agents', id, 'success')
+
+  return c.json({
+    id,
+    name: body.name.trim(),
+    apiKey: rawApiKey,
+    walletId,
+    guardianRules: defaultRules.map((r) => r.type),
+    note: 'Save your API key — it cannot be retrieved later. Default Guardian rules have been applied.',
+  }, 201)
+})
+
 // === Existing Premium Endpoints ===
 
 app.get('/api/premium/report', async (c) => {
@@ -5970,6 +6484,122 @@ app.get('/api/stats', async (c) => {
 
 app.route('/api', api)
 
+// === Guardian Rules Engine ===
+
+async function evaluateGuardian(
+  db: D1Database,
+  agentId: string | null,
+  costUsd: number,
+  serviceId?: string,
+): Promise<{ allowed: boolean; rule?: string; reason?: string }> {
+  if (!agentId) return { allowed: true }
+
+  // Check KILL_SWITCH (global)
+  const killSwitch = await db.prepare(
+    "SELECT id FROM guardian_rules WHERE type = 'KILL_SWITCH' AND active = 1 AND (agent_id IS NULL OR agent_id = ?) LIMIT 1"
+  ).bind(agentId).first<{ id: string }>()
+  if (killSwitch) {
+    return { allowed: false, rule: killSwitch.id, reason: 'Kill switch active — all operations halted' }
+  }
+
+  // Check SPEND_CAP
+  const spendCap = await db.prepare(
+    "SELECT id, params FROM guardian_rules WHERE type = 'SPEND_CAP' AND active = 1 AND (agent_id IS NULL OR agent_id = ?) ORDER BY agent_id DESC LIMIT 1"
+  ).bind(agentId).first<{ id: string; params: string }>()
+
+  if (spendCap) {
+    const params = JSON.parse(spendCap.params) as { dailyLimitUsd?: number; monthlyLimitUsd?: number }
+    if (params.dailyLimitUsd) {
+      const todaySpend = await db.prepare(
+        "SELECT COALESCE(SUM(amount_usd), 0) as total FROM agent_spend WHERE agent_id = ? AND created_at >= datetime('now', '-1 day')"
+      ).bind(agentId).first<{ total: number }>()
+      const spent = todaySpend?.total ?? 0
+      if (spent + costUsd > params.dailyLimitUsd) {
+        return {
+          allowed: false,
+          rule: spendCap.id,
+          reason: `Daily spend cap: $${spent.toFixed(2)} / $${params.dailyLimitUsd.toFixed(2)} used. This call ($${costUsd.toFixed(4)}) would exceed limit.`,
+        }
+      }
+    }
+  }
+
+  // Check FAIL_STREAK
+  const failStreak = await db.prepare(
+    "SELECT id, params FROM guardian_rules WHERE type = 'FAIL_STREAK' AND active = 1 AND (agent_id IS NULL OR agent_id = ?) ORDER BY agent_id DESC LIMIT 1"
+  ).bind(agentId).first<{ id: string; params: string }>()
+
+  if (failStreak) {
+    const params = JSON.parse(failStreak.params) as { maxConsecutiveFails?: number }
+    const maxFails = params.maxConsecutiveFails ?? 5
+    const recentCalls = await db.prepare(
+      'SELECT status FROM service_calls WHERE agent_id = ? ORDER BY created_at DESC LIMIT ?'
+    ).bind(agentId, maxFails).all<{ status: string }>()
+
+    const consecutiveFails = recentCalls.results?.filter((r) => r.status === 'error').length ?? 0
+    if (consecutiveFails >= maxFails) {
+      return {
+        allowed: false,
+        rule: failStreak.id,
+        reason: `Fail streak: ${consecutiveFails} consecutive failures. Auto-paused until manual reset.`,
+      }
+    }
+  }
+
+  // Check CIRCUIT_BREAKER (per service)
+  if (serviceId) {
+    const circuitBreaker = await db.prepare(
+      "SELECT id, params FROM guardian_rules WHERE type = 'CIRCUIT_BREAKER' AND active = 1 AND (agent_id IS NULL OR agent_id = ?) ORDER BY agent_id DESC LIMIT 1"
+    ).bind(agentId).first<{ id: string; params: string }>()
+
+    if (circuitBreaker) {
+      const params = JSON.parse(circuitBreaker.params) as { failRatePct?: number; windowMinutes?: number }
+      const windowMin = params.windowMinutes ?? 60
+      const threshold = params.failRatePct ?? 50
+
+      const stats = await db.prepare(
+        "SELECT COUNT(*) as total, SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as errors FROM service_calls WHERE service_id = ? AND created_at >= datetime('now', ? || ' minutes')"
+      ).bind(serviceId, `-${windowMin}`).first<{ total: number; errors: number }>()
+
+      const total = stats?.total ?? 0
+      const errors = stats?.errors ?? 0
+      if (total >= 5 && (errors / total) * 100 > threshold) {
+        return {
+          allowed: false,
+          rule: circuitBreaker.id,
+          reason: `Circuit breaker: ${errors}/${total} calls failed (${Math.round((errors / total) * 100)}%) in last ${windowMin}min.`,
+        }
+      }
+    }
+  }
+
+  return { allowed: true }
+}
+
+async function logAutonomousAction(
+  db: D1Database,
+  agentId: string | null,
+  actionType: string,
+  serviceId: string | null,
+  decision: string,
+  confidence: number | null,
+  costUsd: number,
+  ruleApplied: string | null,
+  details: Record<string, unknown>,
+) {
+  await db.prepare(
+    'INSERT INTO autonomous_actions (id, agent_id, action_type, service_id, decision, confidence, cost_usd, rule_applied, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    crypto.randomUUID(), agentId, actionType, serviceId, decision, confidence, costUsd, ruleApplied, JSON.stringify(details),
+  ).run()
+}
+
+async function recordSpend(db: D1Database, agentId: string, amountUsd: number, serviceId: string | null, txHash: string | null) {
+  await db.prepare(
+    'INSERT INTO agent_spend (id, agent_id, amount_usd, service_id, tx_hash) VALUES (?, ?, ?, ?, ?)'
+  ).bind(crypto.randomUUID(), agentId, amountUsd, serviceId, txHash).run()
+}
+
 async function audit(
   db: D1Database,
   agentId: string | null,
@@ -5987,7 +6617,6 @@ async function audit(
 export default {
   fetch: app.fetch,
   async scheduled(event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
-    // Run kimchi premium snapshot every hour
     const [bithumbData, binancePrices, krwRate] = await Promise.all([
       fetchBithumbAll(),
       fetchGlobalPrices(),
@@ -5996,6 +6625,7 @@ export default {
 
     const premiums = calcPremiums(bithumbData, binancePrices, krwRate)
 
+    // 1. Kimchi snapshot
     const insertSql = 'INSERT INTO kimchi_snapshots (id, coin, bithumb_krw, binance_usd, premium_pct, krw_usd_rate, volume_24h_usd) VALUES (?, ?, ?, ?, ?, ?, ?)'
     const statements = premiums.map((p) => env.DB.prepare(insertSql).bind(
       crypto.randomUUID(),
@@ -6011,8 +6641,37 @@ export default {
       await env.DB.batch(statements)
     }
 
+    // 2. Autonomous arbitrage scan — log decisions
+    const BITHUMB_FEES = 0.25
+    for (const p of premiums.slice(0, 10)) {
+      const netProfit = Math.abs(p.premiumPct) - BITHUMB_FEES - 0.1
+      const transferTime = 5
+      const slippage = 0.15
+      const volatility = Math.abs(p.premiumPct) * 0.3
+
+      const adjustedProfit = netProfit - slippage
+      const premiumRisk = volatility * Math.sqrt(transferTime / 60)
+      const score = adjustedProfit - premiumRisk
+
+      let decision: string
+      let confidence: number
+      if (score > 1.0) { decision = 'EXECUTE'; confidence = Math.min(0.95, 0.8 + score * 0.05) }
+      else if (score > 0) { decision = 'WAIT'; confidence = 0.5 + score * 0.3 }
+      else { decision = 'SKIP'; confidence = Math.max(0.1, 0.5 + score * 0.2) }
+
+      await env.DB.prepare(
+        'INSERT INTO autonomous_actions (id, agent_id, action_type, service_id, decision, confidence, cost_usd, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(
+        crypto.randomUUID(), null, 'ARBITRAGE_SCAN', null, decision, confidence, 0,
+        JSON.stringify({
+          coin: p.coin, premiumPct: p.premiumPct, netProfit, score,
+          reason: decision === 'EXECUTE' ? `${p.coin} spread ${p.premiumPct.toFixed(2)}% exceeds threshold` : `${p.coin} score ${score.toFixed(2)} below threshold`,
+        }),
+      ).run()
+    }
+
     await env.DB.prepare(
       'INSERT INTO audit_logs (id, agent_id, action, resource, resource_id, detail, result) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).bind(crypto.randomUUID(), null, 'scheduled.snapshot_kimchi', 'kimchi_snapshots', null, `snapshots=${statements.length}`, 'success').run()
+    ).bind(crypto.randomUUID(), null, 'scheduled.guardian_scan', 'autonomous_actions', null, `snapshots=${statements.length},scanned=${Math.min(10, premiums.length)}`, 'success').run()
   },
 }

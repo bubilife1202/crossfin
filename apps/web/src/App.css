@@ -1710,14 +1710,39 @@
   margin-bottom: 20px;
 }
 
+.funnelStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 20px;
+}
+
+.analyticsHint {
+  margin: 0 0 20px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card) 82%, var(--bg));
+  color: var(--muted2);
+  font-size: 0.88rem;
+}
+
 @media (max-width: 900px) {
   .analyticsStatsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .funnelStatsGrid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 480px) {
   .analyticsStatsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .funnelStatsGrid {
     grid-template-columns: 1fr;
   }
 }

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type FormEvent as ReactFormEvent } fr
 import './App.css'
 import {
   fetchAnalytics,
+  fetchFunnelOverview,
   fetchRegistryCategories,
   fetchRegistryServices,
   fetchRegistryStats,
@@ -10,8 +11,11 @@ import {
   getApiBaseUrl,
   searchRegistryServices,
   type AnalyticsOverview,
+  type FunnelEventName,
+  type FunnelOverview,
   type RegistryCategory,
   type RegistryService,
+  trackFunnelEvent,
 } from './lib/api'
 import { CROSSFIN_PLAYGROUND_ENDPOINTS } from './lib/catalog.generated'
 
@@ -65,6 +69,7 @@ function App() {
   const [query, setQuery] = useState<string>('')
 
   const [analytics, setAnalytics] = useState<LoadState<AnalyticsOverview>>({ status: 'loading' })
+  const [funnel, setFunnel] = useState<LoadState<FunnelOverview>>({ status: 'loading' })
   const [codeTab, setCodeTab] = useState<'curl' | 'python' | 'javascript'>('curl')
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [showMcpConfig, setShowMcpConfig] = useState<boolean>(false)
@@ -199,8 +204,29 @@ function App() {
       }
     })()
 
+    void (async () => {
+      try {
+        const f = await fetchFunnelOverview(ctrl.signal)
+        setFunnel({ status: 'success', data: f })
+      } catch (e) {
+        if (ctrl.signal.aborted) return
+        const msg = e instanceof Error ? e.message : 'Failed to load funnel analytics'
+        setFunnel({ status: 'error', message: msg })
+      }
+    })()
+
     return () => ctrl.abort()
   }, [])
+
+  const trackFunnel = useCallback((eventName: FunnelEventName, metadata?: Record<string, unknown>) => {
+    void trackFunnelEvent({ eventName, source: 'web', metadata }).catch(() => {
+      // Ignore tracking failures to avoid breaking UX actions.
+    })
+  }, [])
+
+  useEffect(() => {
+    trackFunnel('mcp_quickstart_view', { section: 'hero' })
+  }, [trackFunnel])
 
   const loadServices = useCallback(async (opts?: { q?: string }) => {
     setServices({ status: 'loading' })
@@ -280,6 +306,7 @@ function App() {
     : 0
   const topServiceName = analyticsData && analyticsData.topServices.length > 0 ? analyticsData.topServices[0].serviceName : '—'
   const maxTopServiceCalls = analyticsData ? Math.max(...analyticsData.topServices.map((s) => s.calls), 1) : 1
+  const funnelData = funnel.status === 'success' ? funnel.data : null
 
   return (
     <div className="page">
@@ -345,21 +372,35 @@ function App() {
             <button
               type="button"
               className="miniButton primary"
-              onClick={() => copyToClipboard('mcp-command', MCP_NPX_COMMAND)}
+              onClick={() => {
+                copyToClipboard('mcp-command', MCP_NPX_COMMAND)
+                trackFunnel('mcp_command_copy', { target: 'mcp_npx' })
+              }}
             >
               {copiedId === 'mcp-command' ? '✓ Copied' : 'Copy Command'}
             </button>
             <button
               type="button"
               className="miniButton"
-              onClick={() => setShowMcpConfig((prev) => !prev)}
+              onClick={() => {
+                setShowMcpConfig((prev) => {
+                  const next = !prev
+                  if (next) {
+                    trackFunnel('mcp_config_view', { target: 'claude_config' })
+                  }
+                  return next
+                })
+              }}
             >
               {showMcpConfig ? 'Hide Claude Config' : 'View Claude Config'}
             </button>
             <button
               type="button"
               className="miniButton"
-              onClick={() => switchTab('developers')}
+              onClick={() => {
+                trackFunnel('mcp_guide_open', { target: 'developers_tab' })
+                switchTab('developers')
+              }}
             >
               Open Full Guide
             </button>
@@ -373,7 +414,10 @@ function App() {
                   <button
                     type="button"
                     className="codeBlockCopy"
-                    onClick={() => copyToClipboard('mcp-config', MCP_CLAUDE_CONFIG)}
+                    onClick={() => {
+                      copyToClipboard('mcp-config', MCP_CLAUDE_CONFIG)
+                      trackFunnel('mcp_config_copy', { target: 'claude_config' })
+                    }}
                   >
                     {copiedId === 'mcp-config' ? '✓ Copied' : 'Copy'}
                   </button>
@@ -482,6 +526,35 @@ function App() {
                   <div className="statMeta">across recent calls</div>
                 </div>
               </div>
+
+              {funnelData ? (
+                <div className="funnelStatsGrid">
+                  <div className="statCard">
+                    <div className="statLabel">QuickStart Views (7d)</div>
+                    <div className="statValue">{funnelData.counts.mcp_quickstart_view.toLocaleString()}</div>
+                    <div className="statMeta">{funnelData.uniqueVisitors.toLocaleString()} unique visitors</div>
+                  </div>
+                  <div className="statCard">
+                    <div className="statLabel">Command Copy</div>
+                    <div className="statValue">{funnelData.conversion.commandCopyPct}%</div>
+                    <div className="statMeta">{funnelData.counts.mcp_command_copy.toLocaleString()} copies</div>
+                  </div>
+                  <div className="statCard">
+                    <div className="statLabel">Config Copy</div>
+                    <div className="statValue">{funnelData.conversion.configCopyPct}%</div>
+                    <div className="statMeta">{funnelData.counts.mcp_config_copy.toLocaleString()} copies</div>
+                  </div>
+                  <div className="statCard">
+                    <div className="statLabel">Guide Open</div>
+                    <div className="statValue">{funnelData.conversion.guideOpenPct}%</div>
+                    <div className="statMeta">{funnelData.counts.mcp_guide_open.toLocaleString()} opens</div>
+                  </div>
+                </div>
+              ) : funnel.status === 'error' ? (
+                <div className="analyticsHint">Funnel analytics unavailable: {funnel.message}</div>
+              ) : (
+                <div className="analyticsHint">Loading conversion funnel…</div>
+              )}
 
               <div className="analyticsColumns">
                 <div className="analyticsPanel">

@@ -274,6 +274,29 @@ export type AnalyticsOverview = {
   recentCalls: Array<{ serviceId: string; serviceName: string; status: string; responseTimeMs: number; createdAt: string }>
 }
 
+export type FunnelEventName =
+  | 'mcp_quickstart_view'
+  | 'mcp_command_copy'
+  | 'mcp_config_view'
+  | 'mcp_config_copy'
+  | 'mcp_guide_open'
+  | 'mcp_install_verify'
+
+export type FunnelOverview = {
+  window: { days: number }
+  counts: Record<FunnelEventName, number>
+  conversion: {
+    commandCopyPct: number
+    configViewPct: number
+    configCopyPct: number
+    guideOpenPct: number
+    installVerifyPct: number
+  }
+  uniqueVisitors: number
+  topSources: Array<{ source: string; count: number }>
+  at: string
+}
+
 export async function fetchAnalytics(signal?: AbortSignal): Promise<AnalyticsOverview> {
   const res = await fetch(`${apiBaseUrl()}/api/analytics/overview`, { signal })
   if (!res.ok) throw new Error(`analytics_failed:${res.status}`)
@@ -301,6 +324,85 @@ export async function fetchAnalytics(signal?: AbortSignal): Promise<AnalyticsOve
         createdAt: String(call.createdAt ?? ''),
       }
     }) : [],
+  }
+}
+
+const DEFAULT_FUNNEL_COUNTS: Record<FunnelEventName, number> = {
+  mcp_quickstart_view: 0,
+  mcp_command_copy: 0,
+  mcp_config_view: 0,
+  mcp_config_copy: 0,
+  mcp_guide_open: 0,
+  mcp_install_verify: 0,
+}
+
+function parseFunnelEventName(value: unknown): FunnelEventName | null {
+  switch (value) {
+    case 'mcp_quickstart_view':
+    case 'mcp_command_copy':
+    case 'mcp_config_view':
+    case 'mcp_config_copy':
+    case 'mcp_guide_open':
+    case 'mcp_install_verify':
+      return value
+    default:
+      return null
+  }
+}
+
+export async function fetchFunnelOverview(signal?: AbortSignal): Promise<FunnelOverview> {
+  const res = await fetch(`${apiBaseUrl()}/api/analytics/funnel/overview`, { signal })
+  if (!res.ok) throw new Error(`funnel_overview_failed:${res.status}`)
+  const data: unknown = await res.json()
+  if (!isRecord(data)) throw new Error('funnel_overview_invalid')
+
+  const countsRaw = isRecord(data.counts) ? data.counts : {}
+  const counts = { ...DEFAULT_FUNNEL_COUNTS }
+  for (const [key, value] of Object.entries(countsRaw)) {
+    const eventName = parseFunnelEventName(key)
+    if (!eventName) continue
+    counts[eventName] = Number(value ?? 0)
+  }
+
+  const conversionRaw = isRecord(data.conversion) ? data.conversion : {}
+
+  return {
+    window: { days: Number(isRecord(data.window) ? data.window.days : 7) },
+    counts,
+    conversion: {
+      commandCopyPct: Number(conversionRaw.commandCopyPct ?? 0),
+      configViewPct: Number(conversionRaw.configViewPct ?? 0),
+      configCopyPct: Number(conversionRaw.configCopyPct ?? 0),
+      guideOpenPct: Number(conversionRaw.guideOpenPct ?? 0),
+      installVerifyPct: Number(conversionRaw.installVerifyPct ?? 0),
+    },
+    uniqueVisitors: Number(data.uniqueVisitors ?? 0),
+    topSources: Array.isArray(data.topSources) ? data.topSources.map((s: unknown) => {
+      const source = s as Record<string, unknown>
+      return { source: String(source.source ?? ''), count: Number(source.count ?? 0) }
+    }) : [],
+    at: String(data.at ?? ''),
+  }
+}
+
+export async function trackFunnelEvent(input: {
+  eventName: FunnelEventName
+  source?: string
+  metadata?: Record<string, unknown>
+}): Promise<void> {
+  const res = await fetch(`${apiBaseUrl()}/api/analytics/funnel/events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      eventName: input.eventName,
+      source: input.source ?? 'web',
+      metadata: input.metadata,
+    }),
+    keepalive: true,
+  })
+
+  if (!res.ok && res.status !== 202) {
+    throw new Error(`funnel_track_failed:${res.status}`)
   }
 }
 
