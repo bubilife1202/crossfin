@@ -47,12 +47,107 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 const app = new Hono<Env>()
 
+const PUBLIC_RATE_LIMIT_WINDOW_MS = 60_000
+const PUBLIC_RATE_LIMIT_PER_WINDOW = 120
+const PUBLIC_RATE_LIMIT_MAX_BUCKETS = 20_000
+
+type RateLimitBucket = {
+  count: number
+  windowStartedAt: number
+}
+
+const publicRateLimitBuckets = new Map<string, RateLimitBucket>()
+
+function trimTrailingSlash(path: string): string {
+  if (path.length > 1 && path.endsWith('/')) return path.slice(0, -1)
+  return path
+}
+
+function getPublicRateLimitRouteKey(path: string): string | null {
+  const normalized = trimTrailingSlash(path)
+
+  if (
+    normalized === '/api/health' ||
+    normalized === '/api/docs/guide' ||
+    normalized === '/api/openapi.json' ||
+    normalized === '/api/arbitrage/demo' ||
+    normalized === '/api/analytics/overview' ||
+    normalized === '/api/survival/status' ||
+    normalized === '/api/stats' ||
+    normalized === '/api/registry' ||
+    normalized === '/api/registry/search' ||
+    normalized === '/api/registry/categories' ||
+    normalized === '/api/registry/stats'
+  ) {
+    return normalized
+  }
+
+  if (normalized.startsWith('/api/registry/')) return '/api/registry/:id'
+  if (normalized.startsWith('/api/analytics/services/')) return '/api/analytics/services/:serviceId'
+  return null
+}
+
+function getClientRateLimitKey(c: Context<Env>): string {
+  const cfIp = (c.req.header('CF-Connecting-IP') ?? '').trim()
+  if (cfIp) return cfIp
+
+  const forwardedFor = (c.req.header('X-Forwarded-For') ?? '').trim()
+  if (!forwardedFor) return 'unknown'
+
+  return forwardedFor.split(',')[0]?.trim() || 'unknown'
+}
+
+function pruneRateLimitBuckets(now: number): void {
+  if (publicRateLimitBuckets.size < PUBLIC_RATE_LIMIT_MAX_BUCKETS) return
+
+  for (const [key, bucket] of publicRateLimitBuckets.entries()) {
+    if (now - bucket.windowStartedAt >= PUBLIC_RATE_LIMIT_WINDOW_MS) {
+      publicRateLimitBuckets.delete(key)
+    }
+  }
+}
+
+const publicRateLimit: MiddlewareHandler<Env> = async (c, next) => {
+  if (c.req.method === 'OPTIONS') {
+    await next()
+    return
+  }
+
+  const routeKey = getPublicRateLimitRouteKey(c.req.path)
+  if (!routeKey) {
+    await next()
+    return
+  }
+
+  const now = Date.now()
+  pruneRateLimitBuckets(now)
+
+  const clientKey = getClientRateLimitKey(c)
+  const bucketKey = `${clientKey}:${routeKey}`
+  const existing = publicRateLimitBuckets.get(bucketKey)
+
+  if (!existing || now - existing.windowStartedAt >= PUBLIC_RATE_LIMIT_WINDOW_MS) {
+    publicRateLimitBuckets.set(bucketKey, { count: 1, windowStartedAt: now })
+    await next()
+    return
+  }
+
+  if (existing.count >= PUBLIC_RATE_LIMIT_PER_WINDOW) {
+    throw new HTTPException(429, { message: 'Rate limited' })
+  }
+
+  existing.count += 1
+  await next()
+}
+
 app.use('*', cors({
   origin: ['http://localhost:5173', 'https://crossfin.pages.dev', 'https://crossfin.dev', 'https://www.crossfin.dev', 'https://live.crossfin.dev', 'https://crossfin-live.pages.dev'],
   allowHeaders: ['Content-Type', 'Authorization', 'X-Agent-Key', 'X-CrossFin-Admin-Token', 'PAYMENT-SIGNATURE'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   exposeHeaders: ['PAYMENT-REQUIRED', 'PAYMENT-RESPONSE'],
 }))
+
+app.use('/api/*', publicRateLimit)
 
 function requireAdmin(c: Context<Env>): void {
   const expected = (c.env.CROSSFIN_ADMIN_TOKEN ?? '').trim()
@@ -1876,22 +1971,41 @@ async function fetchEinsteinAiSeeds(): Promise<ServiceSeed[]> {
   return seeds
 }
 
+const REGISTRY_SEED_CHECK_TTL_MS = 60_000
+let registrySeedCheckedUntil = 0
+let registrySeedInFlight: Promise<void> | null = null
+
 async function ensureRegistrySeeded(
   db: D1Database,
   receiverAddress: string,
   input?: { force?: boolean }
 ): Promise<void> {
-  let row: { count: number | string } | null
-  try {
-    row = await db.prepare('SELECT COUNT(*) as count FROM services').first<{ count: number | string }>()
-  } catch {
-    throw new HTTPException(500, { message: 'DB schema not migrated (services table missing)' })
+  const now = Date.now()
+  const force = input?.force === true
+
+  if (!force) {
+    if (now < registrySeedCheckedUntil) return
+    if (registrySeedInFlight) {
+      await registrySeedInFlight
+      return
+    }
   }
 
-  const count = row ? Number(row.count) : 0
-  if (!input?.force && Number.isFinite(count) && count > 0) return
+  const run = async (): Promise<void> => {
+    let row: { count: number | string } | null
+    try {
+      row = await db.prepare('SELECT COUNT(*) as count FROM services').first<{ count: number | string }>()
+    } catch {
+      throw new HTTPException(500, { message: 'DB schema not migrated (services table missing)' })
+    }
 
-  const crossfinSeeds: ServiceSeed[] = [
+    const count = row ? Number(row.count) : 0
+    if (!force && Number.isFinite(count) && count > 0) {
+      registrySeedCheckedUntil = Date.now() + REGISTRY_SEED_CHECK_TTL_MS
+      return
+    }
+
+    const crossfinSeeds: ServiceSeed[] = [
     {
       id: 'crossfin_kimchi_premium',
       name: 'CrossFin Kimchi Premium Index',
@@ -2950,48 +3064,62 @@ async function ensureRegistrySeeded(
     },
   ]
 
-  const x402engineSeeds = await fetchX402EngineSeeds()
-  const einsteinSeeds = await fetchEinsteinAiSeeds()
+    const x402engineSeeds = await fetchX402EngineSeeds()
+    const einsteinSeeds = await fetchEinsteinAiSeeds()
 
-  const disabledSeedProviders = new Set(['ouchanip', 'snack.money', 'firecrawl'])
-  const normalizedExternalSeeds = externalSeeds.map((seed) => {
-    if (!disabledSeedProviders.has(seed.provider)) return seed
-    return { ...seed, status: 'disabled' }
-  })
+    const disabledSeedProviders = new Set(['ouchanip', 'snack.money', 'firecrawl'])
+    const normalizedExternalSeeds = externalSeeds.map((seed) => {
+      if (!disabledSeedProviders.has(seed.provider)) return seed
+      return { ...seed, status: 'disabled' }
+    })
 
-  const allSeeds = [...crossfinSeeds, ...normalizedExternalSeeds, ...x402engineSeeds, ...einsteinSeeds]
+    const allSeeds = [...crossfinSeeds, ...normalizedExternalSeeds, ...x402engineSeeds, ...einsteinSeeds]
 
-  const statements = allSeeds.map((seed) => {
-    const tags = seed.tags ? JSON.stringify(seed.tags) : null
-    const inputSchema = seed.inputSchema ? JSON.stringify(seed.inputSchema) : null
-    const outputExample = seed.outputExample ? JSON.stringify(seed.outputExample) : null
-    const isCrossfin = seed.isCrossfin ? 1 : 0
+    const statements = allSeeds.map((seed) => {
+      const tags = seed.tags ? JSON.stringify(seed.tags) : null
+      const inputSchema = seed.inputSchema ? JSON.stringify(seed.inputSchema) : null
+      const outputExample = seed.outputExample ? JSON.stringify(seed.outputExample) : null
+      const isCrossfin = seed.isCrossfin ? 1 : 0
 
-    return db.prepare(
-      `INSERT OR IGNORE INTO services
-        (id, name, description, provider, category, endpoint, method, price, currency, network, pay_to, tags, input_schema, output_example, status, is_crossfin)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
-      seed.id,
-      seed.name,
-      seed.description,
-      seed.provider,
-      seed.category,
-      seed.endpoint,
-      normalizeMethod(seed.method),
-      seed.price,
-      seed.currency,
-      seed.network,
-      seed.payTo,
-      tags,
-      inputSchema,
-      outputExample,
-      seed.status,
-      isCrossfin,
-    )
-  })
+      return db.prepare(
+        `INSERT OR IGNORE INTO services
+          (id, name, description, provider, category, endpoint, method, price, currency, network, pay_to, tags, input_schema, output_example, status, is_crossfin)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        seed.id,
+        seed.name,
+        seed.description,
+        seed.provider,
+        seed.category,
+        seed.endpoint,
+        normalizeMethod(seed.method),
+        seed.price,
+        seed.currency,
+        seed.network,
+        seed.payTo,
+        tags,
+        inputSchema,
+        outputExample,
+        seed.status,
+        isCrossfin,
+      )
+    })
 
-  await db.batch(statements)
+    await db.batch(statements)
+    registrySeedCheckedUntil = Date.now() + REGISTRY_SEED_CHECK_TTL_MS
+  }
+
+  if (force) {
+    await run()
+    return
+  }
+
+  registrySeedInFlight = run()
+  try {
+    await registrySeedInFlight
+  } finally {
+    registrySeedInFlight = null
+  }
 }
 
 app.get('/api/registry', async (c) => {

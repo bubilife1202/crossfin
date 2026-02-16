@@ -7,6 +7,8 @@
 - Wallet transfer race condition (TOCTOU) in `POST /api/transfers` — switched to conditional debit update (`balance_cents >= amount`) and rollback-safe finalization to prevent concurrent overdraw
 - Proxy response hardening in `/api/proxy/:serviceId` — block upstream redirects and allowlist passthrough response headers to prevent header injection
 - Admin token auth now uses constant-time comparison to reduce timing side-channel risk
+- Added public endpoint rate limiting middleware (per-IP + per-route window) to reduce unauthenticated D1 abuse risk
+- `ensureRegistrySeeded()` now uses in-memory TTL + in-flight lock to avoid repeated seed checks/fetch bursts on concurrent requests
 
 ### Added
 - **Live Dashboard — Agent Survival panel** (`live.crossfin.dev`)
