@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.1] - 2026-02-16
+
+### Fixed
+- `/api/survival/status` returning 401 — moved route before `agentAuth` middleware on the `api` sub-router so it's publicly accessible
+
+### Added
+- **Live Dashboard — Agent Survival panel** (`live.crossfin.dev`)
+  - ALIVE/STOPPED status badge with pulsing indicator
+  - Mini metric cards: Calls Today, Calls This Week, Registered Agents
+  - Scrollable recent events feed (service name, status, response time, relative timestamp)
+  - Responsive layout matching existing dark trading-terminal theme
+
 ## [1.4.0] - 2026-02-16
 
 ### Added

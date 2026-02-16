@@ -579,6 +579,142 @@
   color: var(--cyan);
 }
 
+.survivalSection {
+  border-left: 3px solid var(--green);
+  transition: border-color 300ms ease;
+}
+
+.survivalSection.stopped {
+  border-left-color: var(--red);
+}
+
+.survivalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.survivalBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+}
+
+.survivalBadge.alive {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.survivalBadge.stopped {
+  background: var(--red-dim);
+  color: var(--red);
+}
+
+.survivalDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.survivalBadge.alive .survivalDot {
+  background: var(--green);
+  box-shadow: 0 0 6px rgba(0, 255, 136, 0.5);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.survivalBadge.stopped .survivalDot {
+  background: var(--red);
+  box-shadow: 0 0 6px rgba(255, 68, 102, 0.5);
+}
+
+.survivalMetrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.survivalMiniCard {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 200ms ease;
+}
+
+.survivalMiniCard:hover {
+  border-color: var(--border-hover);
+}
+
+.survivalMiniCard .metricValue {
+  font-size: 1.25rem;
+}
+
+.survivalFeed {
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.survivalFeedHeader {
+  display: grid;
+  grid-template-columns: 1.4fr 0.7fr 0.6fr 0.7fr;
+  gap: 10px;
+  padding: 0 0 10px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted2);
+  border-bottom: 1px solid var(--border);
+}
+
+.survivalEvent {
+  display: grid;
+  grid-template-columns: 1.4fr 0.7fr 0.6fr 0.7fr;
+  gap: 10px;
+  padding: 8px 0;
+  align-items: center;
+  font-size: 0.84rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  transition: background 100ms ease;
+}
+
+.survivalEvent:hover {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+}
+
+.survivalEventName {
+  font-weight: 650;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.survivalEventStatus {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 @keyframes fadeIn {
   from { opacity: 0.4; }
   to   { opacity: 1; }
@@ -597,6 +733,9 @@
   }
   .twoCol {
     grid-template-columns: 1fr;
+  }
+  .survivalMetrics {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
@@ -631,6 +770,18 @@
   }
   .recentHeader span:nth-child(4),
   .recentRow span:nth-child(4) {
+    display: none;
+  }
+  .survivalMetrics {
+    grid-template-columns: 1fr;
+  }
+  .survivalFeedHeader,
+  .survivalEvent {
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+  }
+  .survivalFeedHeader span:nth-child(4),
+  .survivalEvent span:nth-child(4) {
     display: none;
   }
   .footerInner {

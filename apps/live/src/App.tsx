@@ -79,6 +79,30 @@ interface FxData {
   rates: Record<string, number>;
 }
 
+interface SurvivalEvent {
+  id: string;
+  serviceId: string;
+  serviceName: string | null;
+  status: string;
+  responseTimeMs: number;
+  at: string;
+}
+
+interface SurvivalData {
+  alive: boolean;
+  state: 'ALIVE' | 'STOPPED';
+  version: string;
+  metrics: {
+    totalCalls: number;
+    callsToday: number;
+    callsThisWeek: number;
+    activeServices: number;
+    registeredAgents: number;
+  };
+  recentEvents: SurvivalEvent[];
+  at: string;
+}
+
 /* ─── Helpers ─── */
 
 function timeAgo(iso: string): string {
@@ -113,6 +137,7 @@ export default function App() {
   const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
   const [health, setHealth] = useState<HealthData | null>(null);
   const [fxRate, setFxRate] = useState<number | null>(null);
+  const [survival, setSurvival] = useState<SurvivalData | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [connected, setConnected] = useState(true);
   const [progress, setProgress] = useState(0);
@@ -125,18 +150,20 @@ export default function App() {
       fetchJson<AnalyticsRaw>(`${API}/api/analytics/overview`),
       fetchJson<HealthData>(`${API}/api/health`),
       fetchJson<FxData>("https://open.er-api.com/v6/latest/USD"),
+      fetchJson<SurvivalData>(`${API}/api/survival/status`),
     ]);
 
     const vals = results.map((r) =>
       r.status === "fulfilled" ? r.value : null,
     );
 
-    const [arbRaw, statsRaw, analyticsRaw, healthVal, fxVal] = vals as [
+    const [arbRaw, statsRaw, analyticsRaw, healthVal, fxVal, survivalVal] = vals as [
       ArbitrageRaw | null,
       RegistryStatsRaw | null,
       AnalyticsRaw | null,
       HealthData | null,
       FxData | null,
+      SurvivalData | null,
     ];
 
     const arbVal: ArbitrageData | null = arbRaw
@@ -175,6 +202,7 @@ export default function App() {
     setAnalytics(analyticsVal);
     setHealth(healthVal);
     if (fxVal?.rates?.KRW) setFxRate(fxVal.rates.KRW);
+    setSurvival(survivalVal);
 
     const anyOk = arbVal ?? statsVal ?? analyticsVal ?? healthVal;
     setConnected(!!anyOk);
@@ -317,6 +345,57 @@ export default function App() {
             </table>
           </div>
         </section>
+
+        {/* Row 2.5: Agent Survival */}
+        {survival && (
+          <section className={`panel survivalSection ${survival.state === "ALIVE" ? "alive" : "stopped"}`}>
+            <div className="survivalHeader">
+              <h2 className="panelTitle">Agent Survival</h2>
+              <span className={`survivalBadge ${survival.state === "ALIVE" ? "alive" : "stopped"}`}>
+                <span className="survivalDot" />
+                {survival.state}
+              </span>
+            </div>
+            <div className="survivalMetrics">
+              <div className="survivalMiniCard">
+                <span className="metricLabel">Calls Today</span>
+                <span className="metricValue neutral">{survival.metrics.callsToday.toLocaleString()}</span>
+              </div>
+              <div className="survivalMiniCard">
+                <span className="metricLabel">Calls This Week</span>
+                <span className="metricValue neutral">{survival.metrics.callsThisWeek.toLocaleString()}</span>
+              </div>
+              <div className="survivalMiniCard">
+                <span className="metricLabel">Registered Agents</span>
+                <span className="metricValue neutral">{survival.metrics.registeredAgents.toLocaleString()}</span>
+              </div>
+            </div>
+            <div className="survivalFeed">
+              <div className="survivalFeedHeader">
+                <span>Service</span>
+                <span>Status</span>
+                <span>Time</span>
+                <span>When</span>
+              </div>
+              {survival.recentEvents.length === 0 && (
+                <p className="emptyText">No recent events</p>
+              )}
+              {survival.recentEvents.slice(0, 8).map((evt) => (
+                <div key={evt.id} className="survivalEvent fadeIn">
+                  <span className="survivalEventName">{evt.serviceName ?? evt.serviceId}</span>
+                  <span className="survivalEventStatus">
+                    <span className={`statusDotSmall ${evt.status === "success" ? "green" : "red"}`} />
+                    {evt.status}
+                  </span>
+                  <span className={`recentRt ${rtClass(evt.responseTimeMs)}`}>
+                    {evt.responseTimeMs}ms
+                  </span>
+                  <span className="recentWhen">{timeAgo(evt.at)}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Row 3: Two columns */}
         <section className="twoCol">
