@@ -19,6 +19,19 @@ type TabId = 'services' | 'developers' | 'activity'
 
 const TAB_IDS: readonly TabId[] = ['services', 'developers', 'activity'] as const
 const tabLabels: Record<TabId, string> = { services: 'Services', developers: 'Developers', activity: 'Activity' }
+const MCP_NPX_COMMAND = 'npx -y crossfin-mcp'
+const MCP_CLAUDE_CONFIG = `{
+  "mcpServers": {
+    "crossfin": {
+      "command": "npx",
+      "args": ["-y", "crossfin-mcp"],
+      "env": {
+        "CROSSFIN_API_URL": "https://crossfin.dev",
+        "EVM_PRIVATE_KEY": "0x..."
+      }
+    }
+  }
+}`
 
 function parseHash(): TabId {
   const raw = window.location.hash.replace('#', '') as TabId
@@ -54,6 +67,7 @@ function App() {
   const [analytics, setAnalytics] = useState<LoadState<AnalyticsOverview>>({ status: 'loading' })
   const [codeTab, setCodeTab] = useState<'curl' | 'python' | 'javascript'>('curl')
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [showMcpConfig, setShowMcpConfig] = useState<boolean>(false)
 
   const [activeTab, setActiveTab] = useState<TabId>(parseHash)
 
@@ -317,6 +331,57 @@ function App() {
               Get Started
             </a>
           </div>
+        </section>
+
+        <section className="mcpLaunch">
+          <div className="mcpLaunchHeader">
+            <div className="mcpLaunchBadge">MCP Quick Start</div>
+            <h2>Run CrossFin MCP in one command</h2>
+            <p>Start immediately, then paste the Claude Desktop config if you want persistent setup.</p>
+          </div>
+
+          <div className="mcpLaunchCommandRow">
+            <code className="mcpLaunchCommand">{MCP_NPX_COMMAND}</code>
+            <button
+              type="button"
+              className="miniButton primary"
+              onClick={() => copyToClipboard('mcp-command', MCP_NPX_COMMAND)}
+            >
+              {copiedId === 'mcp-command' ? '✓ Copied' : 'Copy Command'}
+            </button>
+            <button
+              type="button"
+              className="miniButton"
+              onClick={() => setShowMcpConfig((prev) => !prev)}
+            >
+              {showMcpConfig ? 'Hide Claude Config' : 'View Claude Config'}
+            </button>
+            <button
+              type="button"
+              className="miniButton"
+              onClick={() => switchTab('developers')}
+            >
+              Open Full Guide
+            </button>
+          </div>
+
+          {showMcpConfig ? (
+            <div className="mcpLaunchConfig">
+              <div className="codeBlock">
+                <div className="codeBlockHeader">
+                  <span className="codeBlockLang">json</span>
+                  <button
+                    type="button"
+                    className="codeBlockCopy"
+                    onClick={() => copyToClipboard('mcp-config', MCP_CLAUDE_CONFIG)}
+                  >
+                    {copiedId === 'mcp-config' ? '✓ Copied' : 'Copy'}
+                  </button>
+                </div>
+                <pre className="codeBlockPre"><code>{MCP_CLAUDE_CONFIG}</code></pre>
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <section className="section">
