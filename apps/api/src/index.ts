@@ -1510,7 +1510,7 @@ app.use(
           extensions: {
             ...declareDiscoveryExtension({
               output: {
-                example: { paid: true, service: 'crossfin-korea-etf', totalCount: 732, items: [{ name: 'KODEX 200', code: '069500', price: 35015, nav: 35005.12, prevClose: 1282345, threeMonthReturn: 5.93, marketCap: 64123 }], source: 'naver-finance', at: '2026-02-16T00:00:00.000Z' },
+                example: { paid: true, service: 'crossfin-korea-etf', totalCount: 1070, items: [{ name: 'KODEX 200', code: '069500', price: 81860, changeVal: -115, changeRate: -0.14, nav: 81847, volume: 15969201, threeMonthReturn: 38.73, marketCap: 160691 }], source: 'naver-finance', at: '2026-02-16T00:00:00.000Z' },
                 schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, totalCount: { type: 'number' }, items: { type: 'array' }, source: { type: 'string' }, at: { type: 'string' } }, required: ['paid', 'service', 'totalCount', 'items', 'source', 'at'] },
               },
             }),
