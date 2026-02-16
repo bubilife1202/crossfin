@@ -1412,6 +1412,75 @@ app.use(
             }),
           },
         },
+        'GET /api/premium/market/korea/stock-news': {
+          accepts: { scheme: 'exact', price: '$0.03', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
+          description: 'Korean stock-specific news feed from Naver Finance with article title, body, publisher, and timestamp.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              input: { stock: '005930' },
+              inputSchema: { properties: { stock: { type: 'string', description: '6-digit Korean stock code (e.g., 005930 for Samsung Electronics)' } } },
+              output: {
+                example: { paid: true, service: 'crossfin-korea-stock-news', stock: '005930', total: 1284, items: [{ id: 9912345, title: 'Samsung Electronics rises on AI memory demand', body: 'Analysts cited stronger-than-expected server DRAM orders...', publisher: 'Yonhap', datetime: '2026-02-16 09:15:00' }], source: 'naver-finance', at: '2026-02-16T00:00:00.000Z' },
+                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, stock: { type: 'string' }, total: { type: 'number' }, items: { type: 'array' }, source: { type: 'string' }, at: { type: 'string' } }, required: ['paid', 'service', 'stock', 'total', 'items', 'source', 'at'] },
+              },
+            }),
+          },
+        },
+        'GET /api/premium/market/korea/themes': {
+          accepts: { scheme: 'exact', price: '$0.05', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
+          description: 'Korean market theme groups with performance and breadth statistics from Naver Finance.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              output: {
+                example: { paid: true, service: 'crossfin-korea-themes', themes: [{ no: 371, name: 'AI Semiconductor', totalCount: 24, changeRate: 2.13, riseCount: 16, fallCount: 8 }], source: 'naver-finance', at: '2026-02-16T00:00:00.000Z' },
+                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, themes: { type: 'array' }, source: { type: 'string' }, at: { type: 'string' } }, required: ['paid', 'service', 'themes', 'source', 'at'] },
+              },
+            }),
+          },
+        },
+        'GET /api/premium/market/korea/disclosure': {
+          accepts: { scheme: 'exact', price: '$0.03', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
+          description: 'Recent stock disclosures for a Korean listed company from Naver Finance.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              input: { stock: '005930' },
+              inputSchema: { properties: { stock: { type: 'string', description: '6-digit Korean stock code (e.g., 005930 for Samsung Electronics)' } } },
+              output: {
+                example: { paid: true, service: 'crossfin-korea-disclosure', stock: '005930', items: [{ title: 'Report on major management matters', datetime: '2026-02-14 17:48:00' }], source: 'naver-finance', at: '2026-02-16T00:00:00.000Z' },
+                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, stock: { type: 'string' }, items: { type: 'array' }, source: { type: 'string' }, at: { type: 'string' } }, required: ['paid', 'service', 'stock', 'items', 'source', 'at'] },
+              },
+            }),
+          },
+        },
+        'GET /api/premium/crypto/korea/fx-rate': {
+          accepts: { scheme: 'exact', price: '$0.01', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
+          description: 'Real-time KRW/USD forex quote from Upbit CRIX, including base price and daily change.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              output: {
+                example: { paid: true, service: 'crossfin-korea-fx-rate', pair: 'KRW/USD', basePrice: 1332.5, change: 'RISE', changePrice: 4.1, openingPrice: 1328.4, high52w: 1451.0, low52w: 1248.7, source: 'upbit-crix', at: '2026-02-16T00:00:00.000Z' },
+                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, pair: { type: 'string' }, basePrice: { type: 'number' }, change: { type: 'string' }, changePrice: { type: 'number' }, openingPrice: { type: 'number' }, high52w: { type: 'number' }, low52w: { type: 'number' }, source: { type: 'string' }, at: { type: 'string' } }, required: ['paid', 'service', 'pair', 'basePrice', 'change', 'changePrice', 'openingPrice', 'high52w', 'low52w', 'source', 'at'] },
+              },
+            }),
+          },
+        },
+        'GET /api/premium/market/korea/etf': {
+          accepts: { scheme: 'exact', price: '$0.03', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
+          description: 'Top Korean ETF list with price, NAV, return, and market cap from Naver Finance.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              output: {
+                example: { paid: true, service: 'crossfin-korea-etf', totalCount: 732, items: [{ name: 'KODEX 200', code: '069500', price: 35015, nav: 35005.12, prevClose: 1282345, threeMonthReturn: 5.93, marketCap: 64123 }], source: 'naver-finance', at: '2026-02-16T00:00:00.000Z' },
+                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, totalCount: { type: 'number' }, items: { type: 'array' }, source: { type: 'string' }, at: { type: 'string' } }, required: ['paid', 'service', 'totalCount', 'items', 'source', 'at'] },
+              },
+            }),
+          },
+        },
         'GET /api/premium/news/korea/headlines': {
           accepts: {
             scheme: 'exact',
@@ -5055,6 +5124,126 @@ app.get('/api/premium/market/korea/stock-detail', async (c) => {
       date: consensus.createDate,
     } : null,
     industryPeers,
+    source: 'naver-finance',
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/market/korea/stock-news', async (c) => {
+  const stock = (c.req.query('stock') ?? '005930').trim()
+  const page = Math.max(1, Number(c.req.query('page') ?? '1') || 1)
+  const pageSize = Math.min(20, Math.max(1, Number(c.req.query('pageSize') ?? '10') || 10))
+  if (!/^\d{6}$/.test(stock)) throw new HTTPException(400, { message: 'stock must be 6-digit code' })
+
+  const res = await fetch(`https://m.stock.naver.com/api/news/stock/${stock}?page=${page}&pageSize=${pageSize}`)
+  if (!res.ok) throw new HTTPException(502, { message: 'Stock news data unavailable' })
+  const raw = await res.json() as any
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-korea-stock-news',
+    stock,
+    total: raw.totalCount,
+    items: (raw.items ?? []).map((i: any) => ({
+      id: i.id,
+      title: i.title,
+      body: i.body,
+      publisher: i.officeName,
+      datetime: i.datetime,
+    })),
+    source: 'naver-finance',
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/market/korea/themes', async (c) => {
+  const page = Math.max(1, Number(c.req.query('page') ?? '1') || 1)
+  const pageSize = Math.min(50, Math.max(1, Number(c.req.query('pageSize') ?? '20') || 20))
+
+  const res = await fetch(`https://m.stock.naver.com/api/stocks/theme?page=${page}&pageSize=${pageSize}`)
+  if (!res.ok) throw new HTTPException(502, { message: 'Theme data unavailable' })
+  const raw = await res.json() as any
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-korea-themes',
+    themes: (raw.groups ?? []).map((g: any) => ({
+      no: g.no,
+      name: g.name,
+      totalCount: g.totalCount,
+      changeRate: g.changeRate,
+      riseCount: g.riseCount,
+      fallCount: g.fallCount,
+    })),
+    source: 'naver-finance',
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/market/korea/disclosure', async (c) => {
+  const stock = (c.req.query('stock') ?? '005930').trim()
+  const page = Math.max(1, Number(c.req.query('page') ?? '1') || 1)
+  const pageSize = Math.min(20, Math.max(1, Number(c.req.query('pageSize') ?? '10') || 10))
+  if (!/^\d{6}$/.test(stock)) throw new HTTPException(400, { message: 'stock must be 6-digit code' })
+
+  const res = await fetch(`https://m.stock.naver.com/api/stock/${stock}/disclosure?page=${page}&pageSize=${pageSize}`)
+  if (!res.ok) throw new HTTPException(502, { message: 'Disclosure data unavailable' })
+  const raw = await res.json() as any[]
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-korea-disclosure',
+    stock,
+    items: raw.map((d: any) => ({
+      title: d.title,
+      datetime: d.datetime,
+    })),
+    source: 'naver-finance',
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/crypto/korea/fx-rate', async (c) => {
+  const res = await fetch('https://crix-api-cdn.upbit.com/v1/forex/recent?codes=FRX.KRWUSD')
+  if (!res.ok) throw new HTTPException(502, { message: 'FX rate data unavailable' })
+  const data = await res.json() as any[]
+  const quote = data[0]
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-korea-fx-rate',
+    pair: 'KRW/USD',
+    basePrice: quote.basePrice,
+    change: quote.change,
+    changePrice: quote.changePrice,
+    openingPrice: quote.openingPrice,
+    high52w: quote.high52wPrice,
+    low52w: quote.low52wPrice,
+    source: 'upbit-crix',
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/market/korea/etf', async (c) => {
+  const res = await fetch('https://finance.naver.com/api/sise/etfItemList.nhn')
+  if (!res.ok) throw new HTTPException(502, { message: 'ETF data unavailable' })
+  const buf = await res.arrayBuffer()
+  const text = new TextDecoder('euc-kr').decode(buf)
+  const raw = JSON.parse(text) as any
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-korea-etf',
+    totalCount: raw.result.etfItemList.length,
+    items: raw.result.etfItemList.slice(0, 50).map((e: any) => ({
+      name: e.itemname,
+      code: e.itemcode,
+      price: e.nowVal,
+      nav: e.nav,
+      prevClose: e.quant,
+      threeMonthReturn: e.threeMonthEarnRate,
+      marketCap: e.marketSum,
+    })),
     source: 'naver-finance',
     at: new Date().toISOString(),
   })
