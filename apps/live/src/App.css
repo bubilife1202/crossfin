@@ -715,6 +715,231 @@
   color: var(--muted);
 }
 
+/* ─── Decision Layer ─── */
+
+.decisionPanel {
+  border-left: 3px solid var(--cyan);
+}
+
+.decisionBadges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.marketBadge {
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+
+.marketBadge.favorable { background: var(--green-dim); color: var(--green); }
+.marketBadge.neutral { background: var(--cyan-dim); color: var(--cyan); }
+.marketBadge.unfavorable { background: var(--red-dim); color: var(--red); }
+.marketBadge.unknown { background: rgba(255,255,255,0.05); color: var(--muted); }
+
+.decisionSubtext {
+  margin: 0 0 16px;
+  font-size: 0.84rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.decisionGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.decisionCard {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.decisionCard:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.decisionCard.execute { border-top: 3px solid var(--green); }
+.decisionCard.wait { border-top: 3px solid var(--amber); }
+.decisionCard.skip { border-top: 3px solid var(--red); }
+
+.decisionCardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.decisionCoin {
+  font-family: var(--mono);
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.decisionActionBadge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.decisionActionBadge.execute { background: var(--green-dim); color: var(--green); }
+.decisionActionBadge.wait { background: rgba(255, 170, 0, 0.12); color: var(--amber); }
+.decisionActionBadge.skip { background: var(--red-dim); color: var(--red); }
+
+.decisionPremium {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.decisionPremium .positive {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.decisionPremium .negative {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--red);
+}
+
+.decisionDir {
+  font-size: 0.76rem;
+  color: var(--muted2);
+}
+
+.decisionMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.confidenceBar {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.confidenceFill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 500ms ease;
+}
+
+.confidenceFill.execute { background: var(--green); }
+.confidenceFill.wait { background: var(--amber); }
+.confidenceFill.skip { background: var(--red); }
+
+.confidenceLabel {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.decisionReason {
+  font-size: 0.76rem;
+  color: var(--muted2);
+  line-height: 1.4;
+}
+
+/* ─── On-Chain Payments ─── */
+
+.onchainPanel {
+  border-left: 3px solid var(--amber);
+}
+
+.panelBadgeLink {
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
+.panelBadgeLink:hover {
+  color: var(--cyan);
+  border-color: var(--border-hover);
+}
+
+.txList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.txHeader {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 0.8fr;
+  gap: 10px;
+  padding: 0 0 10px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted2);
+  border-bottom: 1px solid var(--border);
+}
+
+.txRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 0.8fr;
+  gap: 10px;
+  padding: 10px 0;
+  align-items: center;
+  font-size: 0.84rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  text-decoration: none;
+  color: inherit;
+  transition: background 100ms ease;
+}
+
+.txRow:hover {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+}
+
+.txDirection {
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.txDirection.incoming { color: var(--green); }
+.txDirection.outgoing { color: var(--amber); }
+
+.txAmount {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.txAddr {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.txWhen {
+  font-size: 0.76rem;
+  color: var(--muted2);
+}
+
 @keyframes fadeIn {
   from { opacity: 0.4; }
   to   { opacity: 1; }
@@ -725,6 +950,9 @@
 }
 
 @media (max-width: 1024px) {
+  .decisionGrid {
+    grid-template-columns: 1fr 1fr;
+  }
   .metricsRow {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -740,6 +968,20 @@
 }
 
 @media (max-width: 640px) {
+  .decisionGrid {
+    grid-template-columns: 1fr;
+  }
+  .txHeader,
+  .txRow {
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+  }
+  .txHeader span:nth-child(3),
+  .txRow span:nth-child(3),
+  .txHeader span:nth-child(4),
+  .txRow span:nth-child(4) {
+    display: none;
+  }
   .metricsRow {
     grid-template-columns: 1fr;
   }

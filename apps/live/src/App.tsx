@@ -3,24 +3,38 @@ import "./App.css";
 
 const API = "https://crossfin.dev";
 const REFRESH_INTERVAL = 15_000;
+const BASESCAN_API = "https://api.basescan.org/api";
+const CROSSFIN_WALLET = "0xe4E79Ce6a1377C58f0Bb99D023908858A4DB5779";
+const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
 /* ─── Types ─── */
+
+interface Decision {
+  action: "EXECUTE" | "WAIT" | "SKIP";
+  confidence: number;
+  reason: string;
+}
 
 interface ArbitragePair {
   coin: string;
   premiumPct: number;
   direction: string;
+  decision?: Decision;
 }
 
 interface ArbitrageRaw {
   demo: boolean;
   avgPremiumPct: number;
+  executeCandidates?: number;
+  marketCondition?: string;
   preview: ArbitragePair[];
   at: string;
 }
 
 interface ArbitrageData {
   average_premium: number;
+  executeCandidates: number;
+  marketCondition: string;
   pairs: ArbitragePair[];
 }
 
@@ -81,7 +95,7 @@ interface FxData {
 
 interface SurvivalData {
   alive: boolean;
-  state: 'ALIVE' | 'STOPPED';
+  state: "ALIVE" | "STOPPED";
   version: string;
   metrics: {
     totalCalls: number;
@@ -90,6 +104,15 @@ interface SurvivalData {
     activeServices: number;
   };
   at: string;
+}
+
+interface OnChainTx {
+  hash: string;
+  from: string;
+  to: string;
+  value: string;
+  tokenDecimal: string;
+  timeStamp: string;
 }
 
 /* ─── Helpers ─── */
@@ -106,6 +129,28 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+function timeAgoUnix(ts: number): string {
+  const diff = Date.now() - ts * 1000;
+  if (diff < 0) return "just now";
+  const secs = Math.floor(diff / 1000);
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function shortAddr(addr: string): string {
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+}
+
+function usdcAmount(raw: string, decimals: string): string {
+  const d = parseInt(decimals) || 6;
+  const val = parseFloat(raw) / Math.pow(10, d);
+  return val.toFixed(2);
+}
+
 /* ─── Fetch helpers ─── */
 
 async function fetchJson<T>(url: string): Promise<T | null> {
@@ -118,6 +163,19 @@ async function fetchJson<T>(url: string): Promise<T | null> {
   }
 }
 
+async function fetchOnChainTxs(): Promise<OnChainTx[]> {
+  try {
+    const url = `${BASESCAN_API}?module=account&action=tokentx&contractaddress=${USDC_BASE}&address=${CROSSFIN_WALLET}&page=1&offset=10&sort=desc`;
+    const r = await fetch(url);
+    if (!r.ok) return [];
+    const data = (await r.json()) as { status: string; result: OnChainTx[] };
+    if (data.status !== "1" || !Array.isArray(data.result)) return [];
+    return data.result;
+  } catch {
+    return [];
+  }
+}
+
 /* ─── App ─── */
 
 export default function App() {
@@ -125,8 +183,9 @@ export default function App() {
   const [stats, setStats] = useState<RegistryStats | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
   const [health, setHealth] = useState<HealthData | null>(null);
-  const [fxRate, setFxRate] = useState<number | null>(null);
+  const [_fxRate, setFxRate] = useState<number | null>(null);
   const [survival, setSurvival] = useState<SurvivalData | null>(null);
+  const [onChainTxs, setOnChainTxs] = useState<OnChainTx[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [connected, setConnected] = useState(true);
   const [progress, setProgress] = useState(0);
@@ -140,28 +199,36 @@ export default function App() {
       fetchJson<HealthData>(`${API}/api/health`),
       fetchJson<FxData>("https://open.er-api.com/v6/latest/USD"),
       fetchJson<SurvivalData>(`${API}/api/survival/status`),
+      fetchOnChainTxs(),
     ]);
 
     const vals = results.map((r) =>
       r.status === "fulfilled" ? r.value : null,
     );
 
-    const [arbRaw, statsRaw, analyticsRaw, healthVal, fxVal, survivalVal] = vals as [
-      ArbitrageRaw | null,
-      RegistryStatsRaw | null,
-      AnalyticsRaw | null,
-      HealthData | null,
-      FxData | null,
-      SurvivalData | null,
-    ];
+    const [arbRaw, statsRaw, analyticsRaw, healthVal, fxVal, survivalVal, txsVal] =
+      vals as [
+        ArbitrageRaw | null,
+        RegistryStatsRaw | null,
+        AnalyticsRaw | null,
+        HealthData | null,
+        FxData | null,
+        SurvivalData | null,
+        OnChainTx[] | null,
+      ];
 
     const arbVal: ArbitrageData | null = arbRaw
       ? {
           average_premium: arbRaw.avgPremiumPct ?? 0,
+          executeCandidates: arbRaw.executeCandidates ?? 0,
+          marketCondition: arbRaw.marketCondition ?? "unknown",
           pairs: (arbRaw.preview ?? []).map((p) => ({
             coin: p.coin,
             premiumPct: p.premiumPct,
-            direction: p.direction ?? (p.premiumPct >= 0 ? "Korea premium" : "Korea discount"),
+            direction:
+              p.direction ??
+              (p.premiumPct >= 0 ? "Korea premium" : "Korea discount"),
+            decision: p.decision,
           })),
         }
       : null;
@@ -192,6 +259,7 @@ export default function App() {
     setHealth(healthVal);
     if (fxVal?.rates?.KRW) setFxRate(fxVal.rates.KRW);
     setSurvival(survivalVal);
+    if (txsVal && txsVal.length > 0) setOnChainTxs(txsVal);
 
     const anyOk = arbVal ?? statsVal ?? analyticsVal ?? healthVal;
     setConnected(!!anyOk);
@@ -242,7 +310,7 @@ export default function App() {
             <span className="logo">
               <span className="logoMark">⬡</span> CrossFin Live
             </span>
-            <span className="subtitle">Real-time Gateway Monitor</span>
+            <span className="subtitle">AI Agent Gateway Monitor</span>
           </div>
           <div className="headerRight">
             <span className={`connStatus ${connected ? "ok" : "err"}`}>
@@ -278,14 +346,103 @@ export default function App() {
             sub="total API requests"
           />
           <MetricCard
-            label="USD/KRW Rate"
-            value={fxRate ? `₩${fxRate.toLocaleString()}` : "—"}
-            tone="neutral"
-            sub="live exchange rate"
+            label="On-Chain Payments"
+            value={String(onChainTxs.length)}
+            tone={onChainTxs.length > 0 ? "positive" : "neutral"}
+            sub="USDC on Base"
           />
         </section>
 
-        {/* Row 2: Kimchi Premium Table */}
+        {/* Row 2: Decision Layer — the hero panel */}
+        <section className="panel decisionPanel">
+          <div className="panelHeader">
+            <h2 className="panelTitle">AI Decision Layer</h2>
+            <div className="decisionBadges">
+              {arb?.marketCondition && (
+                <span
+                  className={`marketBadge ${arb.marketCondition}`}
+                >
+                  {arb.marketCondition === "favorable"
+                    ? "🟢 Favorable"
+                    : arb.marketCondition === "neutral"
+                      ? "🟡 Neutral"
+                      : "🔴 Unfavorable"}
+                </span>
+              )}
+              <span className="panelBadge">
+                <span className="liveDot" />
+                Live decisions
+              </span>
+            </div>
+          </div>
+          <p className="decisionSubtext">
+            Real-time arbitrage decisions for AI agents — not just data, but
+            actionable intelligence with confidence scoring.
+          </p>
+          <div className="decisionGrid">
+            {pairs.length === 0 && (
+              <p className="emptyText">Loading decisions…</p>
+            )}
+            {pairs.map((p) => (
+              <DecisionCard key={p.coin} pair={p} />
+            ))}
+          </div>
+        </section>
+
+        {/* Row 3: On-Chain Payment Feed */}
+        {onChainTxs.length > 0 && (
+          <section className="panel onchainPanel">
+            <div className="panelHeader">
+              <h2 className="panelTitle">On-Chain Payments</h2>
+              <a
+                href={`https://basescan.org/address/${CROSSFIN_WALLET}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="panelBadge panelBadgeLink"
+              >
+                View on BaseScan ↗
+              </a>
+            </div>
+            <div className="txList">
+              <div className="txHeader">
+                <span>Direction</span>
+                <span>Amount</span>
+                <span>Counterparty</span>
+                <span>When</span>
+              </div>
+              {onChainTxs.slice(0, 8).map((tx) => {
+                const isIncoming =
+                  tx.to.toLowerCase() === CROSSFIN_WALLET.toLowerCase();
+                return (
+                  <a
+                    key={tx.hash}
+                    href={`https://basescan.org/tx/${tx.hash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="txRow fadeIn"
+                  >
+                    <span
+                      className={`txDirection ${isIncoming ? "incoming" : "outgoing"}`}
+                    >
+                      {isIncoming ? "⬇ Received" : "⬆ Sent"}
+                    </span>
+                    <span className="txAmount">
+                      ${usdcAmount(tx.value, tx.tokenDecimal)} USDC
+                    </span>
+                    <span className="txAddr">
+                      {shortAddr(isIncoming ? tx.from : tx.to)}
+                    </span>
+                    <span className="txWhen">
+                      {timeAgoUnix(parseInt(tx.timeStamp))}
+                    </span>
+                  </a>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Row 3.5: Live Kimchi Premium Table */}
         <section className="panel">
           <div className="panelHeader">
             <h2 className="panelTitle">Live Kimchi Premium</h2>
@@ -335,12 +492,16 @@ export default function App() {
           </div>
         </section>
 
-        {/* Row 2.5: Agent Survival */}
+        {/* Row 4: Agent Survival */}
         {survival && (
-          <section className={`panel survivalSection ${survival.state === "ALIVE" ? "alive" : "stopped"}`}>
+          <section
+            className={`panel survivalSection ${survival.state === "ALIVE" ? "alive" : "stopped"}`}
+          >
             <div className="survivalHeader">
               <h2 className="panelTitle">Agent Survival</h2>
-              <span className={`survivalBadge ${survival.state === "ALIVE" ? "alive" : "stopped"}`}>
+              <span
+                className={`survivalBadge ${survival.state === "ALIVE" ? "alive" : "stopped"}`}
+              >
                 <span className="survivalDot" />
                 {survival.state}
               </span>
@@ -348,15 +509,21 @@ export default function App() {
             <div className="survivalMetrics">
               <div className="survivalMiniCard">
                 <span className="metricLabel">Calls Today</span>
-                <span className="metricValue neutral">{survival.metrics.callsToday.toLocaleString()}</span>
+                <span className="metricValue neutral">
+                  {survival.metrics.callsToday.toLocaleString()}
+                </span>
               </div>
               <div className="survivalMiniCard">
                 <span className="metricLabel">Calls This Week</span>
-                <span className="metricValue neutral">{survival.metrics.callsThisWeek.toLocaleString()}</span>
+                <span className="metricValue neutral">
+                  {survival.metrics.callsThisWeek.toLocaleString()}
+                </span>
               </div>
               <div className="survivalMiniCard">
                 <span className="metricLabel">Active Services</span>
-                <span className="metricValue neutral">{survival.metrics.activeServices.toLocaleString()}</span>
+                <span className="metricValue neutral">
+                  {survival.metrics.activeServices.toLocaleString()}
+                </span>
               </div>
             </div>
             <div className="survivalFeed">
@@ -370,10 +537,15 @@ export default function App() {
                 <p className="emptyText">No recent events</p>
               )}
               {recentCalls.slice(0, 8).map((evt, index) => (
-                <div key={`${evt.service}-${index}`} className="survivalEvent fadeIn">
+                <div
+                  key={`${evt.service}-${index}`}
+                  className="survivalEvent fadeIn"
+                >
                   <span className="survivalEventName">{evt.service}</span>
                   <span className="survivalEventStatus">
-                    <span className={`statusDotSmall ${evt.status === "success" ? "green" : "red"}`} />
+                    <span
+                      className={`statusDotSmall ${evt.status === "success" ? "green" : "red"}`}
+                    />
                     {evt.status}
                   </span>
                   <span className={`recentRt ${rtClass(evt.responseTime)}`}>
@@ -386,7 +558,7 @@ export default function App() {
           </section>
         )}
 
-        {/* Row 3: Two columns */}
+        {/* Row 5: Two columns */}
         <section className="twoCol">
           {/* Left: Top Services bar chart */}
           <div className="panel">
@@ -452,7 +624,7 @@ export default function App() {
           </div>
         </section>
 
-        {/* Row 4: System Health */}
+        {/* Row 6: System Health */}
         <section className="healthRow">
           <div className="healthCard">
             <span
@@ -475,8 +647,8 @@ export default function App() {
           <div className="healthCard">
             <span className="healthIcon">◈</span>
             <div className="healthInfo">
-              <span className="healthLabel">Gateway</span>
-              <span className="healthValue">crossfin.dev</span>
+              <span className="healthLabel">Payment</span>
+              <span className="healthValue">x402 USDC/Base</span>
             </div>
           </div>
           <div className="healthCard">
@@ -511,7 +683,7 @@ export default function App() {
               GitHub
             </a>
             <a
-              href="https://basescan.org"
+              href={`https://basescan.org/address/${CROSSFIN_WALLET}`}
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -542,6 +714,51 @@ function MetricCard({
       <span className="metricLabel">{label}</span>
       <span className={`metricValue ${tone}`}>{value}</span>
       <span className="metricSub">{sub}</span>
+    </div>
+  );
+}
+
+function DecisionCard({ pair }: { pair: ArbitragePair }) {
+  const d = pair.decision;
+  const actionClass = d
+    ? d.action === "EXECUTE"
+      ? "execute"
+      : d.action === "WAIT"
+        ? "wait"
+        : "skip"
+    : "skip";
+
+  return (
+    <div className={`decisionCard ${actionClass}`}>
+      <div className="decisionCardTop">
+        <span className="decisionCoin">{pair.coin}</span>
+        <span className={`decisionActionBadge ${actionClass}`}>
+          {d?.action ?? "—"}
+        </span>
+      </div>
+      <div className="decisionPremium">
+        <span
+          className={pair.premiumPct >= 0 ? "positive" : "negative"}
+        >
+          {pair.premiumPct >= 0 ? "+" : ""}
+          {pair.premiumPct.toFixed(3)}%
+        </span>
+        <span className="decisionDir">{pair.direction}</span>
+      </div>
+      {d && (
+        <div className="decisionMeta">
+          <div className="confidenceBar">
+            <div
+              className={`confidenceFill ${actionClass}`}
+              style={{ width: `${Math.round(d.confidence * 100)}%` }}
+            />
+          </div>
+          <span className="confidenceLabel">
+            {Math.round(d.confidence * 100)}% confidence
+          </span>
+          <span className="decisionReason">{d.reason}</span>
+        </div>
+      )}
     </div>
   );
 }
