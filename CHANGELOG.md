@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.1] - 2026-02-16
+
+### Changed
+
+- Switched x402 facilitator to v2 Base-mainnet compatible endpoint: `https://facilitator.payai.network`
+- Removed temporary v1 fallback path for `/api/premium/market/fx/usdkrw`; route is now handled by the shared v2 payment middleware like all premium endpoints
+- Updated API-discovery metadata (`x-x402.facilitator`) and public API version strings to `1.5.1`
+
 ## [1.5.0] - 2026-02-16
 
 ### Added

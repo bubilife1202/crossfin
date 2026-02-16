@@ -23,18 +23,6 @@ type Env = { Bindings: Bindings; Variables: Variables }
 
 type Caip2 = `${string}:${string}`
 
-const BASE_MAINNET_V1_NETWORK = 'base'
-const BASE_USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
-const USDKRW_PRICE_ATOMIC = '10000'
-
-function encodeBase64Json(value: unknown): string {
-  return btoa(JSON.stringify(value))
-}
-
-function decodeBase64Json<T>(value: string): T {
-  return JSON.parse(atob(value)) as T
-}
-
 function requireCaip2(value: string): Caip2 {
   const trimmed = value.trim()
   if (!trimmed || !trimmed.includes(':')) {
@@ -196,13 +184,13 @@ app.onError((err, c) => {
   return c.json({ error: 'Internal server error' }, 500)
 })
 
-app.get('/', (c) => c.json({ name: 'crossfin-api', version: '1.4.1', status: 'ok' }))
-app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '1.4.1', status: 'ok' }))
+app.get('/', (c) => c.json({ name: 'crossfin-api', version: '1.5.1', status: 'ok' }))
+app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '1.5.1', status: 'ok' }))
 
 app.get('/api/docs/guide', (c) => {
   return c.json({
     name: 'CrossFin Agent Guide',
-    version: '1.4.1',
+    version: '1.5.1',
     overview: {
       what: 'CrossFin is a service gateway for AI agents. Discover, compare, and call x402/REST services through a single API.',
       services: 'Use GET /api/registry/stats for the current active service counts.',
@@ -395,7 +383,7 @@ app.get('/.well-known/crossfin.json', (c) => {
   const origin = new URL(c.req.url).origin
   return c.json({
     name: 'CrossFin',
-    version: '1.4.1',
+    version: '1.5.1',
     description: 'Agent-first directory and gateway for x402 services and Korean market data.',
     urls: {
       website: 'https://crossfin.dev',
@@ -437,7 +425,7 @@ app.get('/api/openapi.json', (c) => {
     openapi: '3.1.0',
     info: {
       title: 'CrossFin — x402 Agent Services Gateway (Korea)',
-      version: '1.4.1',
+      version: '1.5.1',
       description: 'Service registry + pay-per-request APIs for AI agents. Discover x402 services and access Korean market data. Payments via x402 protocol with USDC on Base mainnet.',
       contact: { url: 'https://crossfin.dev' },
       'x-logo': { url: 'https://crossfin.dev/logos/crossfin.png' },
@@ -950,7 +938,7 @@ app.get('/api/openapi.json', (c) => {
       networkName: 'Base',
       asset: 'USDC',
       payTo: '0xe4E79Ce6a1377C58f0Bb99D023908858A4DB5779',
-      facilitator: 'https://facilitator.x402endpoints.online',
+      facilitator: 'https://facilitator.payai.network',
       pricing: {
         '/api/premium/arbitrage/kimchi': '$0.05',
         '/api/premium/arbitrage/kimchi/history': '$0.05',
@@ -973,10 +961,6 @@ app.get('/api/openapi.json', (c) => {
 app.use(
   '/api/premium/*',
   async (c, next) => {
-    if (c.req.method === 'GET' && c.req.path === '/api/premium/market/fx/usdkrw') {
-      return next()
-    }
-
     const network = requireCaip2(c.env.X402_NETWORK)
     const facilitatorClient = new HTTPFacilitatorClient({ url: c.env.FACILITATOR_URL })
     const resourceServer = new x402ResourceServer(facilitatorClient)
@@ -4385,110 +4369,7 @@ app.get('/api/premium/market/korea', async (c) => {
 })
 
 app.get('/api/premium/market/fx/usdkrw', async (c) => {
-  const facilitatorUrl = c.env.FACILITATOR_URL
-  const paymentRequired = {
-    x402Version: 1 as const,
-    error: 'X-PAYMENT header is required',
-    accepts: [
-      {
-        scheme: 'exact',
-        network: BASE_MAINNET_V1_NETWORK,
-        maxAmountRequired: USDKRW_PRICE_ATOMIC,
-        resource: c.req.url,
-        description: 'USD/KRW exchange rate (for converting KRW exchange prices into USD).',
-        mimeType: 'application/json',
-        payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-        maxTimeoutSeconds: 300,
-        asset: BASE_USDC_ADDRESS,
-        extra: {
-          name: 'USD Coin',
-          version: '2',
-        },
-      },
-    ],
-  }
-
-  const paymentHeader = c.req.header('x-payment') ?? c.req.header('payment-signature')
-  if (!paymentHeader) {
-    c.header('PAYMENT-REQUIRED', encodeBase64Json(paymentRequired))
-    return c.json({}, 402)
-  }
-
-  let paymentPayload: unknown
-  try {
-    paymentPayload = decodeBase64Json<unknown>(paymentHeader)
-  } catch {
-    c.header(
-      'PAYMENT-REQUIRED',
-      encodeBase64Json({
-        ...paymentRequired,
-        error: 'invalid_payment_header',
-      })
-    )
-    return c.json({}, 402)
-  }
-
-  const paymentRequirements = paymentRequired.accepts[0]
-  if (!paymentRequirements) {
-    return c.json({ error: 'payment_requirements_unavailable' }, 500)
-  }
-
-  const verifyResponse = await fetch(`${facilitatorUrl}/verify`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      x402Version: 1,
-      paymentPayload,
-      paymentRequirements,
-    }),
-  })
-
-  const verifyResult = await verifyResponse.json<{ isValid?: boolean; invalidReason?: string }>()
-  if (!verifyResult?.isValid) {
-    c.header(
-      'PAYMENT-REQUIRED',
-      encodeBase64Json({
-        ...paymentRequired,
-        error: verifyResult.invalidReason ?? 'invalid_payment',
-      })
-    )
-    return c.json({}, 402)
-  }
-
   const krwRate = await fetchKrwRate()
-
-  const settleResponse = await fetch(`${facilitatorUrl}/settle`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      x402Version: 1,
-      paymentPayload,
-      paymentRequirements,
-    }),
-  })
-
-  const settleResult = await settleResponse.json<{
-    success?: boolean
-    errorReason?: string
-    transaction?: string
-    network?: string
-  }>()
-
-  if (!settleResult?.success) {
-    c.header(
-      'PAYMENT-REQUIRED',
-      encodeBase64Json({
-        ...paymentRequired,
-        error: settleResult.errorReason ?? 'settlement_failed',
-      })
-    )
-    return c.json({}, 402)
-  }
-
-  const encodedSettle = encodeBase64Json(settleResult)
-  c.header('PAYMENT-RESPONSE', encodedSettle)
-  c.header('X-PAYMENT-RESPONSE', encodedSettle)
-
   return c.json({
     paid: true,
     service: 'crossfin-usdkrw',
@@ -5072,7 +4953,7 @@ api.get('/survival/status', async (c) => {
   return c.json({
     alive,
     state: alive ? 'ALIVE' : 'STOPPED',
-    version: '1.4.1',
+    version: '1.5.1',
     metrics: {
       totalCalls: totalCalls?.cnt ?? 0,
       callsToday,
@@ -5336,4 +5217,35 @@ async function audit(
   ).bind(crypto.randomUUID(), agentId, action, resource, resourceId, detail ?? null, result).run()
 }
 
-export default app
+export default {
+  fetch: app.fetch,
+  async scheduled(event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
+    // Run kimchi premium snapshot every hour
+    const [bithumbData, binancePrices, krwRate] = await Promise.all([
+      fetchBithumbAll(),
+      fetchGlobalPrices(),
+      fetchKrwRate(),
+    ])
+
+    const premiums = calcPremiums(bithumbData, binancePrices, krwRate)
+
+    const insertSql = 'INSERT INTO kimchi_snapshots (id, coin, bithumb_krw, binance_usd, premium_pct, krw_usd_rate, volume_24h_usd) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    const statements = premiums.map((p) => env.DB.prepare(insertSql).bind(
+      crypto.randomUUID(),
+      p.coin,
+      p.bithumbKrw,
+      p.binanceUsd,
+      p.premiumPct,
+      krwRate,
+      p.volume24hUsd,
+    ))
+
+    if (statements.length > 0) {
+      await env.DB.batch(statements)
+    }
+
+    await env.DB.prepare(
+      'INSERT INTO audit_logs (id, agent_id, action, resource, resource_id, detail, result) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).bind(crypto.randomUUID(), null, 'scheduled.snapshot_kimchi', 'kimchi_snapshots', null, `snapshots=${statements.length}`, 'success').run()
+  },
+}
