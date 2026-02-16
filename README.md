@@ -1,6 +1,6 @@
 # CrossFin
 
-**The x402 Agent Services Gateway** — Discover, call, and pay for AI agent services in one place. 162 services (30 CrossFin + 149 external), Korean market APIs, MCP server, and structured agent guides. All payments via [x402](https://x402.org) protocol with USDC on Base mainnet.
+**The x402 Agent Services Gateway** — Discover, call, and pay for AI agent services in one place. 179 services (30 CrossFin + 149 external), Korean market APIs, MCP server, and structured agent guides. All payments via [x402](https://x402.org) protocol with USDC on Base mainnet.
 
 **Live:** https://crossfin.dev | **Demo:** https://live.crossfin.dev
 
@@ -8,7 +8,7 @@
 
 CrossFin is a **gateway and registry for AI agent services**, built on the x402 payment protocol.
 
-- **Service Registry:** 162 verified services from multiple x402 providers (CrossFin, Einstein AI, x402engine)
+- **Service Registry:** 179 verified services from multiple x402 providers (CrossFin, Einstein AI, x402engine)
 - **Agent Guide API:** Structured JSON guide at `/api/docs/guide` — service catalog, payment flow, code examples, MCP setup
 - **Agent Discovery:** `/.well-known/crossfin.json` for automatic service detection
 - **MCP Server:** 13 tools for Claude Desktop and other MCP clients — search, browse, call, and pay for services
@@ -23,9 +23,9 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 
 | Problem | CrossFin Solution |
 |---------|-------------------|
-| x402 services are scattered across the internet | Unified registry with 162 verified services |
+| x402 services are scattered across the internet | Unified registry with 179 verified services |
 | Agents can't discover available APIs | Search API + `.well-known/crossfin.json` + MCP server |
-| No Korean market data for agents | 13 proprietary Korea APIs (Bithumb, Upbit, Coinone, trading signals) |
+| No Korean market data for agents | 30 proprietary Korea APIs (crypto + stocks + ETF + themes + indices) |
 | No structured docs for agents | `/api/docs/guide` — JSON guide with schemas, examples, payment flow |
 | No revenue model for gateway operators | 5% proxy fee on every call through CrossFin |
 | Crypto is hard for end users | Roadmap: fiat on-ramp (KRW → USDC auto-conversion) |
@@ -39,7 +39,7 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 | `GET /api/registry` | List all services (filterable by category, provider) |
 | `GET /api/registry/search?q=...` | Full-text search across services |
 | `GET /api/registry/categories` | Category breakdown with counts |
-| `GET /api/registry/stats` | Total services: 162 (13 CrossFin + 149 external) |
+| `GET /api/registry/stats` | Total services: 179 (30 CrossFin + 149 external) |
 | `GET /api/registry/:id` | Service detail with guide, inputSchema, outputExample |
 | `POST /api/registry` | Register a new service (requires `X-Agent-Key`) |
 
@@ -110,6 +110,17 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 
 CrossFin includes an MCP (Model Context Protocol) server for Claude Desktop and other MCP clients. 13 tools available:
 
+### Install
+
+```bash
+# Quick run (recommended)
+npx -y crossfin-mcp
+
+# Or global install
+npm i -g crossfin-mcp
+crossfin-mcp
+```
+
 | Tool | Description |
 |------|-------------|
 | `search_services` | Search the service registry by keyword |
@@ -127,6 +138,23 @@ CrossFin includes an MCP (Model Context Protocol) server for Claude Desktop and 
 | `call_paid_service` | Call a paid API with automatic x402 USDC payment (returns data + txHash + basescan link) |
 
 ### Claude Desktop Config
+
+```json
+{
+  "mcpServers": {
+    "crossfin": {
+      "command": "npx",
+      "args": ["-y", "crossfin-mcp"],
+      "env": {
+        "CROSSFIN_API_URL": "https://crossfin.dev",
+        "EVM_PRIVATE_KEY": "0x..."
+      }
+    }
+  }
+}
+```
+
+### Claude Desktop Config (Local Build)
 
 ```json
 {
@@ -219,7 +247,7 @@ Phase 3 (6 months) → Agent banking: wallet management, budget controls, fiat o
 
 ```
 apps/
-    api/          Cloudflare Workers API (v1.4.0)
+    api/          Cloudflare Workers API (v1.7.1)
     src/
       index.ts    Routes, x402 paywall, registry, guide, seeds, proxy, analytics
     migrations/

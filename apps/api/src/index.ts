@@ -366,7 +366,10 @@ app.get('/api/docs/guide', (c) => {
     },
     mcpServer: {
       description: 'CrossFin MCP server for Claude Desktop and other MCP clients.',
-      install: 'cd apps/mcp-server && npm install && npm run build',
+      npmPackage: 'crossfin-mcp',
+      install: 'npx -y crossfin-mcp',
+      globalInstall: 'npm i -g crossfin-mcp && crossfin-mcp',
+      localBuild: 'cd apps/mcp-server && npm install && npm run build',
       tools: [
         { name: 'search_services', description: 'Search the service registry by keyword' },
         { name: 'list_services', description: 'List services with optional category filter' },
@@ -383,6 +386,18 @@ app.get('/api/docs/guide', (c) => {
         { name: 'call_paid_service', description: 'Call a paid API with automatic x402 USDC payment (returns data + txHash + basescan link)' },
       ],
       claudeDesktopConfig: {
+        mcpServers: {
+          crossfin: {
+            command: 'npx',
+            args: ['-y', 'crossfin-mcp'],
+            env: {
+              CROSSFIN_API_URL: 'https://crossfin.dev',
+              EVM_PRIVATE_KEY: '0x...',
+            },
+          },
+        },
+      },
+      claudeDesktopConfigLocalBuild: {
         mcpServers: {
           crossfin: {
             command: 'node',
@@ -426,6 +441,8 @@ app.get('/.well-known/crossfin.json', (c) => {
     },
     mcp: {
       name: 'crossfin',
+      package: 'crossfin-mcp',
+      run: 'npx -y crossfin-mcp',
       repo: 'https://github.com/bubilife1202/crossfin/tree/main/apps/mcp-server',
       env: { CROSSFIN_API_URL: origin },
       tools: CROSSFIN_MCP_TOOLS,

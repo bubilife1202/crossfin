@@ -56,6 +56,8 @@ function buildWellKnown(catalog) {
     },
     mcp: {
       name: 'crossfin',
+      package: 'crossfin-mcp',
+      run: 'npx -y crossfin-mcp',
       repo: 'https://github.com/bubilife1202/crossfin/tree/main/apps/mcp-server',
       env: {
         CROSSFIN_API_URL: 'https://crossfin.dev',
