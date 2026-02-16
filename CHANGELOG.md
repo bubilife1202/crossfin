@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.5.0] - 2026-02-16
+
+### Added
+
+**x402 v1 Payment Fallback — First real on-chain payment achieved**
+
+- v1 payment fallback for `/api/premium/market/fx/usdkrw` — bypasses broken v2 facilitator, handles verify/settle directly
+- `encodeBase64Json()` / `decodeBase64Json()` helper functions for v1 payment header encoding
+- Constants: `BASE_MAINNET_V1_NETWORK`, `BASE_USDC_ADDRESS`, `USDKRW_PRICE_ATOMIC`
+- Proven on-chain: [basescan tx 0xd8a054...](https://basescan.org/tx/0xd8a05544c6ada7f6eab84675a15dcdb0eeecd38b0d6df4c1e5f42bf26e3226f9)
+
+**Decision Layer — Arbitrage & Cross-Exchange APIs upgraded from data feeds to decision services**
+
+- **Arbitrage Decision Service** (`/api/premium/arbitrage/opportunities` $0.10)
+  - `action`: EXECUTE / WAIT / SKIP recommendation per opportunity
+  - `confidence`: 0–1 score based on adjusted profit vs risk
+  - `slippageEstimatePct`: Real-time slippage estimate from live Bithumb orderbook depth
+  - `transferTimeMin`: Per-coin transfer time between exchanges (BTC 20min, XRP 30sec, etc.)
+  - `premiumTrend`: rising / falling / stable based on 6-hour kimchi_snapshots history
+  - `reason`: Human-readable explanation of the recommendation
+  - `executeCandidates`: Top-level count of EXECUTE opportunities
+  - `marketCondition`: favorable / neutral / unfavorable overall assessment
+
+- **Cross-Exchange Decision Service** (`/api/premium/market/cross-exchange` $0.08)
+  - `action`: ARBITRAGE / HOLD / MONITOR signal per coin
+  - `bestBuyExchange`: Cheapest domestic exchange for each coin
+  - `bestSellExchange`: Most expensive domestic exchange for each coin
+  - `spreadPct`: Domestic exchange spread per coin
+  - `arbitrageCandidateCount`: Top-level count of ARBITRAGE signals
+
+### Changed
+- OpenAPI spec updated with new decision layer fields and enums
+- Service registry descriptions updated to reflect decision service positioning
+- Agent guide (`/api/docs/guide`) updated with new output examples and usage instructions
+
 ## [1.4.1] - 2026-02-16
 
 ### Fixed

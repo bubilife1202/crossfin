@@ -8,3 +8,7 @@
 
 .sisyphus/
 WALLETS.md
+
+# Screenshots / debug artifacts
+*.png
+cloudflare-*.md

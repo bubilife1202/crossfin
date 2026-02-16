@@ -23,6 +23,18 @@ type Env = { Bindings: Bindings; Variables: Variables }
 
 type Caip2 = `${string}:${string}`
 
+const BASE_MAINNET_V1_NETWORK = 'base'
+const BASE_USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
+const USDKRW_PRICE_ATOMIC = '10000'
+
+function encodeBase64Json(value: unknown): string {
+  return btoa(JSON.stringify(value))
+}
+
+function decodeBase64Json<T>(value: string): T {
+  return JSON.parse(atob(value)) as T
+}
+
 function requireCaip2(value: string): Caip2 {
   const trimmed = value.trim()
   if (!trimmed || !trimmed.includes(':')) {
@@ -250,9 +262,9 @@ app.get('/api/docs/guide', (c) => {
       },
       {
         id: 'crossfin_arbitrage_opportunities',
-        name: 'Arbitrage Opportunities',
+        name: 'Arbitrage Decision Service',
         price: '$0.10',
-        description: 'Pre-calculated profitable arbitrage routes with fees and risk scores.',
+        description: 'AI-ready arbitrage decisions: EXECUTE/WAIT/SKIP with slippage, premium trends, and confidence scores.',
       },
       {
         id: 'crossfin_bithumb_orderbook',
@@ -304,9 +316,9 @@ app.get('/api/docs/guide', (c) => {
       },
       {
         id: 'crossfin_cross_exchange',
-        name: 'Cross-Exchange Comparison',
+        name: 'Cross-Exchange Decision Service',
         price: '$0.08',
-        description: 'Compare crypto prices across Bithumb, Upbit, Coinone, and Binance simultaneously.',
+        description: 'Compare 4 exchanges with ARBITRAGE/HOLD/MONITOR signals and best buy/sell routing.',
       },
       {
         id: 'crossfin_korea_headlines',
@@ -551,18 +563,20 @@ app.get('/api/openapi.json', (c) => {
       '/api/premium/arbitrage/opportunities': {
         get: {
           operationId: 'arbitrageOpportunities',
-          summary: 'Profitable Arbitrage Routes — $0.10 USDC',
-          description: 'Pre-calculated profitable arbitrage routes between Korean and global crypto exchanges. Includes direction, estimated profit after fees (Bithumb 0.25% + Binance 0.10%), volume, and execution risk score. Payment: $0.10 USDC on Base via x402.',
+          summary: 'Arbitrage Decision Service — $0.10 USDC',
+          description: 'AI-ready arbitrage decision service for Korean vs global crypto exchanges. Returns actionable recommendations (EXECUTE/WAIT/SKIP) with slippage estimates, premium trends, transfer time risk, and confidence scores. Includes direction, estimated profit after fees (Bithumb 0.25% + Binance 0.10%), and market condition assessment. Payment: $0.10 USDC on Base via x402.',
           tags: ['Paid — x402'],
           responses: {
             '200': {
-              description: 'Arbitrage opportunities sorted by profitability',
+              description: 'Arbitrage opportunities with decision layer',
               content: { 'application/json': { schema: { type: 'object', properties: {
                 paid: { type: 'boolean' },
                 service: { type: 'string' },
                 krwUsdRate: { type: 'number' },
                 totalOpportunities: { type: 'integer' },
                 profitableCount: { type: 'integer' },
+                executeCandidates: { type: 'integer' },
+                marketCondition: { type: 'string', enum: ['favorable', 'neutral', 'unfavorable'] },
                 estimatedFeesNote: { type: 'string' },
                 bestOpportunity: { type: 'object' },
                 opportunities: { type: 'array', items: { type: 'object', properties: {
@@ -570,6 +584,10 @@ app.get('/api/openapi.json', (c) => {
                   estimatedFeesPct: { type: 'number' }, netProfitPct: { type: 'number' },
                   profitPer10kUsd: { type: 'number' }, volume24hUsd: { type: 'number' },
                   riskScore: { type: 'string' }, profitable: { type: 'boolean' },
+                  slippageEstimatePct: { type: 'number' }, transferTimeMin: { type: 'number' },
+                  premiumTrend: { type: 'string', enum: ['rising', 'falling', 'stable'] },
+                  action: { type: 'string', enum: ['EXECUTE', 'WAIT', 'SKIP'] },
+                  confidence: { type: 'number' }, reason: { type: 'string' },
                 } } },
                 at: { type: 'string', format: 'date-time' },
               } } } },
@@ -751,12 +769,21 @@ app.get('/api/openapi.json', (c) => {
       '/api/premium/market/cross-exchange': {
         get: {
           operationId: 'crossExchangeComparison',
-          summary: 'Cross-Exchange Comparison (Bithumb vs Upbit vs Coinone vs Binance)',
-          description: 'Compare crypto prices across 4 exchanges. Shows kimchi premium per exchange and domestic arbitrage opportunities.',
+          summary: 'Cross-Exchange Decision Service (Bithumb vs Upbit vs Coinone vs Binance)',
+          description: 'Compare crypto prices across 4 exchanges with actionable recommendations. Returns per-coin best buy/sell exchange, spread analysis, and action signals (ARBITRAGE/HOLD/MONITOR). Shows kimchi premium per exchange and domestic arbitrage opportunities.',
           parameters: [{ name: 'coins', in: 'query', schema: { type: 'string' }, description: 'Comma-separated coins (default: BTC,ETH,XRP,DOGE,ADA,SOL)' }],
           tags: ['Premium — $0.08 USDC'],
           responses: {
-            '200': { description: 'Cross-exchange comparison', content: { 'application/json': { schema: { type: 'object' } } } },
+            '200': { description: 'Cross-exchange comparison with decision signals', content: { 'application/json': { schema: { type: 'object', properties: {
+              paid: { type: 'boolean' }, service: { type: 'string' },
+              coinsCompared: { type: 'integer' }, krwUsdRate: { type: 'number' },
+              arbitrageCandidateCount: { type: 'integer' },
+              coins: { type: 'array', items: { type: 'object', properties: {
+                coin: { type: 'string' }, bestBuyExchange: { type: 'string' }, bestSellExchange: { type: 'string' },
+                spreadPct: { type: 'number' }, action: { type: 'string', enum: ['ARBITRAGE', 'HOLD', 'MONITOR'] },
+              } } },
+              at: { type: 'string', format: 'date-time' },
+            } } } } },
             '402': { description: 'Payment required — $0.08 USDC on Base mainnet' },
           },
         },
@@ -946,6 +973,10 @@ app.get('/api/openapi.json', (c) => {
 app.use(
   '/api/premium/*',
   async (c, next) => {
+    if (c.req.method === 'GET' && c.req.path === '/api/premium/market/fx/usdkrw') {
+      return next()
+    }
+
     const network = requireCaip2(c.env.X402_NETWORK)
     const facilitatorClient = new HTTPFacilitatorClient({ url: c.env.FACILITATOR_URL })
     const resourceServer = new x402ResourceServer(facilitatorClient)
@@ -1029,13 +1060,13 @@ app.use(
             payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
             maxTimeoutSeconds: 300,
           },
-          description: 'Pre-calculated profitable arbitrage routes between Korean and global crypto exchanges. Includes estimated profit after fees, volume, and execution risk score.',
+          description: 'AI-ready arbitrage decision service. Returns EXECUTE/WAIT/SKIP recommendations with slippage estimates, premium trends, transfer time risk, and confidence scores for Korean vs global exchange arbitrage.',
           mimeType: 'application/json',
           extensions: {
             ...declareDiscoveryExtension({
               output: {
-                example: { paid: true, service: 'crossfin-arbitrage-opportunities', totalOpportunities: 10, profitableCount: 3, bestOpportunity: { coin: 'BTC', direction: 'buy-global-sell-korea', netProfitPct: 1.85, riskScore: 'low' }, opportunities: [] },
-                schema: { properties: { paid: { type: 'boolean' }, totalOpportunities: { type: 'number' }, profitableCount: { type: 'number' }, opportunities: { type: 'array' } }, required: ['paid', 'totalOpportunities', 'profitableCount', 'opportunities'] },
+                example: { paid: true, service: 'crossfin-arbitrage-opportunities', totalOpportunities: 10, profitableCount: 3, executeCandidates: 2, marketCondition: 'favorable', bestOpportunity: { coin: 'BTC', direction: 'buy-global-sell-korea', netProfitPct: 1.85, action: 'EXECUTE', confidence: 0.87 }, opportunities: [] },
+                schema: { properties: { paid: { type: 'boolean' }, totalOpportunities: { type: 'number' }, profitableCount: { type: 'number' }, executeCandidates: { type: 'number' }, marketCondition: { type: 'string' }, opportunities: { type: 'array' } }, required: ['paid', 'totalOpportunities', 'profitableCount', 'executeCandidates', 'marketCondition', 'opportunities'] },
               },
             }),
           },
@@ -1223,7 +1254,7 @@ app.use(
             payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
             maxTimeoutSeconds: 300,
           },
-          description: 'Cross-exchange comparison across Bithumb, Upbit, Coinone vs Binance. Shows kimchi premium per exchange and domestic arbitrage opportunities.',
+          description: 'Cross-exchange decision service. Compares prices across Bithumb, Upbit, Coinone, and Binance with ARBITRAGE/HOLD/MONITOR signals, best buy/sell exchange per coin, and spread analysis.',
           mimeType: 'application/json',
         },
         'GET /api/premium/news/korea/headlines': {
@@ -1427,16 +1458,19 @@ const CROSSFIN_RUNTIME_DOCS: Record<string, CrossfinRuntimeDocs> = {
   },
   crossfin_arbitrage_opportunities: {
     guide: {
-      whatItDoes: 'Pre-calculated profitable arbitrage routes between Korean and global exchanges with fee assumptions and risk scoring.',
+      whatItDoes: 'AI-ready arbitrage decision service. Analyzes Korean vs global exchange prices, estimates slippage from live orderbooks, checks premium trends, and returns actionable EXECUTE/WAIT/SKIP recommendations with confidence scores.',
       whenToUse: [
-        'Find best routes to exploit kimchi premium with fees considered',
-        'Generate ranked opportunities list for execution bots',
-        'Monitor market stress (risk score shifts) across routes',
+        'Get instant EXECUTE/WAIT/SKIP decisions for kimchi premium arbitrage',
+        'Build autonomous trading agents that act on confidence scores',
+        'Monitor market conditions (favorable/neutral/unfavorable) for timing entry',
+        'Estimate real execution costs including slippage and transfer time risk',
       ],
       howToCall: [
         'Send GET request',
         'Pay via x402 if HTTP 402 is returned',
-        'Read opportunities[] sorted by net profitability',
+        'Check marketCondition for overall assessment',
+        'Filter opportunities[] where action === "EXECUTE" for immediate candidates',
+        'Use confidence score to size positions (higher confidence = larger allocation)',
       ],
       exampleCurl: 'curl -s -D - https://crossfin.dev/api/premium/arbitrage/opportunities -o /dev/null',
       relatedServiceIds: ['crossfin_kimchi_premium', 'crossfin_cross_exchange'],
@@ -1447,9 +1481,19 @@ const CROSSFIN_RUNTIME_DOCS: Record<string, CrossfinRuntimeDocs> = {
       service: 'crossfin-arbitrage-opportunities',
       totalOpportunities: 24,
       profitableCount: 8,
-      bestOpportunity: { coin: 'XRP', netProfitPct: 1.2, direction: 'Buy global, sell Korea' },
-      opportunities: [{ coin: 'XRP', netProfitPct: 1.2, grossPremiumPct: 2.3, estimatedFeesPct: 1.1, riskScore: 'medium' }],
-      at: '2026-02-15T00:00:00.000Z',
+      executeCandidates: 3,
+      marketCondition: 'favorable',
+      bestOpportunity: {
+        coin: 'XRP', netProfitPct: 1.2, direction: 'buy-global-sell-korea',
+        slippageEstimatePct: 0.15, transferTimeMin: 0.5, premiumTrend: 'rising',
+        action: 'EXECUTE', confidence: 0.87, reason: 'Adjusted profit 1.05% exceeds risk 0.12% with strong margin',
+      },
+      opportunities: [{
+        coin: 'XRP', netProfitPct: 1.2, grossPremiumPct: 2.3, estimatedFeesPct: 1.1, riskScore: 'low',
+        slippageEstimatePct: 0.15, transferTimeMin: 0.5, premiumTrend: 'rising',
+        action: 'EXECUTE', confidence: 0.87, reason: 'Adjusted profit 1.05% exceeds risk 0.12% with strong margin',
+      }],
+      at: '2026-02-16T00:00:00.000Z',
     },
   },
   crossfin_bithumb_orderbook: {
@@ -1647,22 +1691,34 @@ const CROSSFIN_RUNTIME_DOCS: Record<string, CrossfinRuntimeDocs> = {
   },
   crossfin_cross_exchange: {
     guide: {
-      whatItDoes: 'Compare crypto prices across Bithumb, Upbit, Coinone, and Binance in one response. Includes premiums per exchange.',
+      whatItDoes: 'Cross-exchange decision service. Compares crypto prices across Bithumb, Upbit, Coinone, and Binance with actionable signals. Returns best buy/sell exchange per coin and ARBITRAGE/HOLD/MONITOR recommendations.',
       whenToUse: [
-        'Compare KRW prices vs global USD prices across exchanges',
-        'Identify domestic vs global dislocations by exchange',
-        'Generate an exchange-aware kimchi premium view',
+        'Find the cheapest exchange to buy and most expensive to sell',
+        'Get instant ARBITRAGE/HOLD/MONITOR signals for domestic exchange spreads',
+        'Compare KRW prices vs global USD prices across all 4 exchanges',
+        'Build cross-exchange arbitrage bots using action signals',
       ],
       howToCall: [
-        'Send GET request',
+        'Send GET request (optional ?coins=BTC,ETH,XRP)',
         'Pay via x402 if HTTP 402 is returned',
-        'Use comparison[] to compute per-exchange spreads',
+        'Check arbitrageCandidateCount in summary for quick assessment',
+        'Filter coins[] where action === "ARBITRAGE" for immediate opportunities',
+        'Use bestBuyExchange and bestSellExchange for execution routing',
       ],
       exampleCurl: 'curl -s -D - https://crossfin.dev/api/premium/market/cross-exchange -o /dev/null',
-      relatedServiceIds: ['crossfin_kimchi_premium', 'crossfin_usdkrw'],
+      relatedServiceIds: ['crossfin_kimchi_premium', 'crossfin_usdkrw', 'crossfin_arbitrage_opportunities'],
     },
-    inputSchema: { type: 'http', method: 'GET', query: {} },
-    outputExample: { paid: true, service: 'crossfin-cross-exchange', comparisons: [{ coin: 'BTC', bithumbKrw: 1, upbitKrw: 1, coinoneKrw: 1, binanceUsd: 1, premiumPctBithumb: 2.1 }], at: '2026-02-15T00:00:00.000Z' },
+    inputSchema: { type: 'http', method: 'GET', query: { coins: 'Comma-separated coins (default: BTC,ETH,XRP,DOGE,ADA,SOL)' } },
+    outputExample: {
+      paid: true, service: 'crossfin-cross-exchange', coinsCompared: 6, krwUsdRate: 1450,
+      arbitrageCandidateCount: 2,
+      coins: [{
+        coin: 'BTC', bestBuyExchange: 'coinone', bestSellExchange: 'bithumb', spreadPct: 0.65,
+        action: 'ARBITRAGE', kimchiPremium: { average: 2.1 },
+      }],
+      summary: { avgKimchiPremium: 2.1, arbitrageCandidateCount: 2, bestDomesticArbitrage: { coin: 'BTC', buy: 'coinone', sell: 'bithumb', spreadPct: 0.65, action: 'ARBITRAGE' } },
+      at: '2026-02-16T00:00:00.000Z',
+    },
   },
   crossfin_korea_headlines: {
     guide: {
@@ -2070,8 +2126,8 @@ async function ensureRegistrySeeded(
     },
     {
       id: 'crossfin_arbitrage_opportunities',
-      name: 'CrossFin Arbitrage Opportunities',
-      description: 'Pre-calculated profitable arbitrage routes between Korean and global exchanges.',
+      name: 'CrossFin Arbitrage Decision Service',
+      description: 'AI-ready arbitrage decision service. Returns EXECUTE/WAIT/SKIP recommendations with slippage estimates, premium trends, confidence scores, and transfer time risk analysis for Korean vs global exchange arbitrage.',
       provider: 'crossfin',
       category: 'korea-crypto',
       endpoint: 'https://crossfin.dev/api/premium/arbitrage/opportunities',
@@ -2082,7 +2138,7 @@ async function ensureRegistrySeeded(
       payTo: receiverAddress,
       status: 'active',
       isCrossfin: true,
-      tags: ['korea', 'crypto', 'arbitrage'],
+      tags: ['korea', 'crypto', 'arbitrage', 'decision-service', 'agent-ready'],
     },
     {
       id: 'crossfin_bithumb_orderbook',
@@ -2214,8 +2270,8 @@ async function ensureRegistrySeeded(
     },
     {
       id: 'crossfin_cross_exchange',
-      name: 'CrossFin Cross-Exchange Comparison',
-      description: 'Compare crypto prices across Bithumb, Upbit, Coinone, and Binance. Shows kimchi premium per exchange and domestic arbitrage opportunities.',
+      name: 'CrossFin Cross-Exchange Decision Service',
+      description: 'Cross-exchange decision service with ARBITRAGE/HOLD/MONITOR signals. Compares prices across Bithumb, Upbit, Coinone, and Binance. Returns best buy/sell exchange per coin, spread analysis, and actionable recommendations.',
       provider: 'crossfin',
       category: 'korea-crypto',
       endpoint: 'https://crossfin.dev/api/premium/market/cross-exchange',
@@ -2226,7 +2282,7 @@ async function ensureRegistrySeeded(
       payTo: receiverAddress,
       status: 'active',
       isCrossfin: true,
-      tags: ['korea', 'x402', 'crossfin', 'exchange', 'comparison', 'arbitrage', 'kimchi-premium'],
+      tags: ['korea', 'x402', 'crossfin', 'exchange', 'comparison', 'arbitrage', 'kimchi-premium', 'decision-service', 'agent-ready'],
     },
     {
       id: 'crossfin_korea_headlines',
@@ -3654,6 +3710,132 @@ const DEFAULT_CROSS_EXCHANGE_COINS = ['BTC', 'ETH', 'XRP', 'DOGE', 'ADA', 'SOL']
 const BITHUMB_FEES_PCT = 0.25 // Bithumb maker/taker fee
 const BINANCE_FEES_PCT = 0.10 // Binance spot fee
 
+// --- Decision Layer: Transfer times (minutes) per coin ---
+const TRANSFER_TIME_MIN: Record<string, number> = {
+  BTC: 20, ETH: 5, XRP: 0.5, SOL: 1, DOGE: 10, ADA: 5,
+  DOT: 5, LINK: 5, AVAX: 2, EOS: 1, TRX: 1, MATIC: 5,
+}
+const DEFAULT_TRANSFER_TIME_MIN = 10
+
+function getTransferTime(coin: string): number {
+  return TRANSFER_TIME_MIN[coin.toUpperCase()] ?? DEFAULT_TRANSFER_TIME_MIN
+}
+
+// Estimate slippage from orderbook depth for a given trade size in KRW
+function estimateSlippage(
+  asks: Array<{ price: string; quantity: string }>,
+  tradeAmountKrw: number,
+): number {
+  if (!asks.length || tradeAmountKrw <= 0) return 0
+  const firstAsk = asks[0]
+  if (!firstAsk) return 0
+  const bestAsk = parseFloat(firstAsk.price)
+  if (!bestAsk || !Number.isFinite(bestAsk)) return 0
+
+  let remaining = tradeAmountKrw
+  let totalCost = 0
+  let totalQty = 0
+
+  for (const level of asks) {
+    const price = parseFloat(level.price)
+    const qty = parseFloat(level.quantity)
+    if (!Number.isFinite(price) || !Number.isFinite(qty) || price <= 0 || qty <= 0) continue
+
+    const levelValue = price * qty
+    if (remaining <= levelValue) {
+      const fillQty = remaining / price
+      totalCost += fillQty * price
+      totalQty += fillQty
+      remaining = 0
+      break
+    } else {
+      totalCost += qty * price
+      totalQty += qty
+      remaining -= levelValue
+    }
+  }
+
+  if (totalQty === 0) return 2.0 // default high slippage if no depth
+  const avgPrice = totalCost / totalQty
+  return Math.round(((avgPrice - bestAsk) / bestAsk) * 10000) / 100 // percentage
+}
+
+// Get premium trend from kimchi_snapshots (last N hours)
+async function getPremiumTrend(
+  db: D1Database,
+  coin: string,
+  hours: number = 6,
+): Promise<{ trend: 'rising' | 'falling' | 'stable'; volatilityPct: number }> {
+  try {
+    const rangeArg = `-${hours} hours`
+    const sql = `
+      SELECT premium_pct AS premiumPct, created_at AS createdAt
+      FROM kimchi_snapshots
+      WHERE datetime(created_at) >= datetime('now', ?)
+        AND coin = ?
+      ORDER BY datetime(created_at) ASC
+    `
+    const res = await db.prepare(sql).bind(rangeArg, coin).all<{ premiumPct: number; createdAt: string }>()
+    const rows = res.results ?? []
+
+    if (rows.length < 2) return { trend: 'stable' as const, volatilityPct: 0 }
+
+    const firstRow = rows[0]!
+    const lastRow = rows[rows.length - 1]!
+    const first = firstRow.premiumPct
+    const last = lastRow.premiumPct
+    const diff = last - first
+
+    const values = rows.map((r) => r.premiumPct)
+    const mean = values.reduce((s, v) => s + v, 0) / values.length
+    const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length
+    const volatilityPct = Math.round(Math.sqrt(variance) * 100) / 100
+
+    const trend: 'rising' | 'falling' | 'stable' =
+      diff > 0.3 ? 'rising' : diff < -0.3 ? 'falling' : 'stable'
+
+    return { trend, volatilityPct }
+  } catch {
+    return { trend: 'stable', volatilityPct: 0 }
+  }
+}
+
+// Compute action recommendation
+function computeAction(
+  netProfitPct: number,
+  slippageEstimatePct: number,
+  transferTimeMin: number,
+  volatilityPct: number,
+): { action: 'EXECUTE' | 'WAIT' | 'SKIP'; confidence: number; reason: string } {
+  const adjustedProfit = netProfitPct - slippageEstimatePct
+  // Estimate premium risk during transfer: volatility * sqrt(transferTime/60)
+  const premiumRisk = volatilityPct * Math.sqrt(transferTimeMin / 60)
+  const score = adjustedProfit - premiumRisk
+
+  if (score > 1.0) {
+    const confidence = Math.min(0.95, 0.8 + (score - 1.0) * 0.05)
+    return {
+      action: 'EXECUTE',
+      confidence: Math.round(confidence * 100) / 100,
+      reason: `Adjusted profit ${round2(adjustedProfit)}% exceeds risk ${round2(premiumRisk)}% with strong margin`,
+    }
+  } else if (score > 0) {
+    const confidence = 0.5 + (score / 1.0) * 0.3
+    return {
+      action: 'WAIT',
+      confidence: Math.round(confidence * 100) / 100,
+      reason: `Marginal profit ${round2(adjustedProfit)}% after risk ${round2(premiumRisk)}% — monitor for better entry`,
+    }
+  } else {
+    const confidence = Math.max(0.1, 0.5 + score * 0.2)
+    return {
+      action: 'SKIP',
+      confidence: Math.round(confidence * 100) / 100,
+      reason: `Negative expected return: adjusted profit ${round2(adjustedProfit)}% minus risk ${round2(premiumRisk)}%`,
+    }
+  }
+}
+
 async function fetchKrwRate(): Promise<number> {
   try {
     const res = await fetch('https://open.er-api.com/v6/latest/USD')
@@ -3966,12 +4148,37 @@ app.get('/api/premium/arbitrage/opportunities', async (c) => {
   const premiums = calcPremiums(bithumbData, binancePrices, krwRate)
   const totalFeesPct = BITHUMB_FEES_PCT + BINANCE_FEES_PCT
 
+  // Fetch orderbooks and premium trends in parallel for decision layer
+  const orderbookPromises = premiums.map((p) =>
+    fetchBithumbOrderbook(p.coin).catch(() => ({ bids: [], asks: [] })),
+  )
+  const trendPromises = premiums.map((p) =>
+    getPremiumTrend(c.env.DB, p.coin, 6),
+  )
+  const [orderbooks, trends] = await Promise.all([
+    Promise.all(orderbookPromises),
+    Promise.all(trendPromises),
+  ])
+
+  const TRADE_SIZE_KRW = 15_000_000 // ~$10,000 reference trade
+
   const opportunities = premiums
-    .map((p) => {
+    .map((p, i) => {
       const netProfitPct = Math.abs(p.premiumPct) - totalFeesPct
       const direction = p.premiumPct > 0 ? 'buy-global-sell-korea' : 'buy-korea-sell-global'
       const riskScore = p.volume24hUsd < 100000 ? 'high' : p.volume24hUsd < 1000000 ? 'medium' : 'low'
       const profitPer10kUsd = Math.round(netProfitPct * 100) // cents per $10,000 traded
+
+      // Decision layer
+      const ob = orderbooks[i] ?? { bids: [], asks: [] }
+      const asks = (ob.asks as Array<{ price: string; quantity: string }>).slice(0, 10)
+      const slippageEstimatePct = estimateSlippage(asks, TRADE_SIZE_KRW)
+      const transferTimeMin = getTransferTime(p.coin)
+      const trendData = trends[i] ?? { trend: 'stable' as const, volatilityPct: 0 }
+      const { trend: premiumTrend, volatilityPct } = trendData
+      const { action, confidence, reason } = computeAction(
+        netProfitPct, slippageEstimatePct, transferTimeMin, volatilityPct,
+      )
 
       return {
         coin: p.coin,
@@ -3985,11 +4192,21 @@ app.get('/api/premium/arbitrage/opportunities', async (c) => {
         profitable: netProfitPct > 0,
         bithumbKrw: p.bithumbKrw,
         binanceUsd: p.binanceUsd,
+        // Decision layer fields
+        slippageEstimatePct: round2(slippageEstimatePct),
+        transferTimeMin,
+        premiumTrend,
+        action,
+        confidence,
+        reason,
       }
     })
     .sort((a, b) => b.netProfitPct - a.netProfitPct)
 
   const profitable = opportunities.filter((o) => o.profitable)
+  const executeCandidates = opportunities.filter((o) => o.action === 'EXECUTE').length
+  const marketCondition: 'favorable' | 'neutral' | 'unfavorable' =
+    executeCandidates >= 3 ? 'favorable' : executeCandidates >= 1 ? 'neutral' : 'unfavorable'
 
   return c.json({
     paid: true,
@@ -3997,6 +4214,8 @@ app.get('/api/premium/arbitrage/opportunities', async (c) => {
     krwUsdRate: krwRate,
     totalOpportunities: opportunities.length,
     profitableCount: profitable.length,
+    executeCandidates,
+    marketCondition,
     estimatedFeesNote: `Bithumb ${BITHUMB_FEES_PCT}% + Binance ${BINANCE_FEES_PCT}% = ${totalFeesPct}% total`,
     bestOpportunity: profitable[0] ?? null,
     opportunities,
@@ -4166,7 +4385,110 @@ app.get('/api/premium/market/korea', async (c) => {
 })
 
 app.get('/api/premium/market/fx/usdkrw', async (c) => {
+  const facilitatorUrl = c.env.FACILITATOR_URL
+  const paymentRequired = {
+    x402Version: 1 as const,
+    error: 'X-PAYMENT header is required',
+    accepts: [
+      {
+        scheme: 'exact',
+        network: BASE_MAINNET_V1_NETWORK,
+        maxAmountRequired: USDKRW_PRICE_ATOMIC,
+        resource: c.req.url,
+        description: 'USD/KRW exchange rate (for converting KRW exchange prices into USD).',
+        mimeType: 'application/json',
+        payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
+        maxTimeoutSeconds: 300,
+        asset: BASE_USDC_ADDRESS,
+        extra: {
+          name: 'USD Coin',
+          version: '2',
+        },
+      },
+    ],
+  }
+
+  const paymentHeader = c.req.header('x-payment') ?? c.req.header('payment-signature')
+  if (!paymentHeader) {
+    c.header('PAYMENT-REQUIRED', encodeBase64Json(paymentRequired))
+    return c.json({}, 402)
+  }
+
+  let paymentPayload: unknown
+  try {
+    paymentPayload = decodeBase64Json<unknown>(paymentHeader)
+  } catch {
+    c.header(
+      'PAYMENT-REQUIRED',
+      encodeBase64Json({
+        ...paymentRequired,
+        error: 'invalid_payment_header',
+      })
+    )
+    return c.json({}, 402)
+  }
+
+  const paymentRequirements = paymentRequired.accepts[0]
+  if (!paymentRequirements) {
+    return c.json({ error: 'payment_requirements_unavailable' }, 500)
+  }
+
+  const verifyResponse = await fetch(`${facilitatorUrl}/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      x402Version: 1,
+      paymentPayload,
+      paymentRequirements,
+    }),
+  })
+
+  const verifyResult = await verifyResponse.json<{ isValid?: boolean; invalidReason?: string }>()
+  if (!verifyResult?.isValid) {
+    c.header(
+      'PAYMENT-REQUIRED',
+      encodeBase64Json({
+        ...paymentRequired,
+        error: verifyResult.invalidReason ?? 'invalid_payment',
+      })
+    )
+    return c.json({}, 402)
+  }
+
   const krwRate = await fetchKrwRate()
+
+  const settleResponse = await fetch(`${facilitatorUrl}/settle`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      x402Version: 1,
+      paymentPayload,
+      paymentRequirements,
+    }),
+  })
+
+  const settleResult = await settleResponse.json<{
+    success?: boolean
+    errorReason?: string
+    transaction?: string
+    network?: string
+  }>()
+
+  if (!settleResult?.success) {
+    c.header(
+      'PAYMENT-REQUIRED',
+      encodeBase64Json({
+        ...paymentRequired,
+        error: settleResult.errorReason ?? 'settlement_failed',
+      })
+    )
+    return c.json({}, 402)
+  }
+
+  const encodedSettle = encodeBase64Json(settleResult)
+  c.header('PAYMENT-RESPONSE', encodedSettle)
+  c.header('X-PAYMENT-RESPONSE', encodedSettle)
+
   return c.json({
     paid: true,
     service: 'crossfin-usdkrw',
@@ -4547,11 +4869,23 @@ app.get('/api/premium/market/cross-exchange', async (c) => {
         }
       }
 
+      // Decision layer for domestic arbitrage
+      let action: 'ARBITRAGE' | 'HOLD' | 'MONITOR' = 'HOLD'
+      if (domesticArbitrage && domesticArbitrage.spreadPct > 0.5) {
+        action = 'ARBITRAGE'
+      } else if (domesticArbitrage && domesticArbitrage.spreadPct > 0.2) {
+        action = 'MONITOR'
+      }
+
       return {
         coin,
         exchanges,
         kimchiPremium,
         domesticArbitrage,
+        bestBuyExchange: domesticArbitrage?.lowestExchange ?? null,
+        bestSellExchange: domesticArbitrage?.highestExchange ?? null,
+        spreadPct: domesticArbitrage?.spreadPct ?? 0,
+        action,
       }
     }),
   )
@@ -4570,17 +4904,22 @@ app.get('/api/premium/market/cross-exchange', async (c) => {
       buy: r.domesticArbitrage!.lowestExchange,
       sell: r.domesticArbitrage!.highestExchange,
       spreadPct: r.domesticArbitrage!.spreadPct,
+      action: r.action,
     }))
     .sort((a, b) => b.spreadPct - a.spreadPct)
+
+  const arbitrageCandidateCount = rows.filter((r) => r.action === 'ARBITRAGE').length
 
   return c.json({
     paid: true,
     service: 'crossfin-cross-exchange',
     coinsCompared: coins.length,
     krwUsdRate: round2(krwRate),
+    arbitrageCandidateCount,
     coins: rows,
     summary: {
       avgKimchiPremium,
+      arbitrageCandidateCount,
       bestDomesticArbitrage: arbitrageCandidates[0] ?? null,
     },
     at: new Date().toISOString(),
