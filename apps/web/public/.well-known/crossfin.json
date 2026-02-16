@@ -32,6 +32,11 @@
       "get_kimchi_premium",
       "get_analytics",
       "get_guide",
+      "create_wallet",
+      "get_balance",
+      "transfer",
+      "list_transactions",
+      "set_budget",
       "call_paid_service"
     ]
   },
