@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.4.0] - 2026-02-16
+
+### Added
+
+**MCP — paid call execution**
+- `call_paid_service` tool (13th MCP tool) — agents can call any CrossFin paid endpoint with automatic x402 USDC payment on Base
+- Supports `serviceId` (registry lookup) or direct `url`
+- Returns API response + payment proof (`txHash`, `basescan` link, `payer` address)
+- Dependencies: `@x402/fetch`, `@x402/evm`, `@x402/core`, `viem`
+- Requires `EVM_PRIVATE_KEY` env var (graceful error if missing)
+
+**PRD**
+- Rewritten for Guardian Autonomous Growth strategy (v1.4.0)
+- Three-engine architecture: Execution (unattended cron), Guardian (ALLOW/SKIP/BLOCK), Growth (flywheel)
+- Staged rollout plan: Shadow → Low-risk → Full → Scale
+
 ## [1.3.4] - 2026-02-16
 
 ### Changed
