@@ -1,0 +1,29 @@
+name: Smoke Test (Production)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "0 * * * *"
+
+jobs:
+  smoke-prod:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run smoke test (repeat x10)
+        run: node scripts/smoke-prod.mjs --repeat 10
+        env:
+          SMOKE_BASE_URL: https://crossfin.dev
+          SMOKE_LIVE_URL: https://live.crossfin.dev
+
