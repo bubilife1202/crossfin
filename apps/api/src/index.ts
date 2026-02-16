@@ -6676,37 +6676,43 @@ export default {
       await env.DB.batch(statements)
     }
 
-    // 2. Autonomous arbitrage scan — log decisions
-    const BITHUMB_FEES = 0.25
-    for (const p of premiums.slice(0, 10)) {
-      const netProfit = Math.abs(p.premiumPct) - BITHUMB_FEES - 0.1
-      const transferTime = 5
-      const slippage = 0.15
-      const volatility = Math.abs(p.premiumPct) * 0.3
+    if (isEnabledFlag(env.CROSSFIN_GUARDIAN_ENABLED)) {
+      // 2. Autonomous arbitrage scan — log decisions (optional, behind feature flag)
+      const BITHUMB_FEES = 0.25
+      for (const p of premiums.slice(0, 10)) {
+        const netProfit = Math.abs(p.premiumPct) - BITHUMB_FEES - 0.1
+        const transferTime = 5
+        const slippage = 0.15
+        const volatility = Math.abs(p.premiumPct) * 0.3
 
-      const adjustedProfit = netProfit - slippage
-      const premiumRisk = volatility * Math.sqrt(transferTime / 60)
-      const score = adjustedProfit - premiumRisk
+        const adjustedProfit = netProfit - slippage
+        const premiumRisk = volatility * Math.sqrt(transferTime / 60)
+        const score = adjustedProfit - premiumRisk
 
-      let decision: string
-      let confidence: number
-      if (score > 1.0) { decision = 'EXECUTE'; confidence = Math.min(0.95, 0.8 + score * 0.05) }
-      else if (score > 0) { decision = 'WAIT'; confidence = 0.5 + score * 0.3 }
-      else { decision = 'SKIP'; confidence = Math.max(0.1, 0.5 + score * 0.2) }
+        let decision: string
+        let confidence: number
+        if (score > 1.0) { decision = 'EXECUTE'; confidence = Math.min(0.95, 0.8 + score * 0.05) }
+        else if (score > 0) { decision = 'WAIT'; confidence = 0.5 + score * 0.3 }
+        else { decision = 'SKIP'; confidence = Math.max(0.1, 0.5 + score * 0.2) }
+
+        await env.DB.prepare(
+          'INSERT INTO autonomous_actions (id, agent_id, action_type, service_id, decision, confidence, cost_usd, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        ).bind(
+          crypto.randomUUID(), null, 'ARBITRAGE_SCAN', null, decision, confidence, 0,
+          JSON.stringify({
+            coin: p.coin, premiumPct: p.premiumPct, netProfit, score,
+            reason: decision === 'EXECUTE' ? `${p.coin} spread ${p.premiumPct.toFixed(2)}% exceeds threshold` : `${p.coin} score ${score.toFixed(2)} below threshold`,
+          }),
+        ).run()
+      }
 
       await env.DB.prepare(
-        'INSERT INTO autonomous_actions (id, agent_id, action_type, service_id, decision, confidence, cost_usd, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-      ).bind(
-        crypto.randomUUID(), null, 'ARBITRAGE_SCAN', null, decision, confidence, 0,
-        JSON.stringify({
-          coin: p.coin, premiumPct: p.premiumPct, netProfit, score,
-          reason: decision === 'EXECUTE' ? `${p.coin} spread ${p.premiumPct.toFixed(2)}% exceeds threshold` : `${p.coin} score ${score.toFixed(2)} below threshold`,
-        }),
-      ).run()
+        'INSERT INTO audit_logs (id, agent_id, action, resource, resource_id, detail, result) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).bind(crypto.randomUUID(), null, 'scheduled.guardian_scan', 'autonomous_actions', null, `snapshots=${statements.length},scanned=${Math.min(10, premiums.length)}`, 'success').run()
+    } else {
+      await env.DB.prepare(
+        'INSERT INTO audit_logs (id, agent_id, action, resource, resource_id, detail, result) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).bind(crypto.randomUUID(), null, 'scheduled.snapshot_kimchi', 'kimchi_snapshots', null, `snapshots=${statements.length}`, 'success').run()
     }
-
-    await env.DB.prepare(
-      'INSERT INTO audit_logs (id, agent_id, action, resource, resource_id, detail, result) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).bind(crypto.randomUUID(), null, 'scheduled.guardian_scan', 'autonomous_actions', null, `snapshots=${statements.length},scanned=${Math.min(10, premiums.length)}`, 'success').run()
   },
 }
