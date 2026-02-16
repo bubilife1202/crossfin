@@ -113,13 +113,19 @@ CrossFin includes an MCP (Model Context Protocol) server for Claude Desktop and 
 ### Install
 
 ```bash
-# Quick run (recommended)
+# Claude Desktop (and most MCP clients) will run this command for you once configured.
 npx -y crossfin-mcp
 
 # Or global install
 npm i -g crossfin-mcp
 crossfin-mcp
 ```
+
+### 60-second Setup
+
+1. Add the Claude Desktop config (below)
+2. Restart Claude Desktop
+3. Use tools like `get_guide`, `search_services`, or `call_paid_service`
 
 | Tool | Description |
 |------|-------------|

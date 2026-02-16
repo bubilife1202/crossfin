@@ -2473,6 +2473,28 @@
   margin-top: 12px;
 }
 
+.mcpVerifyOk,
+.mcpVerifyErr {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  font-size: 0.9rem;
+}
+
+.mcpVerifyOk {
+  border-color: color-mix(in oklab, var(--green) 35%, var(--border));
+  background: color-mix(in oklab, var(--card) 85%, var(--green-dim));
+  color: var(--ink);
+}
+
+.mcpVerifyErr {
+  border-color: color-mix(in oklab, var(--red) 35%, var(--border));
+  background: color-mix(in oklab, var(--card) 85%, var(--red-dim));
+  color: var(--ink);
+}
+
 @media (max-width: 640px) {
   .mcpLaunch {
     padding: 16px;

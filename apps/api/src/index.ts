@@ -392,6 +392,10 @@ app.get('/api/docs/guide', (c) => {
       install: 'npx -y crossfin-mcp',
       globalInstall: 'npm i -g crossfin-mcp && crossfin-mcp',
       localBuild: 'cd apps/mcp-server && npm install && npm run build',
+      notes: [
+        'MCP servers are typically launched by the client (Claude Desktop, Cursor, etc). You usually do not run the stdio server directly in a terminal.',
+        'Set EVM_PRIVATE_KEY to enable paid calls; leave it unset if you only want free browsing/search tools.',
+      ],
       tools: [
         { name: 'search_services', description: 'Search the service registry by keyword' },
         { name: 'list_services', description: 'List services with optional category filter' },

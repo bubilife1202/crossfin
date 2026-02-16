@@ -24,6 +24,8 @@ type TabId = 'services' | 'developers' | 'activity'
 const TAB_IDS: readonly TabId[] = ['services', 'developers', 'activity'] as const
 const tabLabels: Record<TabId, string> = { services: 'Services', developers: 'Developers', activity: 'Activity' }
 const MCP_NPX_COMMAND = 'npx -y crossfin-mcp'
+const MCP_ENV_SNIPPET = `CROSSFIN_API_URL=https://crossfin.dev
+EVM_PRIVATE_KEY=0x...`
 const MCP_CLAUDE_CONFIG = `{
   "mcpServers": {
     "crossfin": {
@@ -73,6 +75,7 @@ function App() {
   const [codeTab, setCodeTab] = useState<'curl' | 'python' | 'javascript'>('curl')
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [showMcpConfig, setShowMcpConfig] = useState<boolean>(false)
+  const [mcpVerify, setMcpVerify] = useState<LoadState<{ version: string; apiBase: string }> | null>(null)
 
   const [activeTab, setActiveTab] = useState<TabId>(parseHash)
 
@@ -286,10 +289,15 @@ function App() {
   }
 
   function copyToClipboard(id: string, text: string) {
-    void navigator.clipboard.writeText(text).then(() => {
-      setCopiedId(id)
-      setTimeout(() => setCopiedId((prev) => (prev === id ? null : prev)), 2000)
-    })
+    void navigator.clipboard.writeText(text)
+      .then(() => {
+        setCopiedId(id)
+        setTimeout(() => setCopiedId((prev) => (prev === id ? null : prev)), 2000)
+      })
+      .catch(() => {
+        setCopiedId('copy-failed')
+        setTimeout(() => setCopiedId((prev) => (prev === 'copy-failed' ? null : prev)), 2500)
+      })
   }
 
   const analyticsData = analytics.status === 'success' ? analytics.data : null
@@ -307,6 +315,22 @@ function App() {
   const topServiceName = analyticsData && analyticsData.topServices.length > 0 ? analyticsData.topServices[0].serviceName : '—'
   const maxTopServiceCalls = analyticsData ? Math.max(...analyticsData.topServices.map((s) => s.calls), 1) : 1
   const funnelData = funnel.status === 'success' ? funnel.data : null
+
+  async function verifyMcpSetup() {
+    setMcpVerify({ status: 'loading' })
+    try {
+      const res = await fetch(`${apiBase}/api/health`)
+      if (!res.ok) throw new Error(`health_failed:${res.status}`)
+      const data = await res.json() as { version?: string }
+      const version = String(data?.version ?? '')
+      setMcpVerify({ status: 'success', data: { version: version || 'unknown', apiBase } })
+      trackFunnel('mcp_install_verify', { method: 'web_verify', ok: true, version: version || null, apiBase })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'verify_failed'
+      setMcpVerify({ status: 'error', message: msg })
+      trackFunnel('mcp_install_verify', { method: 'web_verify', ok: false, error: msg, apiBase })
+    }
+  }
 
   return (
     <div className="page">
@@ -363,8 +387,8 @@ function App() {
         <section className="mcpLaunch">
           <div className="mcpLaunchHeader">
             <div className="mcpLaunchBadge">MCP Quick Start</div>
-            <h2>Run CrossFin MCP in one command</h2>
-            <p>Start immediately, then paste the Claude Desktop config if you want persistent setup.</p>
+            <h2>Add CrossFin MCP in one minute</h2>
+            <p>Claude Desktop (and most MCP clients) will launch this command automatically once configured.</p>
           </div>
 
           <div className="mcpLaunchCommandRow">
@@ -398,6 +422,23 @@ function App() {
               type="button"
               className="miniButton"
               onClick={() => {
+                copyToClipboard('mcp-env', MCP_ENV_SNIPPET)
+              }}
+            >
+              {copiedId === 'mcp-env' ? '✓ Copied' : 'Copy Env'}
+            </button>
+            <button
+              type="button"
+              className="miniButton"
+              onClick={() => void verifyMcpSetup()}
+              disabled={mcpVerify?.status === 'loading'}
+            >
+              {mcpVerify?.status === 'loading' ? 'Verifying…' : 'Verify'}
+            </button>
+            <button
+              type="button"
+              className="miniButton"
+              onClick={() => {
                 trackFunnel('mcp_guide_open', { target: 'developers_tab' })
                 switchTab('developers')
               }}
@@ -405,6 +446,20 @@ function App() {
               Open Full Guide
             </button>
           </div>
+
+          {copiedId === 'copy-failed' ? (
+            <div className="analyticsHint">Copy failed. Your browser may block clipboard access.</div>
+          ) : null}
+
+          {mcpVerify?.status === 'success' ? (
+            <div className="mcpVerifyOk">
+              Verified API: <span className="mono">{mcpVerify.data.apiBase}</span> (version {mcpVerify.data.version})
+            </div>
+          ) : mcpVerify?.status === 'error' ? (
+            <div className="mcpVerifyErr">
+              Verify failed: {mcpVerify.message}
+            </div>
+          ) : null}
 
           {showMcpConfig ? (
             <div className="mcpLaunchConfig">
