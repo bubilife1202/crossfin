@@ -5167,13 +5167,14 @@ app.get('/api/premium/market/korea/stock-news', async (c) => {
 
   const res = await fetch(`https://m.stock.naver.com/api/news/stock/${stock}?page=${page}&pageSize=${pageSize}`)
   if (!res.ok) throw new HTTPException(502, { message: 'Stock news data unavailable' })
-  const raw = await res.json() as any
+  const rawArr = await res.json() as any[]
+  const raw = Array.isArray(rawArr) && rawArr.length > 0 ? rawArr[0] : { total: 0, items: [] }
 
   return c.json({
     paid: true,
     service: 'crossfin-korea-stock-news',
     stock,
-    total: raw.totalCount,
+    total: raw.total ?? 0,
     items: (raw.items ?? []).map((i: any) => ({
       id: i.id,
       title: i.title,
@@ -5269,8 +5270,10 @@ app.get('/api/premium/market/korea/etf', async (c) => {
       name: e.itemname,
       code: e.itemcode,
       price: e.nowVal,
+      changeVal: e.changeVal,
+      changeRate: e.changeRate,
       nav: e.nav,
-      prevClose: e.quant,
+      volume: e.quant,
       threeMonthReturn: e.threeMonthEarnRate,
       marketCap: e.marketSum,
     })),
