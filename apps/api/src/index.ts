@@ -1665,6 +1665,32 @@ function requirePublicHttpsUrl(value: string): string {
   return url.toString()
 }
 
+const PROXY_ALLOWED_RESPONSE_HEADERS = [
+  'content-type',
+  'content-length',
+  'content-encoding',
+  'cache-control',
+  'etag',
+  'last-modified',
+  'vary',
+  'payment-required',
+  'payment-response',
+] as const
+
+function buildProxyResponseHeaders(upstreamHeaders: Headers): Headers {
+  const outHeaders = new Headers()
+
+  for (const headerName of PROXY_ALLOWED_RESPONSE_HEADERS) {
+    const value = upstreamHeaders.get(headerName)
+    if (value) outHeaders.set(headerName, value)
+  }
+
+  outHeaders.set('X-Content-Type-Options', 'nosniff')
+  outHeaders.set('X-CrossFin-Proxy', 'true')
+  outHeaders.set('X-CrossFin-Fee', '5%')
+  return outHeaders
+}
+
 function mapServiceRow(row: Record<string, unknown>): RegistryService {
   const tags = parseJsonArrayOfStrings(typeof row.tags === 'string' ? row.tags : null)
   const statusRaw = typeof row.status === 'string' ? row.status : 'active'
@@ -3308,7 +3334,8 @@ async function proxyToService(c: Context<Env>, method: 'GET' | 'POST'): Promise<
 
     const upstreamRes = await fetch(upstreamUrl.toString(), init)
     const responseTimeMs = Date.now() - start
-    const status = upstreamRes.ok ? 'success' : 'error'
+    const isRedirectResponse = upstreamRes.status >= 300 && upstreamRes.status < 400
+    const status = upstreamRes.ok && !isRedirectResponse ? 'success' : 'error'
 
     try {
       await c.env.DB.prepare(
@@ -3318,9 +3345,11 @@ async function proxyToService(c: Context<Env>, method: 'GET' | 'POST'): Promise<
       console.error('Failed to log service call', err)
     }
 
-    const outHeaders = new Headers(upstreamRes.headers)
-    outHeaders.set('X-CrossFin-Proxy', 'true')
-    outHeaders.set('X-CrossFin-Fee', '5%')
+    if (isRedirectResponse) {
+      return c.json({ error: 'Upstream redirects are not allowed' }, 502)
+    }
+
+    const outHeaders = buildProxyResponseHeaders(upstreamRes.headers)
     return new Response(upstreamRes.body, { status: upstreamRes.status, headers: outHeaders })
   } catch (err) {
     if (err instanceof HTTPException) throw err
