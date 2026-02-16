@@ -556,8 +556,16 @@ app.get('/api/openapi.json', (c) => {
                 paidEndpoint: { type: 'string' },
                 pairsShown: { type: 'integer' },
                 totalPairsAvailable: { type: 'integer' },
-                preview: { type: 'array', items: { type: 'object', properties: { coin: { type: 'string' }, premiumPct: { type: 'number' }, direction: { type: 'string' } } } },
+                krwUsdRate: { type: 'number' },
+                preview: { type: 'array', items: { type: 'object', properties: {
+                  coin: { type: 'string' },
+                  premiumPct: { type: 'number' },
+                  direction: { type: 'string' },
+                  decision: { type: 'object', properties: { action: { type: 'string' }, confidence: { type: 'number' }, reason: { type: 'string' } } },
+                } } },
                 avgPremiumPct: { type: 'number' },
+                executeCandidates: { type: 'integer' },
+                marketCondition: { type: 'string' },
                 at: { type: 'string', format: 'date-time' },
               } } } },
             },
@@ -4340,13 +4348,46 @@ function computeAction(
 }
 
 async function fetchKrwRate(): Promise<number> {
-  try {
-    const res = await fetch('https://open.er-api.com/v6/latest/USD')
-    const data = await res.json() as { rates?: Record<string, number> }
-    return data.rates?.KRW ?? 1450
-  } catch {
-    return 1450
+  // FX does not change fast enough to justify fetching on every request.
+  // Cache in memory to avoid hammering the upstream API (especially from live dashboards).
+  const KRW_RATE_SUCCESS_TTL_MS = 5 * 60_000
+  const KRW_RATE_FAILURE_TTL_MS = 60_000
+
+  type CachedRate = { value: number; expiresAt: number }
+  const globalAny = globalThis as unknown as {
+    __crossfinKrwRateCache?: CachedRate
+    __crossfinKrwRateInFlight?: Promise<number> | null
   }
+
+  const now = Date.now()
+  const cached = globalAny.__crossfinKrwRateCache
+  if (cached && now < cached.expiresAt) return cached.value
+  if (globalAny.__crossfinKrwRateInFlight) return globalAny.__crossfinKrwRateInFlight
+
+  const fallback = cached?.value ?? 1450
+
+  const promise = (async () => {
+    try {
+      const res = await fetch('https://open.er-api.com/v6/latest/USD')
+      if (!res.ok) throw new Error(`FX rate fetch failed (${res.status})`)
+      const data = await res.json() as { rates?: Record<string, number> }
+      const rate = data.rates?.KRW
+      if (typeof rate !== 'number' || !Number.isFinite(rate) || rate < 500 || rate > 5000) {
+        throw new Error('FX rate fetch returned invalid KRW rate')
+      }
+
+      globalAny.__crossfinKrwRateCache = { value: rate, expiresAt: now + KRW_RATE_SUCCESS_TTL_MS }
+      return rate
+    } catch {
+      globalAny.__crossfinKrwRateCache = { value: fallback, expiresAt: now + KRW_RATE_FAILURE_TTL_MS }
+      return fallback
+    } finally {
+      globalAny.__crossfinKrwRateInFlight = null
+    }
+  })()
+
+  globalAny.__crossfinKrwRateInFlight = promise
+  return promise
 }
 
 async function fetchBithumbAll(): Promise<Record<string, Record<string, string>>> {
@@ -5836,6 +5877,7 @@ app.get('/api/arbitrage/demo', async (c) => {
     demo: true,
     note: 'Free preview — top 3 pairs with AI decision layer. Pay $0.10 USDC for full analysis.',
     paidEndpoint: '/api/premium/arbitrage/opportunities',
+    krwUsdRate: krwRate,
     pairsShown: preview.length,
     totalPairsAvailable: premiums.length,
     preview,

@@ -24,6 +24,7 @@ interface ArbitragePair {
 
 interface ArbitrageRaw {
   demo: boolean;
+  krwUsdRate?: number;
   avgPremiumPct: number;
   executeCandidates?: number;
   marketCondition?: string;
@@ -33,6 +34,7 @@ interface ArbitrageRaw {
 
 interface ArbitrageData {
   average_premium: number;
+  krwUsdRate?: number;
   executeCandidates: number;
   marketCondition: string;
   pairs: ArbitragePair[];
@@ -213,6 +215,10 @@ export default function App() {
     const arbVal: ArbitrageData | null = arbRaw
       ? {
           average_premium: arbRaw.avgPremiumPct ?? 0,
+          krwUsdRate:
+            typeof arbRaw.krwUsdRate === "number" && Number.isFinite(arbRaw.krwUsdRate)
+              ? arbRaw.krwUsdRate
+              : undefined,
           executeCandidates: arbRaw.executeCandidates ?? 0,
           marketCondition: arbRaw.marketCondition ?? "unknown",
           pairs: (arbRaw.preview ?? []).map((p) => ({
@@ -278,6 +284,7 @@ export default function App() {
   }, []);
 
   const avgPremium = arb?.average_premium ?? 0;
+  const fxRate = arb?.krwUsdRate;
   const totalServices = stats?.total ?? 0;
   const totalCalls = analytics?.totalCalls ?? 0;
   const topServices = analytics?.topServices ?? [];
@@ -324,6 +331,19 @@ export default function App() {
             value={`${avgPremium >= 0 ? "+" : ""}${avgPremium.toFixed(2)}%`}
             tone={avgPremium >= 0 ? "positive" : "negative"}
             sub="KR↔Global spread"
+          />
+          <MetricCard
+            label="USD/KRW (FX)"
+            value={
+              typeof fxRate === "number" && Number.isFinite(fxRate)
+                ? fxRate.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })
+                : "—"
+            }
+            tone="neutral"
+            sub="cached ~5m"
           />
           <MetricCard
             label="Total Services"
