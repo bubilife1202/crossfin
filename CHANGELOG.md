@@ -4,6 +4,7 @@
 
 ### Fixed
 - `/api/survival/status` returning 401 — moved route before `agentAuth` middleware on the `api` sub-router so it's publicly accessible
+- Wallet transfer race condition (TOCTOU) in `POST /api/transfers` — switched to conditional debit update (`balance_cents >= amount`) and rollback-safe finalization to prevent concurrent overdraw
 
 ### Added
 - **Live Dashboard — Agent Survival panel** (`live.crossfin.dev`)

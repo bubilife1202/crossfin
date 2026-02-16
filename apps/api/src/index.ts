@@ -4631,8 +4631,8 @@ api.post('/transfers', async (c) => {
   }
 
   const from = await c.env.DB.prepare(
-    'SELECT id, balance_cents FROM wallets WHERE id = ? AND agent_id = ?'
-  ).bind(body.fromWalletId, agentId).first<{ id: string; balance_cents: number }>()
+    'SELECT id FROM wallets WHERE id = ? AND agent_id = ?'
+  ).bind(body.fromWalletId, agentId).first<{ id: string }>()
   if (!from) throw new HTTPException(404, { message: 'Source wallet not found' })
 
   const to = await c.env.DB.prepare(
@@ -4666,21 +4666,37 @@ api.post('/transfers', async (c) => {
     }
   }
 
-  if (from.balance_cents < amount) {
+  const txId = crypto.randomUUID()
+  const rail = body.rail ?? 'internal'
+
+  const debit = await c.env.DB.prepare(
+    'UPDATE wallets SET balance_cents = balance_cents - ?, updated_at = datetime("now") WHERE id = ? AND agent_id = ? AND balance_cents >= ?'
+  ).bind(amount, body.fromWalletId, agentId, amount).run()
+
+  const debitChanges = Number(debit.meta.changes ?? 0)
+  if (debitChanges === 0) {
     await audit(c.env.DB, agentId, 'transfer.blocked', 'transactions', null, 'blocked', 'Insufficient balance')
     throw new HTTPException(400, { message: 'Insufficient balance' })
   }
 
-  const txId = crypto.randomUUID()
-  const rail = body.rail ?? 'internal'
-
-  await c.env.DB.batch([
-    c.env.DB.prepare('UPDATE wallets SET balance_cents = balance_cents - ?, updated_at = datetime("now") WHERE id = ?').bind(amount, body.fromWalletId),
-    c.env.DB.prepare('UPDATE wallets SET balance_cents = balance_cents + ?, updated_at = datetime("now") WHERE id = ?').bind(amount, body.toWalletId),
-    c.env.DB.prepare(
-      "INSERT INTO transactions (id, from_wallet_id, to_wallet_id, amount_cents, rail, memo, status) VALUES (?, ?, ?, ?, ?, ?, 'completed')"
-    ).bind(txId, body.fromWalletId, body.toWalletId, amount, rail, body.memo ?? ''),
-  ])
+  try {
+    await c.env.DB.batch([
+      c.env.DB.prepare('UPDATE wallets SET balance_cents = balance_cents + ?, updated_at = datetime("now") WHERE id = ?').bind(amount, body.toWalletId),
+      c.env.DB.prepare(
+        "INSERT INTO transactions (id, from_wallet_id, to_wallet_id, amount_cents, rail, memo, status) VALUES (?, ?, ?, ?, ?, ?, 'completed')"
+      ).bind(txId, body.fromWalletId, body.toWalletId, amount, rail, body.memo ?? ''),
+    ])
+  } catch (error) {
+    try {
+      await c.env.DB.prepare(
+        'UPDATE wallets SET balance_cents = balance_cents + ?, updated_at = datetime("now") WHERE id = ? AND agent_id = ?'
+      ).bind(amount, body.fromWalletId, agentId).run()
+    } catch (rollbackError) {
+      console.error('Transfer rollback failed', rollbackError)
+    }
+    console.error('Transfer finalization failed', error)
+    throw new HTTPException(500, { message: 'Transfer failed' })
+  }
 
   await audit(c.env.DB, agentId, 'transfer.execute', 'transactions', txId, 'success')
 
