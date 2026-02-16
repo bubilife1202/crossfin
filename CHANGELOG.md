@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.7.0] - 2026-02-16
+
+### Added
+
+**12 New Premium API Endpoints — Massive data expansion**
+
+Batch 1 — Deep Korean Market Data:
+- `GET /api/premium/market/korea/investor-flow` ($0.05) — 10-day foreign/institutional/individual net buying per stock
+- `GET /api/premium/market/korea/index-flow` ($0.03) — KOSPI/KOSDAQ investor flow (foreign/institutional/individual in billion KRW)
+- `GET /api/premium/crypto/korea/5exchange` ($0.08) — Compare crypto prices across all 5 Korean exchanges (Upbit, Bithumb, Korbit, Coinone, GoPax)
+- `GET /api/premium/crypto/korea/exchange-status` ($0.03) — Bithumb deposit/withdrawal status for all coins
+- `GET /api/premium/market/korea/stock-detail` ($0.05) — Comprehensive stock analysis (PER, PBR, EPS, consensus, industry peers)
+
+Batch 2 — News, Themes, Disclosure, FX, ETF:
+- `GET /api/premium/market/korea/stock-news` ($0.03) — Stock-specific news from Naver Finance
+- `GET /api/premium/market/korea/themes` ($0.05) — Korean stock market themes/sectors with rise/fall counts
+- `GET /api/premium/market/korea/disclosure` ($0.03) — Corporate disclosure filings
+- `GET /api/premium/crypto/korea/fx-rate` ($0.01) — Real-time KRW/USD rate from Upbit CRIX (52-week high/low)
+- `GET /api/premium/market/korea/etf` ($0.03) — 1,070+ Korean ETFs with NAV, price, 3-month returns
+
+Batch 3 — Candles & Global Indices:
+- `GET /api/premium/crypto/korea/upbit-candles` ($0.02) — Upbit OHLCV candles (1min to monthly, up to 200)
+- `GET /api/premium/market/global/indices-chart` ($0.02) — Global index chart (Dow .DJI, NASDAQ .IXIC, Hang Seng .HSI, Nikkei .N225)
+
+### Changed
+
+- Total premium endpoints: 18 → 30 (all with Bazaar discovery metadata)
+- Version bump to 1.7.0
+- Updated README with all 30 endpoints
+
 ## [1.6.0] - 2026-02-16
 
 ### Added

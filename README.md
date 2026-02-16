@@ -1,6 +1,6 @@
 # CrossFin
 
-**The x402 Agent Services Gateway** — Discover, call, and pay for AI agent services in one place. 162 services (13 CrossFin + 149 external), Korean market APIs, MCP server, and structured agent guides. All payments via [x402](https://x402.org) protocol with USDC on Base mainnet.
+**The x402 Agent Services Gateway** — Discover, call, and pay for AI agent services in one place. 162 services (30 CrossFin + 149 external), Korean market APIs, MCP server, and structured agent guides. All payments via [x402](https://x402.org) protocol with USDC on Base mainnet.
 
 **Live:** https://crossfin.dev | **Demo:** https://live.crossfin.dev
 
@@ -12,7 +12,7 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 - **Agent Guide API:** Structured JSON guide at `/api/docs/guide` — service catalog, payment flow, code examples, MCP setup
 - **Agent Discovery:** `/.well-known/crossfin.json` for automatic service detection
 - **MCP Server:** 13 tools for Claude Desktop and other MCP clients — search, browse, call, and pay for services
-- **Korea-First APIs:** 13 proprietary endpoints (Kimchi Premium, Bithumb, Upbit, Coinone, FX, headlines, trading signals)
+- **Korea-First APIs:** 30 proprietary endpoints (Kimchi Premium, Bithumb, Upbit, Coinone, FX, stock analysis, ETF, themes, global indices)
 - **Proxy Layer:** Call any registered service through CrossFin (`/api/proxy/:serviceId`) — requires `X-Agent-Key`, 5% fee header, automatic call logging
 - **Analytics:** Real-time service usage stats (`/api/analytics/overview`)
 - **Live Demo:** Real-time gateway dashboard at [live.crossfin.dev](https://live.crossfin.dev)
@@ -85,6 +85,18 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 | `GET /api/premium/market/korea/indices` | $0.03 | KOSPI & KOSDAQ real-time index (price, change, direction, market status) |
 | `GET /api/premium/market/korea/indices/history` | $0.05 | KOSPI/KOSDAQ daily OHLC history (up to 60 trading days) |
 | `GET /api/premium/market/korea/stocks/momentum` | $0.05 | Korean stock momentum (top market cap, gainers, losers) |
+| `GET /api/premium/market/korea/investor-flow?stock=005930` | $0.05 | Stock investor flow — 10-day foreign/institutional/individual net buying |
+| `GET /api/premium/market/korea/index-flow?index=KOSPI` | $0.03 | KOSPI/KOSDAQ investor flow — foreign/institutional/individual net buying (billion KRW) |
+| `GET /api/premium/crypto/korea/5exchange?coin=BTC` | $0.08 | Compare crypto prices across 5 Korean exchanges (Upbit, Bithumb, Korbit, Coinone, GoPax) |
+| `GET /api/premium/crypto/korea/exchange-status` | $0.03 | Bithumb deposit/withdrawal status for all coins |
+| `GET /api/premium/market/korea/stock-detail?stock=005930` | $0.05 | Comprehensive stock analysis — PER, PBR, consensus, industry peers |
+| `GET /api/premium/market/korea/stock-news?stock=005930` | $0.03 | Stock-specific news from Naver Finance |
+| `GET /api/premium/market/korea/themes` | $0.05 | Korean stock market themes/sectors with performance |
+| `GET /api/premium/market/korea/disclosure?stock=005930` | $0.03 | Corporate disclosure filings |
+| `GET /api/premium/crypto/korea/fx-rate` | $0.01 | Real-time KRW/USD exchange rate (Upbit CRIX, 52-week high/low) |
+| `GET /api/premium/market/korea/etf` | $0.03 | Korean ETF list with NAV, price, 3-month returns (1,070+ ETFs) |
+| `GET /api/premium/crypto/korea/upbit-candles?coin=BTC&type=days` | $0.02 | Upbit OHLCV candles (1m to monthly, up to 200 candles) |
+| `GET /api/premium/market/global/indices-chart?index=.DJI` | $0.02 | Global index chart — Dow, NASDAQ, Hang Seng, Nikkei |
 
 ### Other (Free)
 
@@ -185,7 +197,7 @@ with x402_requests(client) as session:
 ## Revenue Model
 
 ```
-Phase 1 (Now)      → Own API revenue: $0.01–$0.10 per call (13 Korean market APIs)
+Phase 1 (Now)      → Own API revenue: $0.01–$0.10 per call (30 Korean market APIs)
 Phase 2 (3 months) → Proxy fee: 5% on every call through /api/proxy/:serviceId
 Phase 3 (6 months) → Agent banking: wallet management, budget controls, fiat on-ramp
 ```
