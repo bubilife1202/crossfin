@@ -34,7 +34,8 @@ jobs:
         working-directory: apps/live
 
       - name: Typecheck API
-        run: npx tsc --noEmit -p apps/api/tsconfig.json
+        run: npx tsc --noEmit -p tsconfig.json
+        working-directory: apps/api
 
       - name: Build web
         run: npm run build
