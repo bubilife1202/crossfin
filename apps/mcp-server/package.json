@@ -1,19 +1,50 @@
 {
-  "name": "@crossfin/mcp-server",
-  "private": true,
-  "version": "0.0.0",
+  "name": "crossfin-mcp",
+  "private": false,
+  "version": "1.7.1",
+  "description": "CrossFin MCP server for service discovery and paid x402 API execution",
+  "bin": {
+    "crossfin-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bubilife1202/crossfin.git",
+    "directory": "apps/mcp-server"
+  },
+  "homepage": "https://crossfin.dev",
+  "bugs": {
+    "url": "https://github.com/bubilife1202/crossfin/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "crossfin",
+    "x402",
+    "usdc",
+    "base"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@x402/core": "^2.3.1",
     "@x402/evm": "^2.3.1",
     "@x402/fetch": "^2.3.0",
-    "viem": "^2.46.1"
+    "viem": "^2.46.1",
+    "zod": "^4.1.11"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

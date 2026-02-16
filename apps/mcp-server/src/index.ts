@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
@@ -67,7 +69,7 @@ function basescanLink(networkId: string | undefined, txHash: string | undefined)
   return null
 }
 
-const server = new McpServer({ name: 'crossfin', version: '0.0.0' })
+const server = new McpServer({ name: 'crossfin', version: '1.7.1' })
 
 const railSchema = z.enum(['manual', 'kakaopay', 'toss', 'stripe', 'x402'])
 

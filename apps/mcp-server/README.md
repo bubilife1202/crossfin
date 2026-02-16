@@ -2,6 +2,21 @@
 
 MCP server for CrossFin — 13 tools for service discovery, local ledger, and paid API execution.
 
+## Install (npm)
+
+Use directly with `npx`:
+
+```bash
+npx -y crossfin-mcp
+```
+
+Or install globally:
+
+```bash
+npm i -g crossfin-mcp
+crossfin-mcp
+```
+
 ## Tools
 
 ### Local ledger
@@ -58,7 +73,24 @@ export CROSSFIN_API_URL="https://crossfin.dev"
 
 ## Claude Desktop config (example)
 
-Point Claude Desktop to the built output:
+Use the published npm package:
+
+```json
+{
+  "mcpServers": {
+    "crossfin": {
+      "command": "npx",
+      "args": ["-y", "crossfin-mcp"],
+      "env": {
+        "CROSSFIN_API_URL": "https://crossfin.dev",
+        "EVM_PRIVATE_KEY": "0x..."
+      }
+    }
+  }
+}
+```
+
+Or point Claude Desktop to the local built output:
 
 ```json
 {
