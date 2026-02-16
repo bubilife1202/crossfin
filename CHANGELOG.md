@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.6.0] - 2026-02-16
+
+### Added
+
+**Korean Stock Market APIs — KOSPI/KOSDAQ data from Naver Finance**
+
+- `GET /api/premium/market/korea/indices` ($0.03) — Real-time KOSPI & KOSDAQ index values (price, change, direction, market status)
+- `GET /api/premium/market/korea/indices/history` ($0.05) — Daily OHLC history for KOSPI or KOSDAQ (up to 60 trading days)
+- `GET /api/premium/market/korea/stocks/momentum` ($0.05) — Top 10 by market cap, top 5 gainers, top 5 losers on KOSPI/KOSDAQ
+
+**Bazaar Discovery — All 18 premium endpoints now discoverable by x402 agents**
+
+- Added `declareDiscoveryExtension` with input/output schemas to remaining 5 endpoints (report, enterprise, fx/usdkrw, cross-exchange, headlines)
+- Total: 18/18 premium endpoints have Bazaar discovery metadata
+
+**Community Listings**
+
+- Submitted to xpaysh/awesome-x402 (PR #22)
+- Submitted to Merit-Systems/awesome-x402 (PR #37)
+
+### Changed
+
+- Version bump to 1.6.0
+- Improved descriptions for all premium endpoints (more specific, agent-friendly language)
+
 ## [1.5.1] - 2026-02-16
 
 ### Changed

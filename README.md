@@ -70,18 +70,21 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 |----------|-------|-------------|
 | `GET /api/arbitrage/demo` | Free | Kimchi Premium preview (top 3 pairs) |
 | `GET /api/premium/arbitrage/kimchi` | $0.05 | Full Kimchi Premium index (10+ pairs) |
-| `GET /api/premium/arbitrage/opportunities` | $0.10 | Arbitrage routes with risk scores |
+| `GET /api/premium/arbitrage/opportunities` | $0.10 | Arbitrage decision service (EXECUTE/WAIT/SKIP with slippage, trends, confidence) |
 | `GET /api/premium/bithumb/orderbook?pair=BTC` | $0.02 | Bithumb orderbook (30 levels) |
 | `GET /api/premium/market/korea` | $0.03 | Korean market sentiment & movers |
 | `GET /api/premium/market/fx/usdkrw` | $0.01 | USD/KRW exchange rate |
 | `GET /api/premium/market/upbit/ticker?market=KRW-BTC` | $0.02 | Upbit ticker |
 | `GET /api/premium/market/upbit/orderbook?market=KRW-BTC` | $0.02 | Upbit orderbook |
 | `GET /api/premium/market/coinone/ticker?currency=BTC` | $0.02 | Coinone ticker |
-| `GET /api/premium/market/cross-exchange` | $0.08 | Cross-exchange comparison (Bithumb vs Upbit vs Coinone vs Binance) |
+| `GET /api/premium/market/cross-exchange` | $0.08 | Cross-exchange decision service (ARBITRAGE/HOLD/MONITOR with best buy/sell routing) |
 | `GET /api/premium/news/korea/headlines` | $0.03 | Korean headlines (Google News RSS) |
 | `GET /api/premium/arbitrage/kimchi/history` | $0.05 | Historical kimchi premium (hourly snapshots, up to 7 days) |
 | `GET /api/premium/bithumb/volume-analysis` | $0.03 | Bithumb 24h volume distribution & unusual activity detection |
 | `GET /api/premium/market/upbit/signals` | $0.05 | Upbit trading signals (momentum, volatility, confidence) |
+| `GET /api/premium/market/korea/indices` | $0.03 | KOSPI & KOSDAQ real-time index (price, change, direction, market status) |
+| `GET /api/premium/market/korea/indices/history` | $0.05 | KOSPI/KOSDAQ daily OHLC history (up to 60 trading days) |
+| `GET /api/premium/market/korea/stocks/momentum` | $0.05 | Korean stock momentum (top market cap, gainers, losers) |
 
 ### Other (Free)
 

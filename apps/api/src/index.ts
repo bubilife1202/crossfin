@@ -184,13 +184,13 @@ app.onError((err, c) => {
   return c.json({ error: 'Internal server error' }, 500)
 })
 
-app.get('/', (c) => c.json({ name: 'crossfin-api', version: '1.5.1', status: 'ok' }))
-app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '1.5.1', status: 'ok' }))
+app.get('/', (c) => c.json({ name: 'crossfin-api', version: '1.6.0', status: 'ok' }))
+app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: '1.6.0', status: 'ok' }))
 
 app.get('/api/docs/guide', (c) => {
   return c.json({
     name: 'CrossFin Agent Guide',
-    version: '1.5.1',
+    version: '1.6.0',
     overview: {
       what: 'CrossFin is a service gateway for AI agents. Discover, compare, and call x402/REST services through a single API.',
       services: 'Use GET /api/registry/stats for the current active service counts.',
@@ -383,7 +383,7 @@ app.get('/.well-known/crossfin.json', (c) => {
   const origin = new URL(c.req.url).origin
   return c.json({
     name: 'CrossFin',
-    version: '1.5.1',
+    version: '1.6.0',
     description: 'Agent-first directory and gateway for x402 services and Korean market data.',
     urls: {
       website: 'https://crossfin.dev',
@@ -425,7 +425,7 @@ app.get('/api/openapi.json', (c) => {
     openapi: '3.1.0',
     info: {
       title: 'CrossFin — x402 Agent Services Gateway (Korea)',
-      version: '1.5.1',
+      version: '1.6.0',
       description: 'Service registry + pay-per-request APIs for AI agents. Discover x402 services and access Korean market data. Payments via x402 protocol with USDC on Base mainnet.',
       contact: { url: 'https://crossfin.dev' },
       'x-logo': { url: 'https://crossfin.dev/logos/crossfin.png' },
@@ -977,8 +977,16 @@ app.use(
             payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
             maxTimeoutSeconds: 300,
           },
-          description: 'CrossFin premium report (x402)',
+          description: 'CrossFin premium report — lightweight health/status check for agents verifying the x402 payment flow.',
           mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              output: {
+                example: { paid: true, service: 'crossfin-premium-report', message: 'Payment verified', paidAt: '2026-02-16T00:00:00.000Z' },
+                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, message: { type: 'string' } }, required: ['paid', 'service'] },
+              },
+            }),
+          },
         },
         'GET /api/premium/enterprise': {
           accepts: {
@@ -988,8 +996,16 @@ app.use(
             payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
             maxTimeoutSeconds: 300,
           },
-          description: 'CrossFin enterprise receipt (x402)',
+          description: 'CrossFin enterprise receipt — full settlement proof for institutional agents. High-value endpoint for compliance and audit trails.',
           mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              output: {
+                example: { paid: true, service: 'crossfin-enterprise', receipt: { amount: '$20.00', network: 'eip155:8453', settledAt: '2026-02-16T00:00:00.000Z' } },
+                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, receipt: { type: 'object' } }, required: ['paid', 'service', 'receipt'] },
+              },
+            }),
+          },
         },
         'GET /api/premium/arbitrage/kimchi': {
           accepts: {
@@ -1136,8 +1152,16 @@ app.use(
             payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
             maxTimeoutSeconds: 300,
           },
-          description: 'USD/KRW exchange rate (for converting KRW exchange prices into USD).',
+          description: 'Real-time USD/KRW exchange rate from Korean FX markets. Essential for converting Korean Won prices to USD for arbitrage calculations.',
           mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              output: {
+                example: { paid: true, service: 'crossfin-fx-usdkrw', rate: 1450.25, source: 'exchangerate-api', at: '2026-02-16T00:00:00.000Z' },
+                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, rate: { type: 'number' }, source: { type: 'string' } }, required: ['paid', 'rate'] },
+              },
+            }),
+          },
         },
         'GET /api/premium/market/upbit/ticker': {
           accepts: {
@@ -1240,6 +1264,80 @@ app.use(
           },
           description: 'Cross-exchange decision service. Compares prices across Bithumb, Upbit, Coinone, and Binance with ARBITRAGE/HOLD/MONITOR signals, best buy/sell exchange per coin, and spread analysis.',
           mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              output: {
+                example: { paid: true, service: 'crossfin-cross-exchange', coinsAnalyzed: 10, signals: [{ coin: 'BTC', action: 'ARBITRAGE', bestBuy: 'Binance', bestSell: 'Bithumb', spreadPct: 2.1, confidence: 0.85 }], overallCondition: 'favorable' },
+                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, coinsAnalyzed: { type: 'number' }, signals: { type: 'array' }, overallCondition: { type: 'string' } }, required: ['paid', 'coinsAnalyzed', 'signals'] },
+              },
+            }),
+          },
+        },
+        'GET /api/premium/market/korea/indices': {
+          accepts: {
+            scheme: 'exact',
+            price: '$0.03',
+            network,
+            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
+            maxTimeoutSeconds: 300,
+          },
+          description: 'Real-time KOSPI and KOSDAQ Korean stock market indices. Includes price, change, direction, and market status. Data from Naver Finance — unavailable via standard global APIs.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              output: {
+                example: { paid: true, service: 'crossfin-korea-indices', kospi: { code: 'KOSPI', price: 2650.25, change: 15.3, changePct: 0.58, direction: 'RISING', marketStatus: 'CLOSE' }, kosdaq: { code: 'KOSDAQ', price: 870.15, change: -3.2, changePct: -0.37, direction: 'FALLING', marketStatus: 'CLOSE' }, source: 'naver-finance' },
+                schema: { properties: { paid: { type: 'boolean' }, kospi: { type: 'object' }, kosdaq: { type: 'object' }, source: { type: 'string' } }, required: ['paid', 'kospi', 'kosdaq'] },
+              },
+            }),
+          },
+        },
+        'GET /api/premium/market/korea/indices/history': {
+          accepts: {
+            scheme: 'exact',
+            price: '$0.05',
+            network,
+            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
+            maxTimeoutSeconds: 300,
+          },
+          description: 'Historical KOSPI or KOSDAQ daily OHLC data (up to 60 trading days). Open, high, low, close, change, direction per day.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              input: { index: 'KOSPI', days: 20 },
+              inputSchema: {
+                properties: {
+                  index: { type: 'string', description: 'KOSPI or KOSDAQ' },
+                  days: { type: 'number', description: 'Number of trading days (1-60, default 20)' },
+                },
+              },
+              output: {
+                example: { paid: true, service: 'crossfin-korea-indices-history', index: 'KOSPI', days: 20, history: [{ date: '2026-02-14', open: 2640.5, high: 2665.3, low: 2635.1, close: 2650.25, change: 15.3, changePct: 0.58 }], source: 'naver-finance' },
+                schema: { properties: { paid: { type: 'boolean' }, index: { type: 'string' }, days: { type: 'number' }, history: { type: 'array' } }, required: ['paid', 'index', 'days', 'history'] },
+              },
+            }),
+          },
+        },
+        'GET /api/premium/market/korea/stocks/momentum': {
+          accepts: {
+            scheme: 'exact',
+            price: '$0.05',
+            network,
+            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
+            maxTimeoutSeconds: 300,
+          },
+          description: 'Korean stock market momentum — top 10 by market cap (Samsung, SK Hynix, etc.), top 5 gainers, top 5 losers on KOSPI or KOSDAQ. Real-time rankings from Naver Finance.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              input: { market: 'KOSPI' },
+              inputSchema: { properties: { market: { type: 'string', description: 'KOSPI or KOSDAQ' } } },
+              output: {
+                example: { paid: true, service: 'crossfin-korea-stocks-momentum', market: 'KOSPI', topMarketCap: [{ code: '005930', name: 'Samsung Electronics', price: 72000, changePct: 1.5, direction: 'RISING' }], topGainers: [], topLosers: [], source: 'naver-finance' },
+                schema: { properties: { paid: { type: 'boolean' }, market: { type: 'string' }, topMarketCap: { type: 'array' }, topGainers: { type: 'array' }, topLosers: { type: 'array' } }, required: ['paid', 'market', 'topMarketCap', 'topGainers', 'topLosers'] },
+              },
+            }),
+          },
         },
         'GET /api/premium/news/korea/headlines': {
           accepts: {
@@ -1249,8 +1347,16 @@ app.use(
             payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
             maxTimeoutSeconds: 300,
           },
-          description: 'Korean headlines RSS (Google News feed) for market context.',
+          description: 'Korean news headlines translated/summarized from Google News Korea RSS. Market-moving news, crypto regulation updates, and economic announcements from Korean media.',
           mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              output: {
+                example: { paid: true, service: 'crossfin-korea-headlines', headlines: [{ title: 'Bitcoin surges past 100M KRW on Bithumb', source: 'MaeKyung', publishedAt: '2026-02-16T00:00:00.000Z', url: 'https://...' }], count: 10, at: '2026-02-16T00:00:00.000Z' },
+                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, headlines: { type: 'array' }, count: { type: 'number' } }, required: ['paid', 'headlines', 'count'] },
+              },
+            }),
+          },
         },
       },
       resourceServer,
@@ -4593,6 +4699,118 @@ app.get('/api/premium/market/coinone/ticker', async (c) => {
   })
 })
 
+// ── KOSPI / KOSDAQ Korean Stock Market Index ──────────────────────────
+app.get('/api/premium/market/korea/indices', async (c) => {
+  const [kospiRes, kosdaqRes] = await Promise.all([
+    fetch('https://m.stock.naver.com/api/index/KOSPI/basic'),
+    fetch('https://m.stock.naver.com/api/index/KOSDAQ/basic'),
+  ])
+
+  if (!kospiRes.ok || !kosdaqRes.ok) {
+    throw new HTTPException(502, { message: 'Korean stock market data unavailable' })
+  }
+
+  const [kospiRaw, kosdaqRaw] = await Promise.all([kospiRes.json(), kosdaqRes.json()]) as [any, any]
+
+  const parseIndex = (raw: any) => ({
+    name: raw.stockName ?? raw.itemCode,
+    code: raw.itemCode,
+    price: parseFloat((raw.closePrice ?? '0').replace(/,/g, '')),
+    change: parseFloat((raw.compareToPreviousClosePrice ?? '0').replace(/,/g, '')),
+    changePct: parseFloat(raw.fluctuationsRatio ?? '0'),
+    direction: raw.compareToPreviousPrice?.name ?? 'UNCHANGED',
+    marketStatus: raw.marketStatus ?? 'UNKNOWN',
+    tradedAt: raw.localTradedAt ?? null,
+  })
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-korea-indices',
+    kospi: parseIndex(kospiRaw),
+    kosdaq: parseIndex(kosdaqRaw),
+    source: 'naver-finance',
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/market/korea/indices/history', async (c) => {
+  const days = Math.min(60, Math.max(1, Number(c.req.query('days') ?? '20')))
+  const index = (c.req.query('index') ?? 'KOSPI').toUpperCase()
+  if (index !== 'KOSPI' && index !== 'KOSDAQ') {
+    throw new HTTPException(400, { message: 'index must be KOSPI or KOSDAQ' })
+  }
+
+  const res = await fetch(`https://m.stock.naver.com/api/index/${index}/price?pageSize=${days}`)
+  if (!res.ok) {
+    throw new HTTPException(502, { message: `${index} historical data unavailable` })
+  }
+
+  const rawData = await res.json() as any[]
+
+  const history = rawData.map((item: any) => ({
+    date: item.localTradedAt,
+    open: parseFloat((item.openPrice ?? '0').replace(/,/g, '')),
+    high: parseFloat((item.highPrice ?? '0').replace(/,/g, '')),
+    low: parseFloat((item.lowPrice ?? '0').replace(/,/g, '')),
+    close: parseFloat((item.closePrice ?? '0').replace(/,/g, '')),
+    change: parseFloat((item.compareToPreviousClosePrice ?? '0').replace(/,/g, '')),
+    changePct: parseFloat(item.fluctuationsRatio ?? '0'),
+    direction: item.compareToPreviousPrice?.name ?? 'UNCHANGED',
+  }))
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-korea-indices-history',
+    index,
+    days: history.length,
+    history,
+    source: 'naver-finance',
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/market/korea/stocks/momentum', async (c) => {
+  const market = (c.req.query('market') ?? 'KOSPI').toUpperCase()
+  if (market !== 'KOSPI' && market !== 'KOSDAQ') {
+    throw new HTTPException(400, { message: 'market must be KOSPI or KOSDAQ' })
+  }
+
+  const baseUrl = 'https://m.stock.naver.com/api/stocks'
+  const [capRes, upRes, downRes] = await Promise.all([
+    fetch(`${baseUrl}/marketValue/${market}?page=1&pageSize=10`),
+    fetch(`${baseUrl}/up/${market}?page=1&pageSize=5`),
+    fetch(`${baseUrl}/down/${market}?page=1&pageSize=5`),
+  ])
+
+  if (!capRes.ok || !upRes.ok || !downRes.ok) {
+    throw new HTTPException(502, { message: 'Korean stock ranking data unavailable' })
+  }
+
+  const [capData, upData, downData] = await Promise.all([capRes.json(), upRes.json(), downRes.json()]) as [any, any, any]
+
+  const parseStock = (s: any) => ({
+    code: s.itemCode,
+    name: s.stockName,
+    price: parseFloat((s.closePrice ?? '0').replace(/,/g, '')),
+    change: parseFloat((s.compareToPreviousClosePrice ?? '0').replace(/,/g, '')),
+    changePct: parseFloat(s.fluctuationsRatio ?? '0'),
+    direction: s.compareToPreviousPrice?.name ?? 'UNCHANGED',
+    volume: parseFloat((s.accumulatedTradingVolume ?? '0').replace(/,/g, '')),
+    marketCap: s.marketValueHangeul ?? null,
+  })
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-korea-stocks-momentum',
+    market,
+    topMarketCap: (capData.stocks ?? []).map(parseStock),
+    topGainers: (upData.stocks ?? []).map(parseStock),
+    topLosers: (downData.stocks ?? []).map(parseStock),
+    source: 'naver-finance',
+    at: new Date().toISOString(),
+  })
+})
+
 app.get('/api/premium/news/korea/headlines', async (c) => {
   const limit = Math.min(20, Math.max(1, Number(c.req.query('limit') ?? '10')))
   const feedUrl = 'https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko'
@@ -4953,7 +5171,7 @@ api.get('/survival/status', async (c) => {
   return c.json({
     alive,
     state: alive ? 'ALIVE' : 'STOPPED',
-    version: '1.5.1',
+    version: '1.6.0',
     metrics: {
       totalCalls: totalCalls?.cnt ?? 0,
       callsToday,
