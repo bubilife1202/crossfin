@@ -20,6 +20,7 @@ type Bindings = {
   X402_NETWORK: string
   PAYMENT_RECEIVER_ADDRESS: string
   CROSSFIN_ADMIN_TOKEN?: string
+  CROSSFIN_GUARDIAN_ENABLED?: string
 }
 
 type Variables = {
@@ -50,6 +51,17 @@ function timingSafeEqual(a: string, b: string): boolean {
   }
 
   return diff === 0
+}
+
+function isEnabledFlag(value: string | undefined): boolean {
+  const raw = (value ?? '').trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}
+
+function requireGuardianEnabled(c: Context<Env>): void {
+  if (!isEnabledFlag(c.env.CROSSFIN_GUARDIAN_ENABLED)) {
+    throw new HTTPException(404, { message: 'Not found' })
+  }
 }
 
 function toHex(bytes: Uint8Array): string {
@@ -116,6 +128,8 @@ function getPublicRateLimitRouteKey(path: string): string | null {
     normalized === '/api/registry/search' ||
     normalized === '/api/registry/categories' ||
     normalized === '/api/registry/stats' ||
+    normalized === '/api/agents/register' ||
+    normalized === '/api/deposits' ||
     normalized === '/api/guardian/status' ||
     normalized === '/api/guardian/rules'
   ) {
@@ -5879,6 +5893,7 @@ app.get('/api/cron/snapshot-kimchi', async (c) => {
 // === Guardian Rules CRUD ===
 
 app.get('/api/guardian/rules', async (c) => {
+  requireGuardianEnabled(c)
   const agentId = c.req.query('agent_id')
   let query = "SELECT * FROM guardian_rules WHERE active = 1"
   const binds: string[] = []
@@ -5899,6 +5914,7 @@ app.get('/api/guardian/rules', async (c) => {
 })
 
 app.post('/api/guardian/rules', async (c) => {
+  requireGuardianEnabled(c)
   requireAdmin(c)
   const body = await c.req.json<{
     agent_id?: string | null
@@ -5921,6 +5937,7 @@ app.post('/api/guardian/rules', async (c) => {
 })
 
 app.delete('/api/guardian/rules/:id', async (c) => {
+  requireGuardianEnabled(c)
   requireAdmin(c)
   const ruleId = c.req.param('id')
   await c.env.DB.prepare(
@@ -5933,6 +5950,7 @@ app.delete('/api/guardian/rules/:id', async (c) => {
 // === Guardian Status (public, for live dashboard) ===
 
 app.get('/api/guardian/status', async (c) => {
+  requireGuardianEnabled(c)
   const [rules, recentActions, spendToday] = await Promise.all([
     c.env.DB.prepare("SELECT id, agent_id, type, params, created_at FROM guardian_rules WHERE active = 1 ORDER BY created_at DESC LIMIT 20").all(),
     c.env.DB.prepare("SELECT id, agent_id, action_type, decision, confidence, cost_usd, rule_applied, details, created_at FROM autonomous_actions ORDER BY created_at DESC LIMIT 30").all(),
@@ -5977,6 +5995,7 @@ app.get('/api/guardian/status', async (c) => {
 // === Autonomous Actions Log ===
 
 app.get('/api/agents/:agentId/actions', async (c) => {
+  requireGuardianEnabled(c)
   const agentId = c.req.param('agentId')
   const limit = Math.min(parseInt(c.req.query('limit') ?? '50', 10), 200)
 
@@ -6000,6 +6019,7 @@ const CROSSFIN_WALLET = '0xe4E79Ce6a1377C58f0Bb99D023908858A4DB5779'
 const USDC_BASE_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
 
 app.post('/api/deposits', async (c) => {
+  requireGuardianEnabled(c)
   const body = await c.req.json<{
     tx_hash: string
     agent_id?: string
@@ -6092,6 +6112,7 @@ app.post('/api/deposits', async (c) => {
 })
 
 app.get('/api/deposits', async (c) => {
+  requireGuardianEnabled(c)
   const agentId = c.req.query('agent_id')
   const limit = Math.min(parseInt(c.req.query('limit') ?? '20', 10), 100)
   let query = 'SELECT * FROM deposits'
@@ -6145,10 +6166,18 @@ app.post('/api/agents/register', async (c) => {
     { type: 'FAIL_STREAK', params: { maxConsecutiveFails: 10 } },
     { type: 'CIRCUIT_BREAKER', params: { failRatePct: 60, windowMinutes: 30 } },
   ]
-  for (const rule of defaultRules) {
-    await c.env.DB.prepare(
-      'INSERT INTO guardian_rules (id, agent_id, type, params) VALUES (?, ?, ?, ?)'
-    ).bind(crypto.randomUUID(), id, rule.type, JSON.stringify(rule.params)).run()
+  let guardianApplied = false
+  if (isEnabledFlag(c.env.CROSSFIN_GUARDIAN_ENABLED)) {
+    try {
+      for (const rule of defaultRules) {
+        await c.env.DB.prepare(
+          'INSERT INTO guardian_rules (id, agent_id, type, params) VALUES (?, ?, ?, ?)'
+        ).bind(crypto.randomUUID(), id, rule.type, JSON.stringify(rule.params)).run()
+      }
+      guardianApplied = true
+    } catch (err) {
+      console.error('Failed to apply default guardian rules', err)
+    }
   }
 
   await audit(c.env.DB, id, 'agent.self_register', 'agents', id, 'success')
@@ -6158,8 +6187,10 @@ app.post('/api/agents/register', async (c) => {
     name: body.name.trim(),
     apiKey: rawApiKey,
     walletId,
-    guardianRules: defaultRules.map((r) => r.type),
-    note: 'Save your API key — it cannot be retrieved later. Default Guardian rules have been applied.',
+    guardianRules: guardianApplied ? defaultRules.map((r) => r.type) : [],
+    note: guardianApplied
+      ? 'Save your API key — it cannot be retrieved later. Default Guardian rules have been applied.'
+      : 'Save your API key — it cannot be retrieved later.',
   }, 201)
 })
 
