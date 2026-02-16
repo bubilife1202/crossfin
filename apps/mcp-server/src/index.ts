@@ -2,6 +2,9 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod/v4'
+import { x402Client, wrapFetchWithPayment, x402HTTPClient } from '@x402/fetch'
+import { registerExactEvmScheme } from '@x402/evm/exact/client'
+import { privateKeyToAccount } from 'viem/accounts'
 
 import {
   createWallet,
@@ -16,6 +19,28 @@ import {
 
 const LEDGER_PATH = process.env.CROSSFIN_LEDGER_PATH?.trim() || defaultLedgerPath()
 const API_BASE = (process.env.CROSSFIN_API_URL?.trim() || 'https://crossfin.dev').replace(/\/$/, '')
+const EVM_PRIVATE_KEY = process.env.EVM_PRIVATE_KEY?.trim() ?? ''
+
+/* ── x402 paid fetch setup ── */
+let paidFetch: typeof fetch | null = null
+let httpClient: x402HTTPClient | null = null
+let payerAddress = ''
+
+if (EVM_PRIVATE_KEY) {
+  const signer = privateKeyToAccount(EVM_PRIVATE_KEY as `0x${string}`)
+  payerAddress = signer.address
+  const client = new x402Client()
+  registerExactEvmScheme(client, { signer })
+  paidFetch = wrapFetchWithPayment(fetch, client)
+  httpClient = new x402HTTPClient(client)
+}
+
+function basescanLink(networkId: string | undefined, txHash: string | undefined): string | null {
+  if (!txHash) return null
+  if (networkId === 'eip155:84532') return `https://sepolia.basescan.org/tx/${txHash}`
+  if (networkId === 'eip155:8453') return `https://basescan.org/tx/${txHash}`
+  return null
+}
 
 const server = new McpServer({ name: 'crossfin', version: '0.0.0' })
 
@@ -321,6 +346,86 @@ server.registerTool(
     } catch (e) {
       return {
         content: [{ type: 'text', text: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` }],
+        isError: true,
+      }
+    }
+  }
+)
+
+server.registerTool(
+  'call_paid_service',
+  {
+    title: 'Call paid service',
+    description:
+      'Call a CrossFin paid API endpoint with automatic x402 USDC payment on Base. ' +
+      'Requires EVM_PRIVATE_KEY env var with funded wallet. ' +
+      'Returns the API response data plus payment proof (txHash, basescan link).',
+    inputSchema: z.object({
+      serviceId: z.string().optional().describe('Service ID from registry — looks up endpoint/price automatically'),
+      url: z.string().optional().describe('Direct URL to call (use this OR serviceId, not both)'),
+      params: z.record(z.string(), z.string()).optional().describe('Query parameters'),
+    }),
+  },
+  async ({ serviceId, url, params }): Promise<CallToolResult> => {
+    if (!paidFetch || !httpClient) {
+      return {
+        content: [{ type: 'text', text: 'EVM_PRIVATE_KEY not configured — cannot make paid calls' }],
+        isError: true,
+      }
+    }
+
+    let targetUrl: string
+
+    if (url) {
+      targetUrl = url
+    } else if (serviceId) {
+      try {
+        const svc = await apiFetch<{ endpoint?: string }>(`/api/registry/${encodeURIComponent(serviceId)}`)
+        if (!svc.endpoint) {
+          return { content: [{ type: 'text', text: `Service ${serviceId} has no endpoint` }], isError: true }
+        }
+        targetUrl = svc.endpoint
+      } catch (e) {
+        return {
+          content: [{ type: 'text', text: `Registry lookup failed: ${e instanceof Error ? e.message : String(e)}` }],
+          isError: true,
+        }
+      }
+    } else {
+      return { content: [{ type: 'text', text: 'Provide serviceId or url' }], isError: true }
+    }
+
+    if (params && Object.keys(params).length > 0) {
+      const qs = new URLSearchParams(params)
+      const sep = targetUrl.includes('?') ? '&' : '?'
+      targetUrl = `${targetUrl}${sep}${qs.toString()}`
+    }
+
+    try {
+      const res = await paidFetch(targetUrl, { method: 'GET' })
+
+      const body = await res.text()
+      let data: unknown
+      try { data = JSON.parse(body) } catch { data = body }
+
+      const settle = httpClient.getPaymentSettleResponse((name: string) => res.headers.get(name))
+      const txHash = settle?.transaction
+      const networkId = settle?.network
+      const scanLink = basescanLink(networkId as string | undefined, txHash as string | undefined)
+
+      const result = {
+        status: res.status,
+        payer: payerAddress,
+        paid: !!settle,
+        txHash: txHash ?? null,
+        basescan: scanLink,
+        data,
+      }
+
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
+    } catch (e) {
+      return {
+        content: [{ type: 'text', text: `Payment call failed: ${e instanceof Error ? e.message : String(e)}` }],
         isError: true,
       }
     }
