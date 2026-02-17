@@ -122,6 +122,7 @@ function getPublicRateLimitRouteKey(path: string): string | null {
     normalized === '/api/analytics/overview' ||
     normalized === '/api/analytics/funnel/overview' ||
     normalized === '/api/analytics/funnel/events' ||
+    normalized === '/api/onchain/usdc-transfers' ||
     normalized === '/api/survival/status' ||
     normalized === '/api/stats' ||
     normalized === '/api/registry' ||
@@ -566,6 +567,36 @@ app.get('/api/openapi.json', (c) => {
                 avgPremiumPct: { type: 'number' },
                 executeCandidates: { type: 'integer' },
                 marketCondition: { type: 'string' },
+                at: { type: 'string', format: 'date-time' },
+              } } } },
+            },
+          },
+        },
+      },
+      '/api/onchain/usdc-transfers': {
+        get: {
+          operationId: 'usdcTransfers',
+          summary: 'Recent on-chain USDC transfers to CrossFin wallet (Base)',
+          description: 'Returns recent USDC Transfer events to the CrossFin payment receiver on Base mainnet. Used by live.crossfin.dev to render the on-chain payment feed.',
+          tags: ['Free'],
+          parameters: [
+            { name: 'limit', in: 'query', description: 'Max transfers to return (1..20). Default 10.', schema: { type: 'integer', default: 10, maximum: 20 } },
+          ],
+          responses: {
+            '200': {
+              description: 'USDC transfers',
+              content: { 'application/json': { schema: { type: 'object', properties: {
+                wallet: { type: 'string' },
+                contract: { type: 'string' },
+                token: { type: 'object', properties: { symbol: { type: 'string' }, decimals: { type: 'integer' } } },
+                transfers: { type: 'array', items: { type: 'object', properties: {
+                  hash: { type: 'string' },
+                  from: { type: 'string' },
+                  to: { type: 'string' },
+                  value: { type: 'string' },
+                  tokenDecimal: { type: 'string' },
+                  timeStamp: { type: 'string' },
+                } } },
                 at: { type: 'string', format: 'date-time' },
               } } } },
             },
@@ -4391,24 +4422,148 @@ async function fetchKrwRate(): Promise<number> {
 }
 
 async function fetchBithumbAll(): Promise<Record<string, Record<string, string>>> {
-  const res = await fetch('https://api.bithumb.com/public/ticker/ALL_KRW')
-  const data = await res.json() as { status: string; data: Record<string, unknown> }
-  if (data.status !== '0000') throw new HTTPException(502, { message: 'Bithumb API unavailable' })
-  return data.data as Record<string, Record<string, string>>
+  // Cache to avoid hammering Bithumb on high-traffic dashboards.
+  const BITHUMB_ALL_SUCCESS_TTL_MS = 10_000
+  const BITHUMB_ALL_FAILURE_TTL_MS = 2_000
+
+  type CachedBithumbAll = { value: Record<string, Record<string, string>>; expiresAt: number }
+  const globalAny = globalThis as unknown as {
+    __crossfinBithumbAllCache?: CachedBithumbAll
+    __crossfinBithumbAllInFlight?: Promise<Record<string, Record<string, string>>> | null
+  }
+
+  const now = Date.now()
+  const cached = globalAny.__crossfinBithumbAllCache
+  if (cached && now < cached.expiresAt) return cached.value
+  if (globalAny.__crossfinBithumbAllInFlight) return globalAny.__crossfinBithumbAllInFlight
+
+  const fallback = cached?.value ?? {}
+
+  const promise = (async () => {
+    try {
+      const res = await fetch('https://api.bithumb.com/public/ticker/ALL_KRW')
+      if (!res.ok) throw new Error(`Bithumb API unavailable (${res.status})`)
+      const data: unknown = await res.json()
+      if (!isRecord(data) || typeof data.status !== 'string' || !isRecord(data.data)) {
+        throw new Error('Bithumb API invalid response')
+      }
+      if (data.status !== '0000') throw new Error('Bithumb API unavailable')
+
+      const parsed = data.data as Record<string, Record<string, string>>
+      if (!isRecord(parsed.BTC) && !isRecord(parsed.ETH)) {
+        throw new Error('Bithumb API returned no tickers')
+      }
+
+      globalAny.__crossfinBithumbAllCache = { value: parsed, expiresAt: now + BITHUMB_ALL_SUCCESS_TTL_MS }
+      return parsed
+    } catch {
+      globalAny.__crossfinBithumbAllCache = { value: fallback, expiresAt: now + BITHUMB_ALL_FAILURE_TTL_MS }
+      if (Object.keys(fallback).length > 0) return fallback
+      throw new HTTPException(502, { message: 'Bithumb API unavailable' })
+    } finally {
+      globalAny.__crossfinBithumbAllInFlight = null
+    }
+  })()
+
+  globalAny.__crossfinBithumbAllInFlight = promise
+  return promise
 }
 
 async function fetchGlobalPrices(): Promise<Record<string, number>> {
-  const coins = Object.keys(TRACKED_PAIRS).join(',')
-  const res = await fetch(
-    `https://min-api.cryptocompare.com/data/pricemulti?fsyms=${coins}&tsyms=USD`,
-  )
-  if (!res.ok) throw new HTTPException(502, { message: 'Price feed unavailable' })
-  const data = await res.json() as Record<string, { USD?: number }>
-  const prices: Record<string, number> = {}
-  for (const [coin, binanceSymbol] of Object.entries(TRACKED_PAIRS)) {
-    if (data[coin]?.USD) prices[binanceSymbol] = data[coin].USD
+  // Cache to avoid rate-limits on upstream price providers.
+  const GLOBAL_PRICES_SUCCESS_TTL_MS = 30_000
+  const GLOBAL_PRICES_FAILURE_TTL_MS = 5_000
+
+  type CachedGlobalPrices = { value: Record<string, number>; expiresAt: number; source: string }
+  const globalAny = globalThis as unknown as {
+    __crossfinGlobalPricesCache?: CachedGlobalPrices
+    __crossfinGlobalPricesInFlight?: Promise<Record<string, number>> | null
   }
-  return prices
+
+  const now = Date.now()
+  const cached = globalAny.__crossfinGlobalPricesCache
+  if (cached && now < cached.expiresAt && Object.keys(cached.value).length > 0) return cached.value
+  if (globalAny.__crossfinGlobalPricesInFlight) return globalAny.__crossfinGlobalPricesInFlight
+
+  const fallback = cached?.value ?? {}
+
+  const promise = (async () => {
+    const symbols = Array.from(new Set(Object.values(TRACKED_PAIRS)))
+
+    const isValidPrices = (prices: Record<string, number>): boolean => {
+      const btc = prices[TRACKED_PAIRS.BTC]
+      const eth = prices[TRACKED_PAIRS.ETH]
+      if (typeof btc !== 'number' || !Number.isFinite(btc) || btc <= 1000) return false
+      if (typeof eth !== 'number' || !Number.isFinite(eth) || eth <= 10) return false
+      return Object.keys(prices).length >= 3
+    }
+
+    // 1) Binance (USDT ~= USD) batch endpoint
+    try {
+      const url = `https://api.binance.com/api/v3/ticker/price?symbols=${encodeURIComponent(JSON.stringify(symbols))}`
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`Binance price feed unavailable (${res.status})`)
+      const data: unknown = await res.json()
+      if (!Array.isArray(data)) throw new Error('Binance price feed invalid response')
+
+      const prices: Record<string, number> = {}
+      for (const row of data) {
+        if (!isRecord(row)) continue
+        const symbol = typeof row.symbol === 'string' ? row.symbol.trim().toUpperCase() : ''
+        const priceRaw = typeof row.price === 'string' ? row.price.trim() : ''
+        const price = Number(priceRaw)
+        if (!symbol || !Number.isFinite(price) || price <= 0) continue
+        prices[symbol] = price
+      }
+
+      if (isValidPrices(prices)) {
+        globalAny.__crossfinGlobalPricesCache = { value: prices, expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS, source: 'binance' }
+        return prices
+      }
+    } catch {
+      // Continue to fallback provider
+    }
+
+    // 2) CryptoCompare fallback (no key) — detect 200/ERROR payloads
+    try {
+      const coins = Object.keys(TRACKED_PAIRS).join(',')
+      const res = await fetch(
+        `https://min-api.cryptocompare.com/data/pricemulti?fsyms=${coins}&tsyms=USD`,
+      )
+      if (!res.ok) throw new Error(`CryptoCompare price feed unavailable (${res.status})`)
+
+      const data: unknown = await res.json()
+      if (!isRecord(data)) throw new Error('CryptoCompare price feed invalid response')
+
+      const responseField = typeof data.Response === 'string' ? data.Response.toLowerCase() : ''
+      if (responseField === 'error') throw new Error('CryptoCompare price feed returned error payload')
+
+      const prices: Record<string, number> = {}
+      for (const [coin, binanceSymbol] of Object.entries(TRACKED_PAIRS)) {
+        const row = data[coin]
+        if (!isRecord(row)) continue
+        const price = row.USD
+        if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) continue
+        prices[binanceSymbol] = price
+      }
+
+      if (isValidPrices(prices)) {
+        globalAny.__crossfinGlobalPricesCache = { value: prices, expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS, source: 'cryptocompare' }
+        return prices
+      }
+    } catch {
+      // Continue to fallback
+    }
+
+    globalAny.__crossfinGlobalPricesCache = { value: fallback, expiresAt: now + GLOBAL_PRICES_FAILURE_TTL_MS, source: cached?.source ?? 'cached' }
+    if (isRecord(fallback) && Object.keys(fallback).length > 0) return fallback
+    throw new HTTPException(502, { message: 'Price feed unavailable' })
+  })()
+
+  globalAny.__crossfinGlobalPricesInFlight = promise
+  return promise.finally(() => {
+    globalAny.__crossfinGlobalPricesInFlight = null
+  })
 }
 
 async function fetchBithumbOrderbook(pair: string): Promise<{ bids: unknown[]; asks: unknown[] }> {
@@ -5884,6 +6039,180 @@ app.get('/api/arbitrage/demo', async (c) => {
     avgPremiumPct: avgPremium,
     executeCandidates,
     marketCondition: executeCandidates >= 2 ? 'favorable' : executeCandidates === 1 ? 'neutral' : 'unfavorable',
+    at: new Date().toISOString(),
+  })
+})
+
+// === On-chain USDC transfers (Base mainnet) ===
+
+const BASE_RPC_URL = 'https://mainnet.base.org'
+const BASE_USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
+const ERC20_TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+const USDC_DECIMALS = 6
+
+function toTopicAddress(address: string): string {
+  const normalized = address.trim().toLowerCase()
+  if (!/^0x[0-9a-f]{40}$/.test(normalized)) {
+    throw new HTTPException(500, { message: 'Invalid PAYMENT_RECEIVER_ADDRESS (expected 0x + 40 hex chars)' })
+  }
+  return `0x${normalized.slice(2).padStart(64, '0')}`
+}
+
+function topicToAddress(topic: string): string {
+  const raw = topic.trim().toLowerCase()
+  if (!/^0x[0-9a-f]{64}$/.test(raw)) return ''
+  return `0x${raw.slice(-40)}`
+}
+
+async function baseRpc<T>(method: string, params: unknown[]): Promise<T> {
+  const res = await fetch(BASE_RPC_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+  })
+  if (!res.ok) throw new HTTPException(502, { message: 'Base RPC unavailable' })
+  const data: unknown = await res.json()
+  if (!isRecord(data)) throw new HTTPException(502, { message: 'Base RPC invalid response' })
+  if (data.error) throw new HTTPException(502, { message: 'Base RPC error' })
+  if (!('result' in data)) throw new HTTPException(502, { message: 'Base RPC missing result' })
+  return data.result as T
+}
+
+type RpcLog = {
+  address?: string
+  topics?: string[]
+  data?: string
+  blockNumber?: string
+  transactionHash?: string
+  logIndex?: string
+}
+
+type UsdcTransfer = {
+  hash: string
+  from: string
+  to: string
+  value: string
+  tokenDecimal: string
+  timeStamp: string
+}
+
+async function fetchRecentUsdcTransfers(walletAddress: string, limit: number): Promise<UsdcTransfer[]> {
+  const latestHex = await baseRpc<string>('eth_blockNumber', [])
+  const latest = typeof latestHex === 'string' ? parseInt(latestHex, 16) : NaN
+  if (!Number.isFinite(latest) || latest <= 0) throw new HTTPException(502, { message: 'Base RPC unavailable' })
+
+  const toTopic = toTopicAddress(walletAddress)
+  const ranges = [50_000, 250_000, 1_000_000]
+
+  let logs: RpcLog[] = []
+  for (const span of ranges) {
+    const fromBlock = Math.max(0, latest - span)
+    const filter = {
+      address: BASE_USDC_ADDRESS,
+      fromBlock: `0x${fromBlock.toString(16)}`,
+      toBlock: 'latest',
+      topics: [ERC20_TRANSFER_TOPIC, null, toTopic],
+    }
+    const out = await baseRpc<RpcLog[]>('eth_getLogs', [filter])
+    logs = Array.isArray(out) ? out : []
+    if (logs.length >= limit) break
+  }
+
+  const sorted = logs
+    .filter((l) => Boolean(l && typeof l.transactionHash === 'string' && typeof l.blockNumber === 'string'))
+    .sort((a, b) => {
+      const aBlock = parseInt(a.blockNumber ?? '0x0', 16)
+      const bBlock = parseInt(b.blockNumber ?? '0x0', 16)
+      if (aBlock !== bBlock) return bBlock - aBlock
+      const aIdx = parseInt(a.logIndex ?? '0x0', 16)
+      const bIdx = parseInt(b.logIndex ?? '0x0', 16)
+      return bIdx - aIdx
+    })
+    .slice(0, limit)
+
+  const blockNums = Array.from(
+    new Set(sorted.map((l) => parseInt(l.blockNumber ?? '0x0', 16)).filter((n) => Number.isFinite(n) && n >= 0)),
+  )
+  const blockTs = new Map<number, string>()
+  await Promise.all(blockNums.map(async (n) => {
+    const block = await baseRpc<unknown>('eth_getBlockByNumber', [`0x${n.toString(16)}`, false])
+    if (!isRecord(block) || typeof block.timestamp !== 'string') return
+    const ts = parseInt(block.timestamp, 16)
+    if (!Number.isFinite(ts) || ts <= 0) return
+    blockTs.set(n, String(ts))
+  }))
+
+  const transfers: UsdcTransfer[] = []
+  for (const log of sorted) {
+    const topics = Array.isArray(log.topics) ? log.topics : []
+    const from = typeof topics[1] === 'string' ? topicToAddress(topics[1]) : ''
+    const to = typeof topics[2] === 'string' ? topicToAddress(topics[2]) : ''
+    const hash = typeof log.transactionHash === 'string' ? log.transactionHash : ''
+    const data = typeof log.data === 'string' ? log.data : ''
+    const blockNumber = typeof log.blockNumber === 'string' ? parseInt(log.blockNumber, 16) : NaN
+
+    if (!hash || !from || !to || !data.startsWith('0x') || data.length < 3) continue
+
+    let valueAtomic = 0n
+    try {
+      valueAtomic = BigInt(data)
+    } catch {
+      continue
+    }
+
+    const timeStamp = Number.isFinite(blockNumber) ? (blockTs.get(blockNumber) ?? '') : ''
+    if (!timeStamp) continue
+
+    transfers.push({
+      hash,
+      from,
+      to,
+      value: valueAtomic.toString(),
+      tokenDecimal: String(USDC_DECIMALS),
+      timeStamp,
+    })
+  }
+
+  return transfers
+}
+
+app.get('/api/onchain/usdc-transfers', async (c) => {
+  const limit = Math.min(20, Math.max(1, Number(c.req.query('limit') ?? '10') || 10))
+  const wallet = c.env.PAYMENT_RECEIVER_ADDRESS
+
+  const CACHE_TTL_MS = 20_000
+  type Cached = { transfers: UsdcTransfer[]; expiresAt: number }
+  const globalAny = globalThis as unknown as {
+    __crossfinUsdcTransfersCache?: Cached
+    __crossfinUsdcTransfersInFlight?: Promise<UsdcTransfer[]> | null
+  }
+
+  const now = Date.now()
+  const cached = globalAny.__crossfinUsdcTransfersCache
+  if (cached && now < cached.expiresAt) {
+    return c.json({
+      wallet,
+      contract: BASE_USDC_ADDRESS,
+      token: { symbol: 'USDC', decimals: USDC_DECIMALS },
+      transfers: cached.transfers.slice(0, limit),
+      at: new Date().toISOString(),
+    })
+  }
+
+  if (!globalAny.__crossfinUsdcTransfersInFlight) {
+    globalAny.__crossfinUsdcTransfersInFlight = fetchRecentUsdcTransfers(wallet, 20).finally(() => {
+      globalAny.__crossfinUsdcTransfersInFlight = null
+    })
+  }
+
+  const transfers = await globalAny.__crossfinUsdcTransfersInFlight
+  globalAny.__crossfinUsdcTransfersCache = { transfers, expiresAt: now + CACHE_TTL_MS }
+
+  return c.json({
+    wallet,
+    contract: BASE_USDC_ADDRESS,
+    token: { symbol: 'USDC', decimals: USDC_DECIMALS },
+    transfers: transfers.slice(0, limit),
     at: new Date().toISOString(),
   })
 })
