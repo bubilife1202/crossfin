@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.2] - 2026-02-17
+
+### Fixed
+- Global price feed resilience: routing and kimchi endpoints now fall back to latest D1 snapshots when upstream providers rate-limit or block Workers egress.
+- MCP routing tool: `find_optimal_route` now calls the paid endpoint (`GET /api/premium/route/find`, $0.10) via x402 (fixes 404 on `/api/route/find`).
+- Route status: Binance is reported based on CrossFin's global price feed availability (reflects actual routing readiness).
+
 ## [1.8.1] - 2026-02-18
 
 ### Added

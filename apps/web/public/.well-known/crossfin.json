@@ -1,6 +1,6 @@
 {
   "name": "CrossFin",
-  "version": "1.7.1",
+  "version": "1.8.2",
   "description": "Agent-first directory and gateway for x402 services and Korean market data.",
   "urls": {
     "website": "https://crossfin.dev",
@@ -22,7 +22,9 @@
     "run": "npx -y crossfin-mcp",
     "repo": "https://github.com/bubilife1202/crossfin/tree/main/apps/mcp-server",
     "env": {
-      "CROSSFIN_API_URL": "https://crossfin.dev"
+      "CROSSFIN_API_URL": "https://crossfin.dev",
+      "CROSSFIN_LEDGER_PATH": "~/.crossfin/ledger.json",
+      "EVM_PRIVATE_KEY": "0x..."
     },
     "tools": [
       "search_services",
@@ -37,8 +39,11 @@
       "transfer",
       "list_transactions",
       "set_budget",
-      "call_paid_service"
+      "call_paid_service",
+      "find_optimal_route",
+      "list_exchange_fees",
+      "compare_exchange_prices"
     ]
   },
-  "updatedAt": "2026-02-16T00:00:00.000Z"
+  "updatedAt": "2026-02-17T00:00:00.000Z"
 }

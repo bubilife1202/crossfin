@@ -61,10 +61,14 @@ function buildWellKnown(catalog) {
       repo: 'https://github.com/bubilife1202/crossfin/tree/main/apps/mcp-server',
       env: {
         CROSSFIN_API_URL: 'https://crossfin.dev',
+        // Optional: override ledger file location
+        CROSSFIN_LEDGER_PATH: '~/.crossfin/ledger.json',
+        // Required for paid endpoints (x402 payment on Base)
+        EVM_PRIVATE_KEY: '0x...',
       },
       tools: catalog.mcpTools,
     },
-    updatedAt: '2026-02-16T00:00:00.000Z',
+    updatedAt: '2026-02-17T00:00:00.000Z',
   }
 }
 
