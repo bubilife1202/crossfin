@@ -4944,7 +4944,7 @@ async function findOptimalRoute(
   const [krwRateResult, bithumbAllResult, globalPricesResult] = await Promise.allSettled([
     fetchKrwRate(),
     fetchBithumbAll(),
-    fetchGlobalPrices(),
+    fetchGlobalPrices(db),
   ])
   const krwRate = krwRateResult.status === 'fulfilled' ? krwRateResult.value : 1450
   const bithumbAll = bithumbAllResult.status === 'fulfilled' ? bithumbAllResult.value : {}
@@ -5203,7 +5203,7 @@ async function fetchBithumbAll(): Promise<Record<string, Record<string, string>>
   return promise
 }
 
-async function fetchGlobalPrices(): Promise<Record<string, number>> {
+async function fetchGlobalPrices(db?: D1Database): Promise<Record<string, number>> {
   // Cache to avoid rate-limits on upstream price providers.
   const GLOBAL_PRICES_SUCCESS_TTL_MS = 30_000
   const GLOBAL_PRICES_FAILURE_TTL_MS = 5_000
@@ -5347,6 +5347,49 @@ async function fetchGlobalPrices(): Promise<Record<string, number>> {
       }
     } catch {
       // Continue to fallback
+    }
+
+    // 4) D1 snapshot fallback (last persisted kimchi_snapshots).
+    // This keeps paid endpoints and routing usable even when upstream feeds rate-limit or block Workers egress.
+    if (db) {
+      try {
+        type SnapshotRow = { coin: string; binanceUsd: number | string; createdAt: string }
+        const sql = `
+          WITH ranked AS (
+            SELECT
+              coin,
+              binance_usd AS binanceUsd,
+              created_at AS createdAt,
+              ROW_NUMBER() OVER (PARTITION BY coin ORDER BY datetime(created_at) DESC) AS rn
+            FROM kimchi_snapshots
+            WHERE created_at >= datetime('now', '-7 day')
+              AND binance_usd IS NOT NULL
+          )
+          SELECT coin, binanceUsd, createdAt
+          FROM ranked
+          WHERE rn = 1
+        `
+
+        const res = await db.prepare(sql).all<SnapshotRow>()
+        const rows = res.results ?? []
+
+        const prices: Record<string, number> = {}
+        for (const row of rows) {
+          const coin = String(row.coin ?? '').trim().toUpperCase()
+          const symbol = TRACKED_PAIRS[coin]
+          if (!symbol) continue
+          const price = Number(row.binanceUsd ?? NaN)
+          if (!Number.isFinite(price) || price <= 0) continue
+          prices[symbol] = price
+        }
+
+        if (isValidPrices(prices)) {
+          globalAny.__crossfinGlobalPricesCache = { value: prices, expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS, source: 'snapshot:d1' }
+          return prices
+        }
+      } catch {
+        // Continue to cached fallback
+      }
     }
 
     globalAny.__crossfinGlobalPricesCache = { value: fallback, expiresAt: now + GLOBAL_PRICES_FAILURE_TTL_MS, source: cached?.source ?? 'cached' }
@@ -5531,7 +5574,7 @@ function calcPremiums(
 app.get('/api/premium/arbitrage/kimchi', async (c) => {
   const [bithumbData, binancePrices, krwRate] = await Promise.all([
     fetchBithumbAll(),
-    fetchGlobalPrices(),
+    fetchGlobalPrices(c.env.DB),
     fetchKrwRate(),
   ])
 
@@ -5634,7 +5677,7 @@ app.get('/api/premium/arbitrage/kimchi/history', async (c) => {
 app.get('/api/premium/arbitrage/opportunities', async (c) => {
   const [bithumbData, binancePrices, krwRate] = await Promise.all([
     fetchBithumbAll(),
-    fetchGlobalPrices(),
+    fetchGlobalPrices(c.env.DB),
     fetchKrwRate(),
   ])
 
@@ -6781,7 +6824,7 @@ app.get('/api/premium/crypto/snapshot', async (c) => {
   const coin = 'BTC'
 
   const bithumbPromise = fetchBithumbAll()
-  const globalPricesPromise = fetchGlobalPrices()
+  const globalPricesPromise = fetchGlobalPrices(c.env.DB)
   const krwRatePromise = fetchKrwRate()
 
   type KimchiPremiumRow = ReturnType<typeof calcPremiums>[number]
@@ -6993,7 +7036,7 @@ app.get('/api/premium/kimchi/stats', async (c) => {
 
   const currentTask = (async () => {
     const bithumbPromise = fetchBithumbAll()
-    const globalPricesPromise = fetchGlobalPrices()
+    const globalPricesPromise = fetchGlobalPrices(c.env.DB)
     const krwRatePromise = fetchKrwRate()
 
     const [bithumbSet, globalSet, krwSet] = await Promise.allSettled([
@@ -7209,7 +7252,7 @@ app.get('/api/premium/morning/brief', async (c) => {
   const kimchiTask = (async () => {
     const [bithumbData, binancePrices, krwRate] = await Promise.all([
       fetchBithumbAll(),
-      fetchGlobalPrices(),
+      fetchGlobalPrices(c.env.DB),
       krwRatePromise,
     ])
 
@@ -7377,7 +7420,7 @@ app.get('/api/premium/market/cross-exchange', async (c) => {
 
   const [bithumbSet, binanceSet, krwSet] = await Promise.allSettled([
     fetchBithumbAll(),
-    fetchGlobalPrices(),
+    fetchGlobalPrices(c.env.DB),
     fetchKrwRate(),
   ])
 
@@ -7574,7 +7617,7 @@ app.get('/api/arbitrage/demo', async (c) => {
   try {
     const [bithumbData, binancePrices, krwRate] = await Promise.all([
       fetchBithumbAll(),
-      fetchGlobalPrices(),
+      fetchGlobalPrices(c.env.DB),
       fetchKrwRate(),
     ])
 
@@ -7893,7 +7936,7 @@ app.get('/api/cron/snapshot-kimchi', async (c) => {
 
   const [bithumbData, binancePrices, krwRate] = await Promise.all([
     fetchBithumbAll(),
-    fetchGlobalPrices(),
+    fetchGlobalPrices(c.env.DB),
     fetchKrwRate(),
   ])
 
@@ -8639,7 +8682,7 @@ app.get('/api/route/fees', (c) => {
 // GET /api/route/pairs — Supported pairs with live prices (free)
 app.get('/api/route/pairs', async (c) => {
   const [bithumbResult, globalResult, krwResult] = await Promise.allSettled([
-    fetchBithumbAll(), fetchGlobalPrices(), fetchKrwRate(),
+    fetchBithumbAll(), fetchGlobalPrices(c.env.DB), fetchKrwRate(),
   ])
   const bithumbAll = bithumbResult.status === 'fulfilled' ? bithumbResult.value : {}
   const globalPrices: Record<string, number> = globalResult.status === 'fulfilled' ? globalResult.value : {}
@@ -8914,7 +8957,7 @@ export default {
   async scheduled(event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
     const [bithumbData, binancePrices, krwRate] = await Promise.all([
       fetchBithumbAll(),
-      fetchGlobalPrices(),
+      fetchGlobalPrices(env.DB),
       fetchKrwRate(),
     ])
 
