@@ -87,7 +87,7 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 | `GET /api/premium/market/korea/stocks/momentum` | $0.05 | Korean stock momentum (top market cap, gainers, losers) |
 | `GET /api/premium/market/korea/investor-flow?stock=005930` | $0.05 | Stock investor flow — 10-day foreign/institutional/individual net buying |
 | `GET /api/premium/market/korea/index-flow?index=KOSPI` | $0.03 | KOSPI/KOSDAQ investor flow — foreign/institutional/individual net buying (billion KRW) |
-| `GET /api/premium/crypto/korea/5exchange?coin=BTC` | $0.08 | Compare crypto prices across 5 Korean exchanges (Upbit, Bithumb, Korbit, Coinone, GoPax) |
+| `GET /api/premium/crypto/korea/5exchange?coin=BTC` | $0.08 | Compare crypto prices across 4 Korean exchanges (Upbit, Bithumb, Coinone, GoPax) |
 | `GET /api/premium/crypto/korea/exchange-status` | $0.03 | Bithumb deposit/withdrawal status for all coins |
 | `GET /api/premium/market/korea/stock-detail?stock=005930` | $0.05 | Comprehensive stock analysis — PER, PBR, consensus, industry peers |
 | `GET /api/premium/market/korea/stock-news?stock=005930` | $0.03 | Stock-specific news from Naver Finance |
@@ -111,7 +111,7 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/route/exchanges` | List supported exchanges (6 exchanges, fees, supported coins) |
+| `GET /api/route/exchanges` | List supported exchanges (5 exchanges, fees, supported coins) |
 | `GET /api/route/fees` | Fee comparison table (trading + withdrawal fees) |
 | `GET /api/route/pairs` | Supported trading pairs with live prices |
 | `GET /api/route/status` | Exchange API health check (online/offline) |
@@ -120,7 +120,7 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 
 | Endpoint | Price | Description |
 |----------|-------|-------------|
-| `GET /api/premium/route/find` | $0.10 | Find optimal crypto transfer route across 6 exchanges |
+| `GET /api/premium/route/find` | $0.10 | Find optimal crypto transfer route across 5 exchanges |
 
 ### ACP (Agentic Commerce Protocol)
 

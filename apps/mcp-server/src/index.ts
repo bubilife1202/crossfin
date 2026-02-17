@@ -492,7 +492,7 @@ server.registerTool(
     description:
       'Find the cheapest/fastest path to move money across Asian exchanges. ' +
       'Example: KRW on Bithumb → USDC on Binance. ' +
-      'Supports 6 exchanges (Bithumb, Upbit, Coinone, Korbit, GoPax, Binance) and 12 bridge coins. ' +
+      'Supports 5 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance) and 12 bridge coins. ' +
       'Paid tool: calls /api/premium/route/find ($0.10) via x402 (requires EVM_PRIVATE_KEY).',
     inputSchema: z.object({
       from: z
@@ -561,7 +561,7 @@ server.registerTool(
     title: 'List exchange fees',
     description:
       'Show trading fees, withdrawal fees, and transfer times for all supported exchanges ' +
-      '(Bithumb, Upbit, Coinone, Korbit, GoPax, Binance)',
+      '(Bithumb, Upbit, Coinone, GoPax, Binance)',
     inputSchema: z.object({}),
   },
   async (_params): Promise<CallToolResult> => {
@@ -582,8 +582,8 @@ server.registerTool(
   {
     title: 'Compare exchange prices',
     description:
-      'Compare real-time prices for a coin across all Korean exchanges + Binance. ' +
-      'Shows price, premium, and arbitrage opportunities.',
+      'Compare Bithumb KRW prices vs global USD prices (Binance) for tracked coins. ' +
+      'Shows transfer-time estimates and which coins are bridge-capable.',
     inputSchema: z.object({
       coin: z
         .string()

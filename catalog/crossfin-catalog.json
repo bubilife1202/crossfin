@@ -1,5 +1,5 @@
 {
-  "apiVersion": "1.8.2",
+  "apiVersion": "1.8.3",
   "mcpTools": [
     "search_services",
     "list_services",
@@ -233,14 +233,14 @@
     },
     {
       "id": "crossfin_crypto_korea_5exchange",
-      "name": "CrossFin Korea 5-Exchange Price Compare",
-      "description": "Compare coin prices across Upbit, Bithumb, Korbit, Coinone, and GoPax.",
+      "name": "CrossFin Korea 4-Exchange Price Compare",
+      "description": "Compare coin prices across Upbit, Bithumb, Coinone, and GoPax.",
       "category": "korea-crypto",
       "path": "/api/premium/crypto/korea/5exchange",
       "sampleQuery": "coin=BTC",
       "price": "$0.08",
       "tags": ["korea", "crypto", "exchange", "arbitrage"],
-      "playgroundLabel": "Korea 5-Exchange Compare"
+      "playgroundLabel": "Korea 4-Exchange Compare"
     },
     {
       "id": "crossfin_crypto_korea_exchange_status",
@@ -391,7 +391,7 @@
     {
       "id": "crossfin_route_find",
       "name": "CrossFin Optimal Route Finder",
-      "description": "Find cheapest/fastest crypto transfer route across 6 exchanges (Bithumb, Upbit, Coinone, Korbit, GoPax, Binance). Compares bridge coins, fees, transfer times.",
+      "description": "Find cheapest/fastest crypto transfer route across 5 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance). Compares bridge coins, fees, transfer times.",
       "category": "routing",
       "path": "/api/premium/route/find",
       "sampleQuery": "from=bithumb:KRW&to=binance:USDC&amount=1000000&strategy=cheapest",

@@ -530,7 +530,7 @@ export default function App() {
                 <p className="emptyText">Loading exchanges...</p>
               )}
               {(routeStatus?.exchanges ?? []).map((ex) => {
-                const isKorea = ["bithumb", "upbit", "coinone", "korbit", "gopax"].includes(
+                const isKorea = ["bithumb", "upbit", "coinone", "gopax"].includes(
                   ex.exchange.toLowerCase(),
                 );
                 return (

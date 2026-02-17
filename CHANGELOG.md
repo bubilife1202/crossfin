@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.8.3] - 2026-02-17
+
+### Changed
+- Removed Korbit integration from routing engine + dashboards due to unreliable availability from Cloudflare Workers egress.
+- `GET /api/premium/crypto/korea/5exchange` now compares 4 Korean exchanges (Upbit, Bithumb, Coinone, GoPax).
+
 ## [1.8.2] - 2026-02-17
 
 ### Fixed
@@ -10,7 +16,7 @@
 ## [1.8.1] - 2026-02-18
 
 ### Added
-- **Routing Engine**: Complete crypto transfer routing across 6 exchanges (Bithumb, Upbit, Coinone, Korbit, GoPax, Binance)
+- **Routing Engine**: Complete crypto transfer routing across 5 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance)
   - `GET /api/premium/route/find` ($0.10) — optimal route with bridge coin comparison, slippage, fees
   - `GET /api/route/exchanges` — supported exchanges list (free)
   - `GET /api/route/fees` — fee comparison table (free)
@@ -57,7 +63,7 @@ TIER 2 — Stock analysis bundle:
 Batch 1 — Deep Korean Market Data:
 - `GET /api/premium/market/korea/investor-flow` ($0.05) — 10-day foreign/institutional/individual net buying per stock
 - `GET /api/premium/market/korea/index-flow` ($0.03) — KOSPI/KOSDAQ investor flow (foreign/institutional/individual in billion KRW)
-- `GET /api/premium/crypto/korea/5exchange` ($0.08) — Compare crypto prices across all 5 Korean exchanges (Upbit, Bithumb, Korbit, Coinone, GoPax)
+- `GET /api/premium/crypto/korea/5exchange` ($0.08) — Compare crypto prices across 4 Korean exchanges (Upbit, Bithumb, Coinone, GoPax)
 - `GET /api/premium/crypto/korea/exchange-status` ($0.03) — Bithumb deposit/withdrawal status for all coins
 - `GET /api/premium/market/korea/stock-detail` ($0.05) — Comprehensive stock analysis (PER, PBR, EPS, consensus, industry peers)
 
