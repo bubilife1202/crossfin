@@ -478,5 +478,100 @@ server.registerTool(
   }
 )
 
+/* ── Routing Engine Tools ── */
+
+server.registerTool(
+  'find_optimal_route',
+  {
+    title: 'Find optimal route',
+    description:
+      'Find the cheapest/fastest path to move money across Asian exchanges. ' +
+      'Example: KRW on Bithumb → USDC on Binance. ' +
+      'Supports 6 exchanges (Bithumb, Upbit, Coinone, Korbit, GoPax, Binance) and 12 bridge coins.',
+    inputSchema: z.object({
+      from: z
+        .string()
+        .describe('Source in exchange:currency format (e.g. "bithumb:KRW", "upbit:KRW")'),
+      to: z
+        .string()
+        .describe('Destination in exchange:currency format (e.g. "binance:USDC", "binance:BTC")'),
+      amount: z.number().describe('Amount in source currency (e.g. 1000000 for ₩1,000,000)'),
+      strategy: z
+        .enum(['cheapest', 'fastest', 'balanced'])
+        .optional()
+        .describe('Routing strategy: cheapest (default), fastest, or balanced'),
+    }),
+  },
+  async ({ from, to, amount, strategy }): Promise<CallToolResult> => {
+    try {
+      const qs = new URLSearchParams({
+        from,
+        to,
+        amount: String(amount),
+      })
+      if (strategy) qs.set('strategy', strategy)
+      const data = await apiFetch<unknown>(`/api/route/find?${qs.toString()}`)
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    } catch (e) {
+      return {
+        content: [{ type: 'text', text: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` }],
+        isError: true,
+      }
+    }
+  }
+)
+
+server.registerTool(
+  'list_exchange_fees',
+  {
+    title: 'List exchange fees',
+    description:
+      'Show trading fees, withdrawal fees, and transfer times for all supported exchanges ' +
+      '(Bithumb, Upbit, Coinone, Korbit, GoPax, Binance)',
+    inputSchema: z.object({}),
+  },
+  async (_params): Promise<CallToolResult> => {
+    try {
+      const data = await apiFetch<unknown>('/api/route/fees')
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    } catch (e) {
+      return {
+        content: [{ type: 'text', text: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` }],
+        isError: true,
+      }
+    }
+  }
+)
+
+server.registerTool(
+  'compare_exchange_prices',
+  {
+    title: 'Compare exchange prices',
+    description:
+      'Compare real-time prices for a coin across all Korean exchanges + Binance. ' +
+      'Shows price, premium, and arbitrage opportunities.',
+    inputSchema: z.object({
+      coin: z
+        .string()
+        .optional()
+        .describe('Coin symbol to compare (e.g. "BTC", "XRP"). Omit for all supported coins.'),
+    }),
+  },
+  async ({ coin }): Promise<CallToolResult> => {
+    try {
+      const qs = new URLSearchParams()
+      if (coin?.trim()) qs.set('coin', coin.trim().toUpperCase())
+      const path = qs.size ? `/api/route/pairs?${qs.toString()}` : '/api/route/pairs'
+      const data = await apiFetch<unknown>(path)
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    } catch (e) {
+      return {
+        content: [{ type: 'text', text: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` }],
+        isError: true,
+      }
+    }
+  }
+)
+
 const transport = new StdioServerTransport()
 await server.connect(transport)
