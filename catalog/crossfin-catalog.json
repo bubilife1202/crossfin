@@ -13,7 +13,10 @@
     "transfer",
     "list_transactions",
     "set_budget",
-    "call_paid_service"
+    "call_paid_service",
+    "find_optimal_route",
+    "list_exchange_fees",
+    "compare_exchange_prices"
   ],
   "freePlaygroundEndpoints": [
     { "path": "/api/health", "label": "Health Check" },
@@ -22,7 +25,11 @@
     { "path": "/api/arbitrage/demo", "label": "Kimchi Premium Preview" },
     { "path": "/api/analytics/overview", "label": "Analytics Overview" },
     { "path": "/api/stats", "label": "Agent Stats" },
-    { "path": "/api/openapi.json", "label": "OpenAPI Spec" }
+    { "path": "/api/openapi.json", "label": "OpenAPI Spec" },
+    { "path": "/api/route/exchanges", "label": "Route Exchanges" },
+    { "path": "/api/route/fees", "label": "Route Fees" },
+    { "path": "/api/route/status", "label": "Route Status" },
+    { "path": "/api/acp/status", "label": "ACP Status" }
   ],
   "paidEndpoints": [
     {
@@ -380,6 +387,28 @@
       "price": "$0.10",
       "tags": ["korea", "stocks", "bundle", "fundamentals", "news", "investor-flow", "agent-ready"],
       "playgroundLabel": "Stock Brief"
+    },
+    {
+      "id": "crossfin_route_find",
+      "name": "CrossFin Optimal Route Finder",
+      "description": "Find cheapest/fastest crypto transfer route across 6 exchanges (Bithumb, Upbit, Coinone, Korbit, GoPax, Binance). Compares bridge coins, fees, transfer times.",
+      "category": "routing",
+      "path": "/api/premium/route/find",
+      "sampleQuery": "from=bithumb:KRW&to=binance:USDC&amount=1000000&strategy=cheapest",
+      "price": "$0.10",
+      "tags": ["routing", "crypto", "exchange", "transfer", "bridge", "agent-ready"],
+      "playgroundLabel": "Route Finder"
     }
+  ],
+  "freeRoutingEndpoints": [
+    { "path": "/api/route/exchanges", "label": "Supported Exchanges" },
+    { "path": "/api/route/fees", "label": "Fee Comparison" },
+    { "path": "/api/route/pairs", "label": "Pairs & Live Prices" },
+    { "path": "/api/route/status", "label": "Exchange Health" }
+  ],
+  "freeAcpEndpoints": [
+    { "path": "/api/acp/status", "label": "ACP Protocol Status" },
+    { "path": "/api/acp/quote", "method": "POST", "label": "ACP Route Quote" },
+    { "path": "/api/acp/execute", "method": "POST", "label": "ACP Execute (Simulation)" }
   ]
 }
