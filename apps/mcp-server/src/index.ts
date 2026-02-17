@@ -7,6 +7,7 @@ import { z } from 'zod/v4'
 import { x402Client, wrapFetchWithPayment, x402HTTPClient } from '@x402/fetch'
 import { registerExactEvmScheme } from '@x402/evm/exact/client'
 import { privateKeyToAccount } from 'viem/accounts'
+import { createRequire } from 'node:module'
 
 import {
   createWallet,
@@ -23,6 +24,10 @@ const LEDGER_PATH = process.env.CROSSFIN_LEDGER_PATH?.trim() || defaultLedgerPat
 const API_BASE = (process.env.CROSSFIN_API_URL?.trim() || 'https://crossfin.dev').replace(/\/$/, '')
 const EVM_PRIVATE_KEY = process.env.EVM_PRIVATE_KEY?.trim() ?? ''
 const API_ORIGIN = new URL(API_BASE).origin
+
+const require = createRequire(import.meta.url)
+const pkg = require('../package.json') as { version?: string }
+const MCP_VERSION = typeof pkg.version === 'string' && pkg.version.trim() ? pkg.version.trim() : '0.0.0'
 
 function ensureCrossfinPaidUrl(raw: string): string {
   let url: URL
@@ -69,7 +74,7 @@ function basescanLink(networkId: string | undefined, txHash: string | undefined)
   return null
 }
 
-const server = new McpServer({ name: 'crossfin', version: '1.7.1' })
+const server = new McpServer({ name: 'crossfin', version: MCP_VERSION })
 
 const railSchema = z.enum(['manual', 'kakaopay', 'toss', 'stripe', 'x402'])
 
@@ -487,7 +492,8 @@ server.registerTool(
     description:
       'Find the cheapest/fastest path to move money across Asian exchanges. ' +
       'Example: KRW on Bithumb → USDC on Binance. ' +
-      'Supports 6 exchanges (Bithumb, Upbit, Coinone, Korbit, GoPax, Binance) and 12 bridge coins.',
+      'Supports 6 exchanges (Bithumb, Upbit, Coinone, Korbit, GoPax, Binance) and 12 bridge coins. ' +
+      'Paid tool: calls /api/premium/route/find ($0.10) via x402 (requires EVM_PRIVATE_KEY).',
     inputSchema: z.object({
       from: z
         .string()
@@ -503,6 +509,13 @@ server.registerTool(
     }),
   },
   async ({ from, to, amount, strategy }): Promise<CallToolResult> => {
+    if (!paidFetch || !httpClient) {
+      return {
+        content: [{ type: 'text', text: 'EVM_PRIVATE_KEY not configured — cannot call paid routing endpoint' }],
+        isError: true,
+      }
+    }
+
     try {
       const qs = new URLSearchParams({
         from,
@@ -510,8 +523,29 @@ server.registerTool(
         amount: String(amount),
       })
       if (strategy) qs.set('strategy', strategy)
-      const data = await apiFetch<unknown>(`/api/route/find?${qs.toString()}`)
-      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+
+      const targetUrl = ensureCrossfinPaidUrl(`${API_BASE}/api/premium/route/find?${qs.toString()}`)
+      const res = await paidFetch(targetUrl, { method: 'GET' })
+
+      const body = await res.text()
+      let data: unknown
+      try { data = JSON.parse(body) } catch { data = body }
+
+      const settle = httpClient.getPaymentSettleResponse((name: string) => res.headers.get(name))
+      const txHash = settle?.transaction
+      const networkId = settle?.network
+      const scanLink = basescanLink(networkId as string | undefined, txHash as string | undefined)
+
+      const result = {
+        status: res.status,
+        payer: payerAddress,
+        paid: !!settle,
+        txHash: txHash ?? null,
+        basescan: scanLink,
+        data,
+      }
+
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
     } catch (e) {
       return {
         content: [{ type: 'text', text: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` }],

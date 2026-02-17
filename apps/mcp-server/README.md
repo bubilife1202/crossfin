@@ -39,7 +39,7 @@ crossfin-mcp
 
 ### Routing engine
 
-- `find_optimal_route` — find optimal crypto transfer route across 6 exchanges
+- `find_optimal_route` — find optimal crypto transfer route across 6 exchanges (paid via x402, requires `EVM_PRIVATE_KEY`)
 - `list_exchange_fees` — compare trading and withdrawal fees across exchanges
 - `compare_exchange_prices` — compare live prices for a coin across Korean exchanges
 
