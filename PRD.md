@@ -15,22 +15,31 @@ Live:
 - Discovery: `GET /.well-known/crossfin.json`
 
 Current capabilities:
-- Registry: 179 services (CrossFin 34 + external 149), verified-only policy
-- Paid APIs: 34 x402 endpoints (USDC on Base mainnet), including 4 bundle endpoints
+- Registry: 184 services (CrossFin 35 + external 149), verified-only policy
+- Paid APIs: 35 x402 endpoints (USDC on Base mainnet), including 4 bundle endpoints + Routing Engine
 - Bundle APIs (v1.8.0):
   - `GET /api/premium/morning/brief` ($0.20) — Daily market summary (kimchi + FX + indices + momentum + headlines)
   - `GET /api/premium/crypto/snapshot` ($0.15) — Crypto overview (5-exchange + kimchi + volume + FX)
   - `GET /api/premium/kimchi/stats` ($0.15) — Kimchi premium deep analysis (current + trend + arbitrage signal + cross-exchange)
   - `GET /api/premium/market/korea/stock-brief?stock=005930` ($0.10) — Stock analysis (fundamentals + news + investor flow + disclosures)
+- Routing Engine (v1.8.1):
+  - `GET /api/premium/route/find` ($0.10) — optimal transfer route across 6 exchanges (bridge coin comparison, slippage, fees)
+  - `GET /api/route/exchanges` — supported exchanges list (free)
+  - `GET /api/route/fees` — fee comparison table (free)
+  - `GET /api/route/pairs` — trading pairs with live prices (free)
+  - `GET /api/route/status` — exchange health check (free)
+- ACP (Agentic Commerce Protocol) compatibility layer (v1.8.1):
+  - `POST /api/acp/quote` — request routing quote (free)
+  - `POST /api/acp/execute` — execute route (simulation) (free)
+  - `GET /api/acp/status` — protocol status + capabilities (free)
 - Proxy: `GET/POST /api/proxy/:serviceId` with `X-Agent-Key`
 - Analytics: `GET /api/analytics/overview`
 - Agent auth: admin-created agent key + API protection
 - D1 schema: `agents`, `wallets`, `transactions`, `budgets`, `services`, `service_calls`, `audit_logs`, `kimchi_snapshots`
-- MCP server: 13 tools (registry/docs/analytics + local ledger + paid call execution)
+- MCP server: 16 tools (registry/docs/analytics + local ledger + paid call execution + routing tools)
 
 Known gap:
 - No unattended autonomous loop yet (no Cloudflare scheduled handler for operations)
-- No MCP paid-call tool yet (`call_paid_service` missing)
 - No external deposit-to-credit flow yet
 - No Guardian decision engine yet
 

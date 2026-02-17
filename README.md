@@ -1,6 +1,6 @@
 # CrossFin
 
-**The x402 Agent Services Gateway** — Discover, call, and pay for AI agent services in one place. 183 services (34 CrossFin + 149 external), Korean market APIs, MCP server, and structured agent guides. All payments via [x402](https://x402.org) protocol with USDC on Base mainnet.
+**The x402 Agent Services Gateway** — Discover, call, and pay for AI agent services in one place. 184 services (35 CrossFin + 149 external), Korean market APIs, MCP server, and structured agent guides. All payments via [x402](https://x402.org) protocol with USDC on Base mainnet.
 
 **Live:** https://crossfin.dev | **Demo:** https://live.crossfin.dev
 
@@ -8,10 +8,10 @@
 
 CrossFin is a **gateway and registry for AI agent services**, built on the x402 payment protocol.
 
-- **Service Registry:** 183 verified services from multiple x402 providers (CrossFin, Einstein AI, x402engine)
+- **Service Registry:** 184 verified services from multiple x402 providers (CrossFin, Einstein AI, x402engine)
 - **Agent Guide API:** Structured JSON guide at `/api/docs/guide` — service catalog, payment flow, code examples, MCP setup
 - **Agent Discovery:** `/.well-known/crossfin.json` for automatic service detection
-- **MCP Server:** 13 tools for Claude Desktop and other MCP clients — search, browse, call, and pay for services
+- **MCP Server:** 16 tools for Claude Desktop and other MCP clients — search, browse, call, and pay for services
 - **Korea-First APIs:** 34 proprietary endpoints including 4 bundle APIs (Kimchi Premium, Bithumb, Upbit, Coinone, FX, stock analysis, ETF, themes, global indices, Morning Brief, Crypto Snapshot, Kimchi Stats, Stock Brief)
 - **Proxy Layer:** Call any registered service through CrossFin (`/api/proxy/:serviceId`) — requires `X-Agent-Key`, 5% fee header, automatic call logging
 - **Analytics:** Real-time service usage stats (`/api/analytics/overview`)
@@ -25,7 +25,7 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 |---------|-------------------|
 | x402 services are scattered across the internet | Unified registry with 179 verified services |
 | Agents can't discover available APIs | Search API + `.well-known/crossfin.json` + MCP server |
-| No Korean market data for agents | 30 proprietary Korea APIs (crypto + stocks + ETF + themes + indices) |
+| No Korean market data for agents | 31 proprietary paid APIs (Korean market + routing + ETF + themes + indices) |
 | No structured docs for agents | `/api/docs/guide` — JSON guide with schemas, examples, payment flow |
 | No revenue model for gateway operators | 5% proxy fee on every call through CrossFin |
 | Crypto is hard for end users | Roadmap: fiat on-ramp (KRW → USDC auto-conversion) |
@@ -107,6 +107,29 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 | `GET /api/premium/kimchi/stats` | $0.15 | Kimchi Stats — current spreads + 24h trend + arbitrage signal + cross-exchange spread |
 | `GET /api/premium/market/korea/stock-brief?stock=005930` | $0.10 | Stock Brief — fundamentals + news + investor flow + disclosures for any Korean stock |
 
+### Routing Engine (Free)
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/route/exchanges` | List supported exchanges (6 exchanges, fees, supported coins) |
+| `GET /api/route/fees` | Fee comparison table (trading + withdrawal fees) |
+| `GET /api/route/pairs` | Supported trading pairs with live prices |
+| `GET /api/route/status` | Exchange API health check (online/offline) |
+
+### Routing Engine (Paid)
+
+| Endpoint | Price | Description |
+|----------|-------|-------------|
+| `GET /api/premium/route/find` | $0.10 | Find optimal crypto transfer route across 6 exchanges |
+
+### ACP (Agentic Commerce Protocol)
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/acp/quote` | Request routing quote (ACP-compatible) |
+| `POST /api/acp/execute` | Execute route (simulation mode) |
+| `GET /api/acp/status` | ACP protocol status and capabilities |
+
 ### Other (Free)
 
 | Endpoint | Description |
@@ -117,7 +140,7 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 
 ## MCP Server
 
-CrossFin includes an MCP (Model Context Protocol) server for Claude Desktop and other MCP clients. 13 tools available:
+CrossFin includes an MCP (Model Context Protocol) server for Claude Desktop and other MCP clients. 16 tools available:
 
 ### Install
 
@@ -151,6 +174,9 @@ crossfin-mcp
 | `list_transactions` | List recent transactions |
 | `set_budget` | Set daily spend limit |
 | `call_paid_service` | Call a paid API with automatic x402 USDC payment (returns data + txHash + basescan link) |
+| `find_optimal_route` | Find optimal crypto transfer route across exchanges (routing engine) |
+| `list_exchange_fees` | List supported exchange fees (routing engine) |
+| `compare_exchange_prices` | Compare live exchange prices for routing (routing engine) |
 
 ### Claude Desktop Config
 
@@ -240,7 +266,7 @@ with x402_requests(client) as session:
 ## Revenue Model
 
 ```
-Phase 1 (Now)      → Own API revenue: $0.01–$0.10 per call (30 Korean market APIs)
+Phase 1 (Now)      → Own API revenue: $0.01–$0.10 per call (31 paid APIs incl. routing)
 Phase 2 (3 months) → Proxy fee: 5% on every call through /api/proxy/:serviceId
 Phase 3 (6 months) → Agent banking: wallet management, budget controls, fiat on-ramp
 ```
@@ -253,7 +279,7 @@ Phase 3 (6 months) → Agent banking: wallet management, budget controls, fiat o
 | Database | Cloudflare D1 (SQLite) |
 | Payments | x402 protocol (@x402/hono, @x402/extensions/bazaar) |
 | Network | Base mainnet, USDC |
-| MCP Server | @modelcontextprotocol/sdk (13 tools) |
+| MCP Server | @modelcontextprotocol/sdk (16 tools) |
 | Frontend | React + Vite → Cloudflare Pages |
 | Live Demo | React + Vite → Cloudflare Pages (live.crossfin.dev) |
 | Domain | crossfin.dev + live.crossfin.dev |
@@ -274,7 +300,7 @@ apps/
       x402-funds-check.mjs   Check Base wallet balance
       x402-usdc-balance.mjs  Check USDC balance
       x402-gen-wallet.mjs    Generate EVM wallet
-  mcp-server/   MCP Server (13 tools)
+mcp-server/   MCP Server (16 tools)
     src/
       index.ts       MCP tool definitions + CrossFin API integration
       ledgerStore.ts Local ledger for wallet/budget tools

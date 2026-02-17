@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.8.1] - 2026-02-18
+
+### Added
+- **Routing Engine**: Complete crypto transfer routing across 6 exchanges (Bithumb, Upbit, Coinone, Korbit, GoPax, Binance)
+  - `GET /api/premium/route/find` ($0.10) — optimal route with bridge coin comparison, slippage, fees
+  - `GET /api/route/exchanges` — supported exchanges list (free)
+  - `GET /api/route/fees` — fee comparison table (free)
+  - `GET /api/route/pairs` — trading pairs with live prices (free)
+  - `GET /api/route/status` — exchange health check (free)
+- **ACP (Agentic Commerce Protocol)**: OpenAI + Stripe compatible agent commerce layer
+  - `POST /api/acp/quote` — routing quote (free)
+  - `POST /api/acp/execute` — route execution simulation (free)
+  - `GET /api/acp/status` — protocol capabilities (free)
+- **MCP Tools**: 3 new routing tools (find_optimal_route, list_exchange_fees, compare_exchange_prices)
+
+### Fixed
+- Routing endpoints moved before agentAuth middleware to prevent 401 errors
+- Price feed resilience: routing gracefully handles Binance/CoinGecko outages
+
 ## [1.8.0] - 2026-02-18
 
 ### Added

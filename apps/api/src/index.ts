@@ -1083,6 +1083,141 @@ app.get('/api/openapi.json', (c) => {
         },
       },
 
+      '/api/premium/route/find': {
+        get: {
+          operationId: 'routeFindOptimal',
+          summary: 'Optimal Route Finder — $0.10 USDC',
+          description: 'Paid routing engine endpoint. Finds the optimal crypto transfer route across supported exchanges using bridge coin comparison, slippage estimates, and fee modeling. Payment: $0.10 USDC on Base via x402.',
+          tags: ['Routing', 'Paid — x402'],
+          parameters: [
+            { name: 'from', in: 'query', required: true, description: 'Source (exchange:currency), e.g. bithumb:KRW', schema: { type: 'string' } },
+            { name: 'to', in: 'query', required: true, description: 'Destination (exchange:currency), e.g. binance:USDC', schema: { type: 'string' } },
+            { name: 'amount', in: 'query', required: true, description: 'Amount in source currency', schema: { type: 'number' } },
+            { name: 'strategy', in: 'query', required: false, description: 'Routing strategy (default: cheapest)', schema: { type: 'string', default: 'cheapest' } },
+          ],
+          responses: {
+            '200': { description: 'Optimal route', content: { 'application/json': { schema: { type: 'object' } } } },
+            '400': { description: 'Invalid query parameters' },
+            '402': { description: 'Payment required — $0.10 USDC on Base mainnet' },
+          },
+        },
+      },
+
+      '/api/route/exchanges': {
+        get: {
+          operationId: 'routeExchanges',
+          summary: 'List supported exchanges',
+          description: 'Free routing engine endpoint. Lists supported exchanges, fee profiles, and supported coins.',
+          tags: ['Routing'],
+          responses: {
+            '200': { description: 'Supported exchanges', content: { 'application/json': { schema: { type: 'object' } } } },
+          },
+        },
+      },
+      '/api/route/fees': {
+        get: {
+          operationId: 'routeFees',
+          summary: 'Fee comparison table',
+          description: 'Free routing engine endpoint. Returns a fee comparison table including trading + withdrawal fees.',
+          tags: ['Routing'],
+          parameters: [{ name: 'coin', in: 'query', required: false, description: 'Optional coin filter (e.g. BTC, ETH)', schema: { type: 'string' } }],
+          responses: {
+            '200': { description: 'Fee comparison table', content: { 'application/json': { schema: { type: 'object' } } } },
+          },
+        },
+      },
+      '/api/route/pairs': {
+        get: {
+          operationId: 'routePairs',
+          summary: 'Supported pairs with live prices',
+          description: 'Free routing engine endpoint. Lists supported trading pairs with live prices used by the routing engine.',
+          tags: ['Routing'],
+          responses: {
+            '200': { description: 'Supported pairs', content: { 'application/json': { schema: { type: 'object' } } } },
+          },
+        },
+      },
+      '/api/route/status': {
+        get: {
+          operationId: 'routeStatus',
+          summary: 'Exchange API health check',
+          description: 'Free routing engine endpoint. Exchange API health check (online/offline).',
+          tags: ['Routing'],
+          responses: {
+            '200': { description: 'Exchange status', content: { 'application/json': { schema: { type: 'object' } } } },
+          },
+        },
+      },
+
+      '/api/acp/quote': {
+        post: {
+          operationId: 'acpQuote',
+          summary: 'Request routing quote (ACP-compatible)',
+          description: 'ACP endpoint. Requests a routing quote compatible with OpenAI + Stripe style agent commerce flows.',
+          tags: ['ACP'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    from_exchange: { type: 'string' },
+                    from_currency: { type: 'string' },
+                    to_exchange: { type: 'string' },
+                    to_currency: { type: 'string' },
+                    amount: { type: 'number' },
+                    strategy: { type: 'string', default: 'cheapest' },
+                  },
+                  required: ['from_exchange', 'from_currency', 'to_exchange', 'to_currency', 'amount'],
+                },
+              },
+            },
+          },
+          responses: {
+            '200': { description: 'Routing quote', content: { 'application/json': { schema: { type: 'object' } } } },
+            '400': { description: 'Invalid request body' },
+          },
+        },
+      },
+      '/api/acp/execute': {
+        post: {
+          operationId: 'acpExecute',
+          summary: 'Execute route (simulation)',
+          description: 'ACP endpoint. Executes a previously quoted route in simulation mode.',
+          tags: ['ACP'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    quote_id: { type: 'string' },
+                  },
+                  required: ['quote_id'],
+                },
+              },
+            },
+          },
+          responses: {
+            '200': { description: 'Execution result (simulation)', content: { 'application/json': { schema: { type: 'object' } } } },
+            '400': { description: 'Invalid request body' },
+          },
+        },
+      },
+      '/api/acp/status': {
+        get: {
+          operationId: 'acpStatus',
+          summary: 'ACP protocol status',
+          description: 'ACP endpoint. Returns protocol status and capabilities.',
+          tags: ['ACP'],
+          responses: {
+            '200': { description: 'ACP status', content: { 'application/json': { schema: { type: 'object' } } } },
+          },
+        },
+      },
+
       '/api/registry': {
         get: {
           operationId: 'registryList',
