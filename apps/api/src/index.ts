@@ -6044,46 +6044,137 @@ app.get('/api/premium/market/cross-exchange', async (c) => {
 // === Free Demo — delayed kimchi premium (no paywall) ===
 
 app.get('/api/arbitrage/demo', async (c) => {
-  const [bithumbData, binancePrices, krwRate] = await Promise.all([
-    fetchBithumbAll(),
-    fetchGlobalPrices(),
-    fetchKrwRate(),
-  ])
+  const buildPreview = (rows: Array<{ coin: string; premiumPct: number }>) =>
+    rows.slice(0, 3).map((p) => {
+      const netProfitPct = Math.abs(p.premiumPct) - BITHUMB_FEES_PCT - 0.1
+      const transferTime = getTransferTime(p.coin)
+      const slippage = 0.15
+      const volatility = Math.abs(p.premiumPct) * 0.3
+      const decision = computeAction(netProfitPct, slippage, transferTime, volatility)
+      return {
+        coin: p.coin,
+        premiumPct: p.premiumPct,
+        direction: p.premiumPct >= 0 ? 'Korea premium' : 'Korea discount',
+        decision: { action: decision.action, confidence: decision.confidence, reason: decision.reason },
+      }
+    })
 
-  const premiums = calcPremiums(bithumbData, binancePrices, krwRate)
-  // Demo: top 3 with decision layer preview
-  const preview = premiums.slice(0, 3).map((p) => {
-    const netProfitPct = Math.abs(p.premiumPct) - BITHUMB_FEES_PCT - 0.1
-    const transferTime = getTransferTime(p.coin)
-    const slippage = 0.15
-    const volatility = Math.abs(p.premiumPct) * 0.3
-    const decision = computeAction(netProfitPct, slippage, transferTime, volatility)
-    return {
-      coin: p.coin,
-      premiumPct: p.premiumPct,
-      direction: p.premiumPct > 0 ? 'Korea premium' : 'Korea discount',
-      decision: { action: decision.action, confidence: decision.confidence, reason: decision.reason },
+  try {
+    const [bithumbData, binancePrices, krwRate] = await Promise.all([
+      fetchBithumbAll(),
+      fetchGlobalPrices(),
+      fetchKrwRate(),
+    ])
+
+    const premiums = calcPremiums(bithumbData, binancePrices, krwRate)
+    if (premiums.length === 0) throw new Error('No premiums available')
+
+    const preview = buildPreview(premiums)
+    const avgPremium = Math.round(premiums.reduce((s, p) => s + p.premiumPct, 0) / premiums.length * 100) / 100
+    const executeCandidates = preview.filter((p) => p.decision.action === 'EXECUTE').length
+
+    return c.json({
+      demo: true,
+      dataSource: 'live',
+      note: 'Free preview — top 3 pairs with AI decision layer. Pay $0.10 USDC for full analysis.',
+      paidEndpoint: '/api/premium/arbitrage/opportunities',
+      krwUsdRate: krwRate,
+      pairsShown: preview.length,
+      totalPairsAvailable: premiums.length,
+      preview,
+      avgPremiumPct: avgPremium,
+      executeCandidates,
+      marketCondition: executeCandidates >= 2 ? 'favorable' : executeCandidates === 1 ? 'neutral' : 'unfavorable',
+      at: new Date().toISOString(),
+    })
+  } catch {
+    // Fallback: use last persisted snapshot if upstream price feeds are rate-limited.
+    type SnapshotRow = { coin: string; premiumPct: number | string; krwUsdRate: number | string; createdAt: string }
+    let rows: SnapshotRow[] = []
+
+    try {
+      const sql = `
+        WITH ranked AS (
+          SELECT
+            coin,
+            premium_pct AS premiumPct,
+            krw_usd_rate AS krwUsdRate,
+            created_at AS createdAt,
+            ROW_NUMBER() OVER (PARTITION BY coin ORDER BY datetime(created_at) DESC) AS rn
+          FROM kimchi_snapshots
+          WHERE created_at >= datetime('now', '-7 day')
+        )
+        SELECT coin, premiumPct, krwUsdRate, createdAt
+        FROM ranked
+        WHERE rn = 1
+      `
+
+      const res = await c.env.DB.prepare(sql).all<SnapshotRow>()
+      rows = res.results ?? []
+    } catch (err) {
+      console.error('snapshot fallback failed', err)
+      rows = []
     }
-  })
 
-  const avgPremium = premiums.length > 0
-    ? Math.round(premiums.reduce((s, p) => s + p.premiumPct, 0) / premiums.length * 100) / 100
-    : 0
-  const executeCandidates = preview.filter((p) => p.decision.action === 'EXECUTE').length
+    const premiums = rows
+      .map((r) => ({
+        coin: String(r.coin ?? ''),
+        premiumPct: Number(r.premiumPct ?? NaN),
+        krwUsdRate: Number(r.krwUsdRate ?? NaN),
+        createdAt: String(r.createdAt ?? ''),
+      }))
+      .filter((r) => r.coin && Number.isFinite(r.premiumPct))
+      .sort((a, b) => Math.abs(b.premiumPct) - Math.abs(a.premiumPct))
 
-  return c.json({
-    demo: true,
-    note: 'Free preview — top 3 pairs with AI decision layer. Pay $0.10 USDC for full analysis.',
-    paidEndpoint: '/api/premium/arbitrage/opportunities',
-    krwUsdRate: krwRate,
-    pairsShown: preview.length,
-    totalPairsAvailable: premiums.length,
-    preview,
-    avgPremiumPct: avgPremium,
-    executeCandidates,
-    marketCondition: executeCandidates >= 2 ? 'favorable' : executeCandidates === 1 ? 'neutral' : 'unfavorable',
-    at: new Date().toISOString(),
-  })
+    const avgPremium = premiums.length > 0
+      ? Math.round(premiums.reduce((s, p) => s + p.premiumPct, 0) / premiums.length * 100) / 100
+      : 0
+
+    const krwUsdRate = premiums.find((p) => Number.isFinite(p.krwUsdRate))?.krwUsdRate ?? 1450
+    const preview = buildPreview(premiums)
+    const executeCandidates = preview.filter((p) => p.decision.action === 'EXECUTE').length
+    const snapshotAt = premiums[0]?.createdAt ?? null
+
+    if (preview.length === 0) {
+      // Final fallback: stable demo output to keep live dashboard non-empty.
+      const fallbackPremiums = [
+        { coin: 'BTC', premiumPct: 0.0 },
+        { coin: 'ETH', premiumPct: 0.0 },
+        { coin: 'XRP', premiumPct: 0.0 },
+      ]
+      const fallbackPreview = buildPreview(fallbackPremiums)
+      return c.json({
+        demo: true,
+        dataSource: 'fallback',
+        note: 'Demo fallback — live price feeds are temporarily unavailable.',
+        paidEndpoint: '/api/premium/arbitrage/opportunities',
+        krwUsdRate,
+        pairsShown: fallbackPreview.length,
+        totalPairsAvailable: fallbackPremiums.length,
+        preview: fallbackPreview,
+        avgPremiumPct: 0,
+        executeCandidates: 0,
+        marketCondition: 'unfavorable',
+        at: new Date().toISOString(),
+      })
+    }
+
+    return c.json({
+      demo: true,
+      dataSource: 'snapshot',
+      note: 'Snapshot preview — live price feeds are rate-limited. Pay $0.10 USDC for full analysis.',
+      paidEndpoint: '/api/premium/arbitrage/opportunities',
+      krwUsdRate,
+      pairsShown: preview.length,
+      totalPairsAvailable: premiums.length,
+      preview,
+      avgPremiumPct: avgPremium,
+      executeCandidates,
+      marketCondition: executeCandidates >= 2 ? 'favorable' : executeCandidates === 1 ? 'neutral' : 'unfavorable',
+      snapshotAt,
+      at: new Date().toISOString(),
+    })
+  }
 })
 
 // === On-chain USDC transfers (Base mainnet) ===
@@ -6255,9 +6346,14 @@ app.get('/api/onchain/usdc-transfers', async (c) => {
   }
 
   if (!globalAny.__crossfinUsdcTransfersInFlight) {
-    globalAny.__crossfinUsdcTransfersInFlight = fetchRecentUsdcTransfers(wallet, 20).finally(() => {
-      globalAny.__crossfinUsdcTransfersInFlight = null
-    })
+    globalAny.__crossfinUsdcTransfersInFlight = fetchRecentUsdcTransfers(wallet, 20)
+      .catch((err) => {
+        console.error('usdc-transfers fetch failed', err)
+        return []
+      })
+      .finally(() => {
+        globalAny.__crossfinUsdcTransfersInFlight = null
+      })
   }
 
   const transfers = await globalAny.__crossfinUsdcTransfersInFlight
