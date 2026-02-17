@@ -3,9 +3,7 @@ import "./App.css";
 
 const API = "https://crossfin.dev";
 const REFRESH_INTERVAL = 15_000;
-const BASESCAN_API = "https://api.basescan.org/api";
 const CROSSFIN_WALLET = "0xe4E79Ce6a1377C58f0Bb99D023908858A4DB5779";
-const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
 /* ─── Types ─── */
 
@@ -163,12 +161,11 @@ async function fetchJson<T>(url: string): Promise<T | null> {
 
 async function fetchOnChainTxs(): Promise<OnChainTx[]> {
   try {
-    const url = `${BASESCAN_API}?module=account&action=tokentx&contractaddress=${USDC_BASE}&address=${CROSSFIN_WALLET}&page=1&offset=10&sort=desc`;
-    const r = await fetch(url);
+    const r = await fetch(`${API}/api/onchain/usdc-transfers?limit=10`);
     if (!r.ok) return [];
-    const data = (await r.json()) as { status: string; result: OnChainTx[] };
-    if (data.status !== "1" || !Array.isArray(data.result)) return [];
-    return data.result;
+    const data = (await r.json()) as { transfers?: OnChainTx[] };
+    if (!data || !Array.isArray(data.transfers)) return [];
+    return data.transfers;
   } catch {
     return [];
   }
