@@ -888,6 +888,50 @@ app.get('/api/openapi.json', (c) => {
           },
         },
       },
+      '/api/premium/morning/brief': {
+        get: {
+          operationId: 'morningBrief',
+          summary: 'Morning Brief bundle — $0.20 USDC',
+          description: 'One-call daily market summary combining kimchi premium, USD/KRW FX rate, KOSPI/KOSDAQ indices, stock momentum, and Korean headlines. Payment: $0.20 USDC on Base via x402.',
+          tags: ['Paid — x402'],
+          responses: {
+            '200': {
+              description: 'Morning brief bundle response',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      paid: { type: 'boolean' },
+                      service: { type: 'string' },
+                      kimchiPremium: { type: 'object', properties: {
+                        avgPremiumPct: { type: 'number' },
+                        topPair: { type: 'string' },
+                        pairsTracked: { type: 'integer' },
+                        premiums: { type: 'array', items: { type: 'object' } },
+                      }, required: ['avgPremiumPct', 'topPair', 'pairsTracked', 'premiums'] },
+                      fxRate: { type: 'object', properties: { usdKrw: { type: 'number' }, source: { type: 'string' } }, required: ['usdKrw', 'source'] },
+                      indices: { type: 'object', properties: {
+                        kospi: { type: 'object', properties: { price: { type: 'number' }, changePct: { type: 'number' }, volume: { type: 'number' }, status: { type: 'string' } }, required: ['price', 'changePct', 'volume', 'status'] },
+                        kosdaq: { type: 'object', properties: { price: { type: 'number' }, changePct: { type: 'number' }, volume: { type: 'number' }, status: { type: 'string' } }, required: ['price', 'changePct', 'volume', 'status'] },
+                      }, required: ['kospi', 'kosdaq'] },
+                      momentum: { type: 'object', properties: {
+                        topGainers: { type: 'array', items: { type: 'object' } },
+                        topLosers: { type: 'array', items: { type: 'object' } },
+                        market: { type: 'string' },
+                      }, required: ['topGainers', 'topLosers', 'market'] },
+                      headlines: { type: 'array', items: { type: 'object' } },
+                      at: { type: 'string', format: 'date-time' },
+                    },
+                    required: ['paid', 'service', 'kimchiPremium', 'fxRate', 'indices', 'momentum', 'headlines', 'at'],
+                  },
+                },
+              },
+            },
+            '402': { description: 'Payment required — $0.20 USDC on Base mainnet' },
+          },
+        },
+      },
       '/api/premium/news/korea/headlines': {
         get: {
           operationId: 'koreaHeadlines',
@@ -1662,6 +1706,19 @@ app.use(
               output: {
                 example: { paid: true, service: 'crossfin-korea-headlines', headlines: [{ title: 'Bitcoin surges past 100M KRW on Bithumb', source: 'MaeKyung', publishedAt: '2026-02-16T00:00:00.000Z', url: 'https://...' }], count: 10, at: '2026-02-16T00:00:00.000Z' },
                 schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, headlines: { type: 'array' }, count: { type: 'number' } }, required: ['paid', 'headlines', 'count'] },
+              },
+            }),
+          },
+        },
+        'GET /api/premium/morning/brief': {
+          accepts: { scheme: 'exact', price: '$0.20', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
+          description: 'Morning Brief — one-call daily market summary combining kimchi premium, FX rate, KOSPI/KOSDAQ indices, stock momentum, and Korean headlines. Replaces 5+ individual API calls.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              output: {
+                example: { paid: true, service: 'crossfin-morning-brief', kimchiPremium: { avgPremiumPct: 2.15, topPair: 'BTC', pairsTracked: 10 }, fxRate: { usdKrw: 1450 }, indices: { kospi: { price: 2650, changePct: 0.5 }, kosdaq: { price: 850, changePct: -0.3 } }, momentum: { topGainers: [], topLosers: [] }, headlines: [], at: '2026-02-17T00:00:00.000Z' },
+                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, kimchiPremium: { type: 'object' }, fxRate: { type: 'object' }, indices: { type: 'object' }, momentum: { type: 'object' }, headlines: { type: 'array' } }, required: ['paid', 'service', 'kimchiPremium', 'fxRate', 'indices'] },
               },
             }),
           },
@@ -4491,7 +4548,9 @@ async function fetchGlobalPrices(): Promise<Record<string, number>> {
     const symbols = Array.from(new Set(Object.values(TRACKED_PAIRS)))
 
     const isValidPrices = (prices: Record<string, number>): boolean => {
-      const btc = prices[TRACKED_PAIRS.BTC]
+      const btcSymbol = TRACKED_PAIRS.BTC
+      if (!btcSymbol) return false
+      const btc = prices[btcSymbol]
       if (typeof btc !== 'number' || !Number.isFinite(btc) || btc <= 1000) return false
       // We can operate with partial coverage (demo + some paid endpoints),
       // so only require at least one sane price.
@@ -5857,6 +5916,189 @@ app.get('/api/premium/news/korea/headlines', async (c) => {
     url: feedUrl,
     items,
     at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/morning/brief', async (c) => {
+  const at = new Date().toISOString()
+  const market = 'KOSPI'
+
+  const krwRatePromise = fetchKrwRate()
+
+  type KimchiPremiumRow = ReturnType<typeof calcPremiums>[number]
+  type HeadlinesItem = { title: string; publisher: string | null; link: string; publishedAt: string }
+  type MomentumStock = {
+    code: string
+    name: string
+    price: number
+    changePct: number
+    direction: string
+    volume: number
+  }
+
+  const kimchiTask = (async () => {
+    const [bithumbData, binancePrices, krwRate] = await Promise.all([
+      fetchBithumbAll(),
+      fetchGlobalPrices(),
+      krwRatePromise,
+    ])
+
+    const premiums = calcPremiums(bithumbData, binancePrices, krwRate)
+    const avg = premiums.length > 0
+      ? Math.round(premiums.reduce((s, p) => s + p.premiumPct, 0) / premiums.length * 100) / 100
+      : 0
+
+    return {
+      avgPremiumPct: avg,
+      topPair: premiums[0]?.coin ?? '',
+      pairsTracked: premiums.length,
+      premiums: premiums.slice(0, 5),
+    }
+  })()
+
+  const indicesTask = (async () => {
+    const [kospiRes, kosdaqRes] = await Promise.all([
+      fetch('https://m.stock.naver.com/api/index/KOSPI/basic'),
+      fetch('https://m.stock.naver.com/api/index/KOSDAQ/basic'),
+    ])
+
+    if (!kospiRes.ok || !kosdaqRes.ok) {
+      throw new HTTPException(502, { message: 'Korean stock market data unavailable' })
+    }
+
+    const [kospiRaw, kosdaqRaw] = await Promise.all([kospiRes.json(), kosdaqRes.json()]) as [unknown, unknown]
+
+    const parseIndex = (raw: unknown) => {
+      if (!isRecord(raw)) {
+        return { price: 0, changePct: 0, volume: 0, status: 'UNKNOWN' }
+      }
+
+      const price = parseFloat(String(raw.closePrice ?? '0').replace(/,/g, ''))
+      const changePct = parseFloat(String(raw.fluctuationsRatio ?? '0').replace(/,/g, ''))
+      const volume = parseFloat(String(raw.accumulatedTradingVolume ?? raw.accumulatedTradingPrice ?? '0').replace(/,/g, ''))
+      const status = typeof raw.marketStatus === 'string' ? raw.marketStatus : 'UNKNOWN'
+
+      return {
+        price: Number.isFinite(price) ? price : 0,
+        changePct: Number.isFinite(changePct) ? changePct : 0,
+        volume: Number.isFinite(volume) ? volume : 0,
+        status,
+      }
+    }
+
+    return {
+      kospi: parseIndex(kospiRaw),
+      kosdaq: parseIndex(kosdaqRaw),
+    }
+  })()
+
+  const momentumTask = (async () => {
+    const baseUrl = 'https://m.stock.naver.com/api/stocks'
+    const [upRes, downRes] = await Promise.all([
+      fetch(`${baseUrl}/up/${market}?page=1&pageSize=5`),
+      fetch(`${baseUrl}/down/${market}?page=1&pageSize=5`),
+    ])
+
+    if (!upRes.ok || !downRes.ok) {
+      throw new HTTPException(502, { message: 'Korean stock ranking data unavailable' })
+    }
+
+    const [upDataRaw, downDataRaw] = await Promise.all([upRes.json(), downRes.json()]) as [unknown, unknown]
+    const upStocksRaw = isRecord(upDataRaw) && Array.isArray(upDataRaw.stocks) ? upDataRaw.stocks : []
+    const downStocksRaw = isRecord(downDataRaw) && Array.isArray(downDataRaw.stocks) ? downDataRaw.stocks : []
+
+    const parseStock = (s: unknown): MomentumStock | null => {
+      if (!isRecord(s)) return null
+
+      const code = typeof s.itemCode === 'string' ? s.itemCode : String(s.itemCode ?? '')
+      const name = typeof s.stockName === 'string' ? s.stockName : String(s.stockName ?? '')
+      const price = parseFloat(String(s.closePrice ?? '0').replace(/,/g, ''))
+      const changePct = parseFloat(String(s.fluctuationsRatio ?? '0').replace(/,/g, ''))
+      const direction = isRecord(s.compareToPreviousPrice) && typeof s.compareToPreviousPrice.name === 'string'
+        ? s.compareToPreviousPrice.name
+        : 'UNCHANGED'
+      const volume = parseFloat(String(s.accumulatedTradingVolume ?? '0').replace(/,/g, ''))
+
+      return {
+        code,
+        name,
+        price: Number.isFinite(price) ? price : 0,
+        changePct: Number.isFinite(changePct) ? changePct : 0,
+        direction,
+        volume: Number.isFinite(volume) ? volume : 0,
+      }
+    }
+
+    const topGainers = upStocksRaw.map(parseStock).filter((v): v is MomentumStock => v !== null).slice(0, 5)
+    const topLosers = downStocksRaw.map(parseStock).filter((v): v is MomentumStock => v !== null).slice(0, 5)
+
+    return { market, topGainers, topLosers }
+  })()
+
+  const headlinesTask = (async () => {
+    const feedUrl = 'https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko'
+    const res = await fetch(feedUrl, { headers: { 'User-Agent': 'crossfin-news/1.0' } })
+    if (!res.ok) throw new HTTPException(502, { message: 'News feed unavailable' })
+    const xml = await res.text()
+
+    const limit = 5
+    const items: HeadlinesItem[] = []
+    const re = /<item>([\s\S]*?)<\/item>/g
+    let match: RegExpExecArray | null
+    while (items.length < limit) {
+      match = re.exec(xml)
+      if (!match) break
+      const block = match[1] ?? ''
+      const rawTitle = extractXmlTag(block, 'title')
+      const link = extractXmlTag(block, 'link')
+      const pubDate = extractXmlTag(block, 'pubDate')
+      if (!rawTitle || !link || !pubDate) continue
+      const { title, publisher } = splitPublisherFromTitle(rawTitle)
+      items.push({ title, publisher, link, publishedAt: parseIsoDate(pubDate) })
+    }
+
+    return items
+  })()
+
+  const [krwSet, kimchiSet, indicesSet, momentumSet, headlinesSet] = await Promise.allSettled([
+    krwRatePromise,
+    kimchiTask,
+    indicesTask,
+    momentumTask,
+    headlinesTask,
+  ] as const)
+
+  const usdKrw = krwSet.status === 'fulfilled' ? krwSet.value : 1450
+
+  const kimchiPremium = kimchiSet.status === 'fulfilled'
+    ? kimchiSet.value
+    : { avgPremiumPct: 0, topPair: '', pairsTracked: 0, premiums: [] as KimchiPremiumRow[] }
+
+  const indices = indicesSet.status === 'fulfilled'
+    ? indicesSet.value
+    : {
+      kospi: { price: 0, changePct: 0, volume: 0, status: 'UNKNOWN' },
+      kosdaq: { price: 0, changePct: 0, volume: 0, status: 'UNKNOWN' },
+    }
+
+  const momentum = momentumSet.status === 'fulfilled'
+    ? momentumSet.value
+    : { market, topGainers: [] as MomentumStock[], topLosers: [] as MomentumStock[] }
+
+  const headlines = headlinesSet.status === 'fulfilled' ? headlinesSet.value : []
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-morning-brief',
+    kimchiPremium,
+    fxRate: {
+      usdKrw: round2(usdKrw),
+      source: 'open.er-api.com',
+    },
+    indices,
+    momentum,
+    headlines,
+    at,
   })
 })
 

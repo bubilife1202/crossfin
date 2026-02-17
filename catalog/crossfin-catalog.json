@@ -339,6 +339,16 @@
       "price": "$0.03",
       "tags": ["korea", "news", "rss"],
       "playgroundLabel": "Korea Headlines"
+    },
+    {
+      "id": "crossfin_morning_brief",
+      "name": "CrossFin Morning Brief",
+      "description": "One-call daily market summary: kimchi premium, FX rate, KOSPI/KOSDAQ, stock momentum, headlines.",
+      "category": "korea-bundle",
+      "path": "/api/premium/morning/brief",
+      "price": "$0.20",
+      "tags": ["korea", "bundle", "morning-brief", "market-summary", "agent-ready"],
+      "playgroundLabel": "Morning Brief"
     }
   ]
 }

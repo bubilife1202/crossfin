@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --port 8787",
+    "build": "tsc -p tsconfig.json --noEmit",
     "deploy": "wrangler deploy",
     "db:migrate:local": "wrangler d1 migrations apply crossfin-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply crossfin-db --remote",
