@@ -1911,7 +1911,7 @@ app.use(
             }),
           },
         },
-        'GET /api/route/find': {
+        'GET /api/premium/route/find': {
           accepts: { scheme: 'exact', price: '$0.10', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
           description: 'Optimal Route Finder — finds the cheapest/fastest crypto transfer route across 6 exchanges (Bithumb, Upbit, Coinone, Korbit, GoPax, Binance). Compares bridge coins, fees, and transfer times.',
           mimeType: 'application/json',
@@ -4806,11 +4806,14 @@ async function findOptimalRoute(
   const fromCur = fromCurrency.toUpperCase()
   const toCur = toCurrency.toUpperCase()
 
-  const [krwRate, bithumbAll, globalPrices] = await Promise.all([
+  const [krwRateResult, bithumbAllResult, globalPricesResult] = await Promise.allSettled([
     fetchKrwRate(),
     fetchBithumbAll(),
     fetchGlobalPrices(),
   ])
+  const krwRate = krwRateResult.status === 'fulfilled' ? krwRateResult.value : 1450
+  const bithumbAll = bithumbAllResult.status === 'fulfilled' ? bithumbAllResult.value : {}
+  const globalPrices: Record<string, number> = globalPricesResult.status === 'fulfilled' ? globalPricesResult.value : {}
 
   const pricesUsed: Record<string, Record<string, number>> = {}
   const routes: Route[] = []
@@ -8410,15 +8413,15 @@ app.get('/api/stats', async (c) => {
 // ROUTING ENGINE — API Endpoints (MUST be before app.route('/api', api) to avoid agentAuth)
 // ============================================================
 
-// GET /api/route/find — Main routing endpoint (paid via x402, $0.10)
-app.get('/api/route/find', async (c) => {
+// GET /api/premium/route/find — Main routing endpoint (paid via x402, $0.10)
+app.get('/api/premium/route/find', async (c) => {
   const fromRaw = c.req.query('from') // e.g., "bithumb:KRW"
   const toRaw = c.req.query('to') // e.g., "binance:USDC"
   const amountRaw = c.req.query('amount')
   const strategyRaw = c.req.query('strategy') ?? 'cheapest'
 
   if (!fromRaw || !toRaw || !amountRaw) {
-    throw new HTTPException(400, { message: 'Required: from (exchange:currency), to (exchange:currency), amount. Example: /api/route/find?from=bithumb:KRW&to=binance:USDC&amount=1000000' })
+    throw new HTTPException(400, { message: 'Required: from (exchange:currency), to (exchange:currency), amount. Example: /api/premium/route/find?from=bithumb:KRW&to=binance:USDC&amount=1000000' })
   }
 
   const [fromExchange, fromCurrency] = fromRaw.split(':')
@@ -8485,9 +8488,12 @@ app.get('/api/route/fees', (c) => {
 
 // GET /api/route/pairs — Supported pairs with live prices (free)
 app.get('/api/route/pairs', async (c) => {
-  const [bithumbAll, globalPrices, krwRate] = await Promise.all([
+  const [bithumbResult, globalResult, krwResult] = await Promise.allSettled([
     fetchBithumbAll(), fetchGlobalPrices(), fetchKrwRate(),
   ])
+  const bithumbAll = bithumbResult.status === 'fulfilled' ? bithumbResult.value : {}
+  const globalPrices: Record<string, number> = globalResult.status === 'fulfilled' ? globalResult.value : {}
+  const krwRate = krwResult.status === 'fulfilled' ? krwResult.value : 1450
 
   const pairs = Object.entries(TRACKED_PAIRS).map(([coin, binanceSymbol]) => {
     const bithumb = bithumbAll[coin]
