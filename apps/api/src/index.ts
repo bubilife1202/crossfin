@@ -5234,30 +5234,45 @@ async function fetchGlobalPrices(): Promise<Record<string, number>> {
       return Object.keys(prices).length >= 1
     }
 
-    // 1) Binance (USDT ~= USD) batch endpoint
-    try {
-      const url = `https://api.binance.com/api/v3/ticker/price?symbols=${encodeURIComponent(JSON.stringify(symbols))}`
-      const res = await fetch(url)
-      if (!res.ok) throw new Error(`Binance price feed unavailable (${res.status})`)
-      const data: unknown = await res.json()
-      if (!Array.isArray(data)) throw new Error('Binance price feed invalid response')
+    // 1) Binance (USDT ~= USD) batch endpoint.
+    // We try binance.vision first because Cloudflare Workers egress can be geo-blocked on api.binance.com.
+    {
+      const query = encodeURIComponent(JSON.stringify(symbols))
+      const BINANCE_BASE_URLS = [
+        'https://data-api.binance.vision',
+        'https://api.binance.com',
+        'https://api1.binance.com',
+        'https://api2.binance.com',
+        'https://api3.binance.com',
+      ]
 
-      const prices: Record<string, number> = {}
-      for (const row of data) {
-        if (!isRecord(row)) continue
-        const symbol = typeof row.symbol === 'string' ? row.symbol.trim().toUpperCase() : ''
-        const priceRaw = typeof row.price === 'string' ? row.price.trim() : ''
-        const price = Number(priceRaw)
-        if (!symbol || !Number.isFinite(price) || price <= 0) continue
-        prices[symbol] = price
-      }
+      for (const baseUrl of BINANCE_BASE_URLS) {
+        try {
+          const url = `${baseUrl}/api/v3/ticker/price?symbols=${query}`
+          const res = await fetch(url)
+          if (!res.ok) throw new Error(`Binance price feed unavailable (${res.status})`)
+          const data: unknown = await res.json()
+          if (!Array.isArray(data)) throw new Error('Binance price feed invalid response')
 
-      if (isValidPrices(prices)) {
-        globalAny.__crossfinGlobalPricesCache = { value: prices, expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS, source: 'binance' }
-        return prices
+          const prices: Record<string, number> = {}
+          for (const row of data) {
+            if (!isRecord(row)) continue
+            const symbol = typeof row.symbol === 'string' ? row.symbol.trim().toUpperCase() : ''
+            const priceRaw = typeof row.price === 'string' ? row.price.trim() : ''
+            const price = Number(priceRaw)
+            if (!symbol || !Number.isFinite(price) || price <= 0) continue
+            prices[symbol] = price
+          }
+
+          if (isValidPrices(prices)) {
+            const hostname = new URL(baseUrl).hostname
+            globalAny.__crossfinGlobalPricesCache = { value: prices, expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS, source: `binance:${hostname}` }
+            return prices
+          }
+        } catch {
+          // Try next base URL
+        }
       }
-    } catch {
-      // Continue to fallback provider
     }
 
     // 2) CryptoCompare fallback (no key) — detect 200/ERROR payloads
