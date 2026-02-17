@@ -8706,13 +8706,17 @@ app.get('/api/route/pairs', async (c) => {
 
 // GET /api/route/status — Exchange API health check (free)
 app.get('/api/route/status', async (c) => {
+  const btcSymbol = TRACKED_PAIRS.BTC ?? 'BTCUSDT'
   const checks = await Promise.allSettled([
     fetch('https://api.bithumb.com/public/ticker/BTC_KRW').then((r) => r.ok),
     fetch('https://api.upbit.com/v1/ticker?markets=KRW-BTC').then((r) => r.ok),
     fetch('https://api.coinone.co.kr/public/v2/ticker_new/KRW/BTC').then((r) => r.ok),
     fetch('https://api.korbit.co.kr/v1/ticker/detailed?currency_pair=btc_krw').then((r) => r.ok),
     fetch('https://api.gopax.co.kr/trading-pairs/BTC-KRW/ticker').then((r) => r.ok),
-    fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT').then((r) => r.ok),
+    fetchGlobalPrices(c.env.DB).then((prices) => {
+      const btc = prices[btcSymbol]
+      return typeof btc === 'number' && Number.isFinite(btc) && btc > 1000
+    }),
   ])
 
   const names = ['bithumb', 'upbit', 'coinone', 'korbit', 'gopax', 'binance']
