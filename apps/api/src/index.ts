@@ -132,7 +132,12 @@ function getPublicRateLimitRouteKey(path: string): string | null {
     normalized === '/api/agents/register' ||
     normalized === '/api/deposits' ||
     normalized === '/api/guardian/status' ||
-    normalized === '/api/guardian/rules'
+    normalized === '/api/guardian/rules' ||
+    normalized === '/api/route/exchanges' ||
+    normalized === '/api/route/fees' ||
+    normalized === '/api/route/pairs' ||
+    normalized === '/api/route/status' ||
+    normalized === '/api/acp/status'
   ) {
     return normalized
   }
@@ -1902,6 +1907,21 @@ app.use(
               output: {
                 example: { paid: true, service: 'crossfin-kimchi-stats', current: { avgPremiumPct: 2.15, pairsTracked: 10 }, trend: { direction: 'rising', change24hPct: 0.3 }, bestOpportunity: { coin: 'BTC', action: 'WAIT', confidence: 0.6 }, crossExchangeSpread: { spreadPct: 0.18 }, at: '2026-02-17T00:00:00.000Z' },
                 schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, current: { type: 'object' }, trend: { type: 'object' }, bestOpportunity: { type: 'object' }, crossExchangeSpread: { type: 'object' } }, required: ['paid', 'service', 'current'] },
+              },
+            }),
+          },
+        },
+        'GET /api/route/find': {
+          accepts: { scheme: 'exact', price: '$0.10', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
+          description: 'Optimal Route Finder — finds the cheapest/fastest crypto transfer route across 6 exchanges (Bithumb, Upbit, Coinone, Korbit, GoPax, Binance). Compares bridge coins, fees, and transfer times.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              input: { from: 'bithumb:KRW', to: 'binance:USDC', amount: 1000000, strategy: 'cheapest' },
+              inputSchema: { properties: { from: { type: 'string', description: 'Source exchange:currency (e.g., bithumb:KRW)' }, to: { type: 'string', description: 'Destination exchange:currency (e.g., binance:USDC)' }, amount: { type: 'number', description: 'Amount in source currency' }, strategy: { type: 'string', description: 'cheapest | fastest | balanced' } } },
+              output: {
+                example: { paid: true, service: 'crossfin-route-finder', request: { from: 'bithumb:KRW', to: 'binance:USDC', amount: 1000000, strategy: 'cheapest' }, optimal: { bridgeCoin: 'XRP', totalCostPct: 0.45, estimatedMinutes: 5, steps: [] }, alternatives: [], meta: { exchangesChecked: 6, bridgeCoinsEvaluated: 5 } },
+                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, optimal: { type: 'object' }, alternatives: { type: 'array' }, meta: { type: 'object' } }, required: ['paid', 'service', 'optimal'] },
               },
             }),
           },
@@ -8386,6 +8406,221 @@ app.get('/api/stats', async (c) => {
   })
 })
 
+// ============================================================
+// ROUTING ENGINE — API Endpoints (MUST be before app.route('/api', api) to avoid agentAuth)
+// ============================================================
+
+// GET /api/route/find — Main routing endpoint (paid via x402, $0.10)
+app.get('/api/route/find', async (c) => {
+  const fromRaw = c.req.query('from') // e.g., "bithumb:KRW"
+  const toRaw = c.req.query('to') // e.g., "binance:USDC"
+  const amountRaw = c.req.query('amount')
+  const strategyRaw = c.req.query('strategy') ?? 'cheapest'
+
+  if (!fromRaw || !toRaw || !amountRaw) {
+    throw new HTTPException(400, { message: 'Required: from (exchange:currency), to (exchange:currency), amount. Example: /api/route/find?from=bithumb:KRW&to=binance:USDC&amount=1000000' })
+  }
+
+  const [fromExchange, fromCurrency] = fromRaw.split(':')
+  const [toExchange, toCurrency] = toRaw.split(':')
+  if (!fromExchange || !fromCurrency || !toExchange || !toCurrency) {
+    throw new HTTPException(400, { message: 'Format: exchange:currency (e.g., bithumb:KRW, binance:USDC)' })
+  }
+
+  const amount = Number(amountRaw)
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new HTTPException(400, { message: 'amount must be a positive number' })
+  }
+
+  const strategy = (['cheapest', 'fastest', 'balanced'].includes(strategyRaw) ? strategyRaw : 'cheapest') as RoutingStrategy
+
+  const { optimal, alternatives, meta } = await findOptimalRoute(
+    fromExchange, fromCurrency, toExchange, toCurrency, amount, strategy, c.env.DB,
+  )
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-route-finder',
+    request: { from: fromRaw, to: toRaw, amount, strategy },
+    optimal,
+    alternatives,
+    meta,
+  })
+})
+
+// GET /api/route/exchanges — List supported exchanges (free)
+app.get('/api/route/exchanges', (c) => {
+  const exchanges = ROUTING_EXCHANGES.map((ex) => ({
+    id: ex,
+    name: ex.charAt(0).toUpperCase() + ex.slice(1),
+    country: ex === 'binance' ? 'Global' : 'South Korea',
+    tradingFeePct: EXCHANGE_FEES[ex],
+    supportedCoins: Object.keys(WITHDRAWAL_FEES[ex] ?? {}),
+    type: ex === 'binance' ? 'global' : 'korean',
+  }))
+  return c.json({ service: 'crossfin-route-exchanges', exchanges, at: new Date().toISOString() })
+})
+
+// GET /api/route/fees — Fee comparison table (free)
+app.get('/api/route/fees', (c) => {
+  const coinRaw = c.req.query('coin')
+  const coin = coinRaw ? coinRaw.toUpperCase() : null
+
+  const fees = ROUTING_EXCHANGES.map((ex) => {
+    const withdrawals = coin
+      ? { [coin]: getWithdrawalFee(ex, coin) }
+      : WITHDRAWAL_FEES[ex] ?? {}
+    return {
+      exchange: ex,
+      tradingFeePct: EXCHANGE_FEES[ex],
+      withdrawalFees: withdrawals,
+      transferTimes: coin
+        ? { [coin]: getTransferTime(coin) }
+        : Object.fromEntries(Object.keys(WITHDRAWAL_FEES[ex] ?? {}).map((c) => [c, getTransferTime(c)])),
+    }
+  })
+
+  return c.json({ service: 'crossfin-route-fees', coin: coin ?? 'all', fees, at: new Date().toISOString() })
+})
+
+// GET /api/route/pairs — Supported pairs with live prices (free)
+app.get('/api/route/pairs', async (c) => {
+  const [bithumbAll, globalPrices, krwRate] = await Promise.all([
+    fetchBithumbAll(), fetchGlobalPrices(), fetchKrwRate(),
+  ])
+
+  const pairs = Object.entries(TRACKED_PAIRS).map(([coin, binanceSymbol]) => {
+    const bithumb = bithumbAll[coin]
+    const binancePrice = globalPrices[binanceSymbol]
+    return {
+      coin,
+      binanceSymbol,
+      bithumbKrw: bithumb?.closing_price ? parseFloat(bithumb.closing_price) : null,
+      binanceUsd: binancePrice ?? null,
+      transferTimeMin: getTransferTime(coin),
+      bridgeSupported: BRIDGE_COINS.includes(coin as typeof BRIDGE_COINS[number]),
+    }
+  })
+
+  return c.json({ service: 'crossfin-route-pairs', krwUsdRate: krwRate, pairs, at: new Date().toISOString() })
+})
+
+// GET /api/route/status — Exchange API health check (free)
+app.get('/api/route/status', async (c) => {
+  const checks = await Promise.allSettled([
+    fetch('https://api.bithumb.com/public/ticker/BTC_KRW').then((r) => r.ok),
+    fetch('https://api.upbit.com/v1/ticker?markets=KRW-BTC').then((r) => r.ok),
+    fetch('https://api.coinone.co.kr/public/v2/ticker_new/KRW/BTC').then((r) => r.ok),
+    fetch('https://api.korbit.co.kr/v1/ticker/detailed?currency_pair=btc_krw').then((r) => r.ok),
+    fetch('https://api.gopax.co.kr/trading-pairs/BTC-KRW/ticker').then((r) => r.ok),
+    fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT').then((r) => r.ok),
+  ])
+
+  const names = ['bithumb', 'upbit', 'coinone', 'korbit', 'gopax', 'binance']
+  const statuses = names.map((name, i) => ({
+    exchange: name,
+    status: checks[i]?.status === 'fulfilled' && (checks[i] as PromiseFulfilledResult<boolean>).value ? 'online' : 'offline',
+  }))
+
+  const allOnline = statuses.every((s) => s.status === 'online')
+  return c.json({ service: 'crossfin-route-status', healthy: allOnline, exchanges: statuses, at: new Date().toISOString() })
+})
+
+// ============================================================
+// ACP (Agentic Commerce Protocol) — Compatibility Layer (MUST be before app.route('/api', api))
+// ============================================================
+
+// POST /api/acp/quote — Request a routing quote (ACP-compatible, free)
+app.post('/api/acp/quote', async (c) => {
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json() as Record<string, unknown>
+  } catch {
+    throw new HTTPException(400, { message: 'Invalid JSON body' })
+  }
+
+  const fromExchange = String(body.from_exchange ?? 'bithumb')
+  const fromCurrency = String(body.from_currency ?? 'KRW')
+  const toExchange = String(body.to_exchange ?? 'binance')
+  const toCurrency = String(body.to_currency ?? 'USDC')
+  const amount = Number(body.amount ?? 0)
+  const strategy = String(body.strategy ?? 'cheapest') as RoutingStrategy
+
+  if (amount <= 0) throw new HTTPException(400, { message: 'amount must be positive' })
+
+  const { optimal, alternatives, meta } = await findOptimalRoute(
+    fromExchange, fromCurrency, toExchange, toCurrency, amount, strategy, c.env.DB,
+  )
+
+  return c.json({
+    protocol: 'acp',
+    version: '1.0',
+    type: 'quote',
+    provider: 'crossfin',
+    quote_id: `cfq_${crypto.randomUUID().slice(0, 8)}`,
+    status: 'quoted',
+    request: { from_exchange: fromExchange, from_currency: fromCurrency, to_exchange: toExchange, to_currency: toCurrency, amount, strategy },
+    optimal_route: optimal,
+    alternatives: alternatives.slice(0, 3),
+    meta,
+    expires_at: new Date(Date.now() + 60_000).toISOString(), // 60s quote validity
+    actions: {
+      execute: { method: 'POST', url: '/api/acp/execute', note: 'Execution simulation — actual execution requires exchange API keys (coming soon)' },
+    },
+  })
+})
+
+// POST /api/acp/execute — Execute a route (simulation mode, free)
+app.post('/api/acp/execute', async (c) => {
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json() as Record<string, unknown>
+  } catch {
+    throw new HTTPException(400, { message: 'Invalid JSON body' })
+  }
+
+  const quoteId = String(body.quote_id ?? '')
+  if (!quoteId) throw new HTTPException(400, { message: 'quote_id is required' })
+
+  return c.json({
+    protocol: 'acp',
+    version: '1.0',
+    type: 'execution',
+    provider: 'crossfin',
+    quote_id: quoteId,
+    execution_id: `cfx_${crypto.randomUUID().slice(0, 8)}`,
+    status: 'simulated',
+    message: 'Route execution is in simulation mode. Actual execution requires exchange API credentials. Contact team@crossfin.dev to enable live execution.',
+    simulated: true,
+    next_steps: [
+      'Connect exchange API keys for live execution',
+      'Set spending limits and policies (Locus-compatible)',
+      'Enable automated route execution for your agents',
+    ],
+  })
+})
+
+// GET /api/acp/status — ACP protocol status (free)
+app.get('/api/acp/status', (c) => {
+  return c.json({
+    protocol: 'acp',
+    version: '1.0',
+    provider: 'crossfin',
+    capabilities: ['quote', 'simulate'],
+    supported_exchanges: [...ROUTING_EXCHANGES],
+    supported_currencies: { source: ['KRW'], destination: ['USDC', 'USDT', 'KRW'] },
+    bridge_coins: [...BRIDGE_COINS],
+    execution_mode: 'simulation',
+    live_execution: 'coming_soon',
+    compatible_with: ['locus', 'x402', 'openai-acp'],
+    at: new Date().toISOString(),
+  })
+})
+
+// ============================================================
+// END ROUTING + ACP (registered before app.route to bypass agentAuth)
+// ============================================================
+
 app.route('/api', api)
 
 // === Guardian Rules Engine ===
@@ -8517,222 +8752,6 @@ async function audit(
     'INSERT INTO audit_logs (id, agent_id, action, resource, resource_id, detail, result) VALUES (?, ?, ?, ?, ?, ?, ?)'
   ).bind(crypto.randomUUID(), agentId, action, resource, resourceId, detail ?? null, result).run()
 }
-
-// ============================================================
-// ROUTING ENGINE — API Endpoints
-// ============================================================
-
-// GET /api/route/find — Main routing endpoint
-app.get('/api/route/find', async (c) => {
-  const fromRaw = c.req.query('from') // e.g., "bithumb:KRW"
-  const toRaw = c.req.query('to') // e.g., "binance:USDC"
-  const amountRaw = c.req.query('amount')
-  const strategyRaw = c.req.query('strategy') ?? 'cheapest'
-
-  if (!fromRaw || !toRaw || !amountRaw) {
-    throw new HTTPException(400, { message: 'Required: from (exchange:currency), to (exchange:currency), amount. Example: /api/route/find?from=bithumb:KRW&to=binance:USDC&amount=1000000' })
-  }
-
-  const [fromExchange, fromCurrency] = fromRaw.split(':')
-  const [toExchange, toCurrency] = toRaw.split(':')
-  if (!fromExchange || !fromCurrency || !toExchange || !toCurrency) {
-    throw new HTTPException(400, { message: 'Format: exchange:currency (e.g., bithumb:KRW, binance:USDC)' })
-  }
-
-  const amount = Number(amountRaw)
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new HTTPException(400, { message: 'amount must be a positive number' })
-  }
-
-  const strategy = (['cheapest', 'fastest', 'balanced'].includes(strategyRaw) ? strategyRaw : 'cheapest') as RoutingStrategy
-
-  const { optimal, alternatives, meta } = await findOptimalRoute(
-    fromExchange, fromCurrency, toExchange, toCurrency, amount, strategy, c.env.DB,
-  )
-
-  return c.json({
-    paid: true,
-    service: 'crossfin-route-finder',
-    request: { from: fromRaw, to: toRaw, amount, strategy },
-    optimal,
-    alternatives,
-    meta,
-  })
-})
-
-// GET /api/route/exchanges — List supported exchanges
-app.get('/api/route/exchanges', (c) => {
-  const exchanges = ROUTING_EXCHANGES.map((ex) => ({
-    id: ex,
-    name: ex.charAt(0).toUpperCase() + ex.slice(1),
-    country: ex === 'binance' ? 'Global' : 'South Korea',
-    tradingFeePct: EXCHANGE_FEES[ex],
-    supportedCoins: Object.keys(WITHDRAWAL_FEES[ex] ?? {}),
-    type: ex === 'binance' ? 'global' : 'korean',
-  }))
-  return c.json({ service: 'crossfin-route-exchanges', exchanges, at: new Date().toISOString() })
-})
-
-// GET /api/route/fees — Fee comparison table
-app.get('/api/route/fees', (c) => {
-  const coinRaw = c.req.query('coin')
-  const coin = coinRaw ? coinRaw.toUpperCase() : null
-
-  const fees = ROUTING_EXCHANGES.map((ex) => {
-    const withdrawals = coin
-      ? { [coin]: getWithdrawalFee(ex, coin) }
-      : WITHDRAWAL_FEES[ex] ?? {}
-    return {
-      exchange: ex,
-      tradingFeePct: EXCHANGE_FEES[ex],
-      withdrawalFees: withdrawals,
-      transferTimes: coin
-        ? { [coin]: getTransferTime(coin) }
-        : Object.fromEntries(Object.keys(WITHDRAWAL_FEES[ex] ?? {}).map((c) => [c, getTransferTime(c)])),
-    }
-  })
-
-  return c.json({ service: 'crossfin-route-fees', coin: coin ?? 'all', fees, at: new Date().toISOString() })
-})
-
-// GET /api/route/pairs — Supported pairs with live prices
-app.get('/api/route/pairs', async (c) => {
-  const [bithumbAll, globalPrices, krwRate] = await Promise.all([
-    fetchBithumbAll(), fetchGlobalPrices(), fetchKrwRate(),
-  ])
-
-  const pairs = Object.entries(TRACKED_PAIRS).map(([coin, binanceSymbol]) => {
-    const bithumb = bithumbAll[coin]
-    const binancePrice = globalPrices[binanceSymbol]
-    return {
-      coin,
-      binanceSymbol,
-      bithumbKrw: bithumb?.closing_price ? parseFloat(bithumb.closing_price) : null,
-      binanceUsd: binancePrice ?? null,
-      transferTimeMin: getTransferTime(coin),
-      bridgeSupported: BRIDGE_COINS.includes(coin as typeof BRIDGE_COINS[number]),
-    }
-  })
-
-  return c.json({ service: 'crossfin-route-pairs', krwUsdRate: krwRate, pairs, at: new Date().toISOString() })
-})
-
-// GET /api/route/status — Exchange API health check
-app.get('/api/route/status', async (c) => {
-  const checks = await Promise.allSettled([
-    fetch('https://api.bithumb.com/public/ticker/BTC_KRW').then((r) => r.ok),
-    fetch('https://api.upbit.com/v1/ticker?markets=KRW-BTC').then((r) => r.ok),
-    fetch('https://api.coinone.co.kr/public/v2/ticker_new/KRW/BTC').then((r) => r.ok),
-    fetch('https://api.korbit.co.kr/v1/ticker/detailed?currency_pair=btc_krw').then((r) => r.ok),
-    fetch('https://api.gopax.co.kr/trading-pairs/BTC-KRW/ticker').then((r) => r.ok),
-    fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT').then((r) => r.ok),
-  ])
-
-  const names = ['bithumb', 'upbit', 'coinone', 'korbit', 'gopax', 'binance']
-  const statuses = names.map((name, i) => ({
-    exchange: name,
-    status: checks[i]?.status === 'fulfilled' && (checks[i] as PromiseFulfilledResult<boolean>).value ? 'online' : 'offline',
-  }))
-
-  const allOnline = statuses.every((s) => s.status === 'online')
-  return c.json({ service: 'crossfin-route-status', healthy: allOnline, exchanges: statuses, at: new Date().toISOString() })
-})
-
-// ============================================================
-// ACP (Agentic Commerce Protocol) — Compatibility Layer
-// OpenAI + Stripe standard for agent-to-agent transactions
-// ============================================================
-
-// POST /api/acp/quote — Request a routing quote (ACP-compatible)
-app.post('/api/acp/quote', async (c) => {
-  let body: Record<string, unknown>
-  try {
-    body = await c.req.json() as Record<string, unknown>
-  } catch {
-    throw new HTTPException(400, { message: 'Invalid JSON body' })
-  }
-
-  const fromExchange = String(body.from_exchange ?? 'bithumb')
-  const fromCurrency = String(body.from_currency ?? 'KRW')
-  const toExchange = String(body.to_exchange ?? 'binance')
-  const toCurrency = String(body.to_currency ?? 'USDC')
-  const amount = Number(body.amount ?? 0)
-  const strategy = String(body.strategy ?? 'cheapest') as RoutingStrategy
-
-  if (amount <= 0) throw new HTTPException(400, { message: 'amount must be positive' })
-
-  const { optimal, alternatives, meta } = await findOptimalRoute(
-    fromExchange, fromCurrency, toExchange, toCurrency, amount, strategy, c.env.DB,
-  )
-
-  return c.json({
-    protocol: 'acp',
-    version: '1.0',
-    type: 'quote',
-    provider: 'crossfin',
-    quote_id: `cfq_${crypto.randomUUID().slice(0, 8)}`,
-    status: 'quoted',
-    request: { from_exchange: fromExchange, from_currency: fromCurrency, to_exchange: toExchange, to_currency: toCurrency, amount, strategy },
-    optimal_route: optimal,
-    alternatives: alternatives.slice(0, 3),
-    meta,
-    expires_at: new Date(Date.now() + 60_000).toISOString(), // 60s quote validity
-    actions: {
-      execute: { method: 'POST', url: '/api/acp/execute', note: 'Execution simulation — actual execution requires exchange API keys (coming soon)' },
-    },
-  })
-})
-
-// POST /api/acp/execute — Execute a route (simulation mode)
-app.post('/api/acp/execute', async (c) => {
-  let body: Record<string, unknown>
-  try {
-    body = await c.req.json() as Record<string, unknown>
-  } catch {
-    throw new HTTPException(400, { message: 'Invalid JSON body' })
-  }
-
-  const quoteId = String(body.quote_id ?? '')
-  if (!quoteId) throw new HTTPException(400, { message: 'quote_id is required' })
-
-  return c.json({
-    protocol: 'acp',
-    version: '1.0',
-    type: 'execution',
-    provider: 'crossfin',
-    quote_id: quoteId,
-    execution_id: `cfx_${crypto.randomUUID().slice(0, 8)}`,
-    status: 'simulated',
-    message: 'Route execution is in simulation mode. Actual execution requires exchange API credentials. Contact team@crossfin.dev to enable live execution.',
-    simulated: true,
-    next_steps: [
-      'Connect exchange API keys for live execution',
-      'Set spending limits and policies (Locus-compatible)',
-      'Enable automated route execution for your agents',
-    ],
-  })
-})
-
-// GET /api/acp/status — ACP protocol status
-app.get('/api/acp/status', (c) => {
-  return c.json({
-    protocol: 'acp',
-    version: '1.0',
-    provider: 'crossfin',
-    capabilities: ['quote', 'simulate'],
-    supported_exchanges: [...ROUTING_EXCHANGES],
-    supported_currencies: { source: ['KRW'], destination: ['USDC', 'USDT', 'KRW'] },
-    bridge_coins: [...BRIDGE_COINS],
-    execution_mode: 'simulation',
-    live_execution: 'coming_soon',
-    compatible_with: ['locus', 'x402', 'openai-acp'],
-    at: new Date().toISOString(),
-  })
-})
-
-// ============================================================
-// END ROUTING + ACP ENDPOINTS
-// ============================================================
 
 export default {
   fetch: app.fetch,
