@@ -1,6 +1,6 @@
 # CrossFin PRD — Guardian Autonomous Growth
 
-> Last updated: 2026-02-16
+> Last updated: 2026-02-18
 > Status: Planning locked, implementation pending (target v1.4.0)
 
 ---
@@ -15,8 +15,13 @@ Live:
 - Discovery: `GET /.well-known/crossfin.json`
 
 Current capabilities:
-- Registry: 162 services (CrossFin 13 + external 149), verified-only policy
-- Paid APIs: 13 x402 endpoints (USDC on Base mainnet)
+- Registry: 179 services (CrossFin 34 + external 149), verified-only policy
+- Paid APIs: 34 x402 endpoints (USDC on Base mainnet), including 4 bundle endpoints
+- Bundle APIs (v1.8.0):
+  - `GET /api/premium/morning/brief` ($0.20) — Daily market summary (kimchi + FX + indices + momentum + headlines)
+  - `GET /api/premium/crypto/snapshot` ($0.15) — Crypto overview (5-exchange + kimchi + volume + FX)
+  - `GET /api/premium/kimchi/stats` ($0.15) — Kimchi premium deep analysis (current + trend + arbitrage signal + cross-exchange)
+  - `GET /api/premium/market/korea/stock-brief?stock=005930` ($0.10) — Stock analysis (fundamentals + news + investor flow + disclosures)
 - Proxy: `GET/POST /api/proxy/:serviceId` with `X-Agent-Key`
 - Analytics: `GET /api/analytics/overview`
 - Agent auth: admin-created agent key + API protection

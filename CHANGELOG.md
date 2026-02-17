@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.8.0] - 2026-02-18
+
+### Added
+
+**4 Bundle Endpoints — TIER 1 & TIER 2 composite APIs for agents**
+
+Agents can now get comprehensive market data in a single call instead of making 4-8 individual requests.
+
+TIER 1 — High-value bundles:
+- `GET /api/premium/morning/brief` ($0.20) — Daily market summary: kimchi premium + FX rate + KOSPI/KOSDAQ + stock momentum + headlines
+- `GET /api/premium/crypto/snapshot` ($0.15) — Crypto market overview: 5-exchange BTC prices + kimchi premium + Bithumb volume + FX rate
+- `GET /api/premium/kimchi/stats` ($0.15) — Comprehensive kimchi premium analysis: current spreads + 24h trend + best arbitrage signal + cross-exchange spread
+
+TIER 2 — Stock analysis bundle:
+- `GET /api/premium/market/korea/stock-brief?stock=005930` ($0.10) — One-call stock analysis: fundamentals + news + investor flow + disclosures
+
+### Changed
+
+- Total premium endpoints: 30 → 34 (all with Bazaar discovery metadata)
+- All bundle endpoints use `Promise.allSettled()` for resilience (partial failures degrade gracefully)
+- Version bump to 1.8.0
+
 ## [1.7.0] - 2026-02-16
 
 ### Added

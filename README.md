@@ -1,6 +1,6 @@
 # CrossFin
 
-**The x402 Agent Services Gateway** — Discover, call, and pay for AI agent services in one place. 179 services (30 CrossFin + 149 external), Korean market APIs, MCP server, and structured agent guides. All payments via [x402](https://x402.org) protocol with USDC on Base mainnet.
+**The x402 Agent Services Gateway** — Discover, call, and pay for AI agent services in one place. 183 services (34 CrossFin + 149 external), Korean market APIs, MCP server, and structured agent guides. All payments via [x402](https://x402.org) protocol with USDC on Base mainnet.
 
 **Live:** https://crossfin.dev | **Demo:** https://live.crossfin.dev
 
@@ -8,11 +8,11 @@
 
 CrossFin is a **gateway and registry for AI agent services**, built on the x402 payment protocol.
 
-- **Service Registry:** 179 verified services from multiple x402 providers (CrossFin, Einstein AI, x402engine)
+- **Service Registry:** 183 verified services from multiple x402 providers (CrossFin, Einstein AI, x402engine)
 - **Agent Guide API:** Structured JSON guide at `/api/docs/guide` — service catalog, payment flow, code examples, MCP setup
 - **Agent Discovery:** `/.well-known/crossfin.json` for automatic service detection
 - **MCP Server:** 13 tools for Claude Desktop and other MCP clients — search, browse, call, and pay for services
-- **Korea-First APIs:** 30 proprietary endpoints (Kimchi Premium, Bithumb, Upbit, Coinone, FX, stock analysis, ETF, themes, global indices)
+- **Korea-First APIs:** 34 proprietary endpoints including 4 bundle APIs (Kimchi Premium, Bithumb, Upbit, Coinone, FX, stock analysis, ETF, themes, global indices, Morning Brief, Crypto Snapshot, Kimchi Stats, Stock Brief)
 - **Proxy Layer:** Call any registered service through CrossFin (`/api/proxy/:serviceId`) — requires `X-Agent-Key`, 5% fee header, automatic call logging
 - **Analytics:** Real-time service usage stats (`/api/analytics/overview`)
 - **Live Demo:** Real-time gateway dashboard at [live.crossfin.dev](https://live.crossfin.dev)
@@ -97,6 +97,15 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 | `GET /api/premium/market/korea/etf` | $0.03 | Korean ETF list with NAV, price, 3-month returns (1,070+ ETFs) |
 | `GET /api/premium/crypto/korea/upbit-candles?coin=BTC&type=days` | $0.02 | Upbit OHLCV candles (1m to monthly, up to 200 candles) |
 | `GET /api/premium/market/global/indices-chart?index=.DJI` | $0.02 | Global index chart — Dow, NASDAQ, Hang Seng, Nikkei |
+
+### Bundle APIs (One-call composites, Paid via x402)
+
+| Endpoint | Price | Description |
+|----------|-------|-------------|
+| `GET /api/premium/morning/brief` | $0.20 | Morning Brief — kimchi premium + FX + KOSPI/KOSDAQ + stock momentum + headlines in one call |
+| `GET /api/premium/crypto/snapshot` | $0.15 | Crypto Snapshot — 5-exchange BTC prices + kimchi premium + Bithumb volume + FX rate |
+| `GET /api/premium/kimchi/stats` | $0.15 | Kimchi Stats — current spreads + 24h trend + arbitrage signal + cross-exchange spread |
+| `GET /api/premium/market/korea/stock-brief?stock=005930` | $0.10 | Stock Brief — fundamentals + news + investor flow + disclosures for any Korean stock |
 
 ### Other (Free)
 
