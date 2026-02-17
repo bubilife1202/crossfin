@@ -1036,6 +1036,34 @@ app.get('/api/openapi.json', (c) => {
           },
         },
       },
+      '/api/premium/market/korea/stock-brief': {
+        get: {
+          operationId: 'stockBrief',
+          summary: 'Stock Brief bundle — $0.10 USDC',
+          description: 'One-call comprehensive Korean stock analysis combining stock detail (PER/PBR/consensus/peers), recent news, investor flow (foreign/institutional/individual), and disclosure filings. Payment: $0.10 USDC on Base via x402.',
+          tags: ['Paid — x402'],
+          parameters: [
+            { name: 'stock', in: 'query', required: true, description: 'Korean stock code (6-digit number, e.g., 005930 for Samsung Electronics)', schema: { type: 'string', default: '005930' } },
+          ],
+          responses: {
+            '200': {
+              description: 'Stock brief bundle response',
+              content: { 'application/json': { schema: { type: 'object', properties: {
+                paid: { type: 'boolean' },
+                service: { type: 'string' },
+                stock: { type: 'string' },
+                name: { type: ['string', 'null'] },
+                detail: { type: ['object', 'null'] },
+                news: { type: 'array', items: { type: 'object' } },
+                investorFlow: { type: ['object', 'null'] },
+                disclosures: { type: 'array', items: { type: 'object' } },
+                at: { type: 'string', format: 'date-time' },
+              }, required: ['paid', 'service', 'stock', 'detail', 'news', 'investorFlow', 'disclosures', 'at'] } } },
+            },
+            '402': { description: 'Payment required — $0.10 USDC on Base mainnet' },
+          },
+        },
+      },
       '/api/premium/news/korea/headlines': {
         get: {
           operationId: 'koreaHeadlines',
@@ -1707,6 +1735,31 @@ app.use(
               output: {
                 example: { paid: true, service: 'crossfin-korea-stock-news', stock: '005930', total: 1284, items: [{ id: 9912345, title: 'Samsung Electronics rises on AI memory demand', body: 'Analysts cited stronger-than-expected server DRAM orders...', publisher: 'Yonhap', datetime: '2026-02-16 09:15:00' }], source: 'naver-finance', at: '2026-02-16T00:00:00.000Z' },
                 schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, stock: { type: 'string' }, total: { type: 'number' }, items: { type: 'array' }, source: { type: 'string' }, at: { type: 'string' } }, required: ['paid', 'service', 'stock', 'total', 'items', 'source', 'at'] },
+              },
+            }),
+          },
+        },
+        'GET /api/premium/market/korea/stock-brief': {
+          accepts: { scheme: 'exact', price: '$0.10', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
+          description: 'Stock Brief — one-call comprehensive Korean stock analysis combining fundamentals (PER/PBR/consensus), recent news, investor flow (foreign/institutional), and disclosure filings. Replaces 4 individual API calls.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              input: { stock: '005930' },
+              inputSchema: { properties: { stock: { type: 'string', description: 'Korean stock code (e.g., 005930 for Samsung Electronics)' } } },
+              output: {
+                example: {
+                  paid: true,
+                  service: 'crossfin-stock-brief',
+                  stock: '005930',
+                  name: 'Samsung Electronics',
+                  detail: { stock: '005930', name: 'Samsung Electronics', metrics: { PER: '12.5\uBC30', PBR: '1.3\uBC30' }, consensus: { targetPrice: '216,417', recommendation: '4.00' } },
+                  news: [],
+                  investorFlow: { stock: '005930', days: 10, flow: [{ date: '20260213', foreignNetBuy: '-4,715,928' }] },
+                  disclosures: [],
+                  at: '2026-02-17T00:00:00.000Z',
+                },
+                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, stock: { type: 'string' }, name: { type: ['string', 'null'] }, detail: { type: ['object', 'null'] }, news: { type: 'array' }, investorFlow: { type: ['object', 'null'] }, disclosures: { type: 'array' }, at: { type: 'string', format: 'date-time' } }, required: ['paid', 'service', 'stock', 'detail', 'news', 'investorFlow', 'disclosures', 'at'] },
               },
             }),
           },
@@ -5900,6 +5953,171 @@ app.get('/api/premium/market/korea/disclosure', async (c) => {
     })),
     source: 'naver-finance',
     at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/market/korea/stock-brief', async (c) => {
+  const stock = (c.req.query('stock') ?? '').trim()
+  if (!stock) throw new HTTPException(400, { message: 'stock is required' })
+  if (!/^\d{6}$/.test(stock)) throw new HTTPException(400, { message: 'stock must be 6-digit code (e.g., 005930)' })
+
+  const at = new Date().toISOString()
+
+  const detailTask = (async () => {
+    const res = await fetch(`https://m.stock.naver.com/api/stock/${stock}/integration`)
+    if (!res.ok) throw new Error(`Stock detail data unavailable (${res.status})`)
+    const raw: unknown = await res.json()
+    if (!isRecord(raw)) throw new Error('Stock detail invalid response')
+
+    const infos: Record<string, string> = {}
+    const totalInfos = Array.isArray(raw.totalInfos) ? raw.totalInfos : []
+    for (const item of totalInfos) {
+      if (!isRecord(item)) continue
+      const key = typeof item.key === 'string' ? item.key : String(item.key ?? '')
+      const value = typeof item.value === 'string' ? item.value : String(item.value ?? '')
+      if (!key) continue
+      infos[key] = value
+    }
+
+    const consensus = isRecord(raw.consensusInfo) ? raw.consensusInfo : null
+
+    const industryRaw = Array.isArray(raw.industryCompareInfo) ? raw.industryCompareInfo : []
+    const industryPeers = industryRaw
+      .map((s): { code: string; name: string; price: unknown; changePct: unknown; direction: string } | null => {
+        if (!isRecord(s)) return null
+        const direction = isRecord(s.compareToPreviousPrice) && typeof s.compareToPreviousPrice.name === 'string'
+          ? s.compareToPreviousPrice.name
+          : 'UNCHANGED'
+
+        return {
+          code: typeof s.itemCode === 'string' ? s.itemCode : String(s.itemCode ?? ''),
+          name: typeof s.stockName === 'string' ? s.stockName : String(s.stockName ?? ''),
+          price: s.closePrice,
+          changePct: s.fluctuationsRatio,
+          direction,
+        }
+      })
+      .filter((v): v is { code: string; name: string; price: unknown; changePct: unknown; direction: string } => v !== null)
+
+    return {
+      stock,
+      name: typeof raw.stockName === 'string' ? raw.stockName : String(raw.stockName ?? ''),
+      metrics: infos,
+      consensus: consensus ? {
+        targetPrice: typeof consensus.priceTargetMean === 'string' ? consensus.priceTargetMean : String(consensus.priceTargetMean ?? ''),
+        recommendation: typeof consensus.recommMean === 'string' ? consensus.recommMean : String(consensus.recommMean ?? ''),
+        date: typeof consensus.createDate === 'string' ? consensus.createDate : String(consensus.createDate ?? ''),
+      } : null,
+      industryPeers,
+      source: 'naver-finance',
+    }
+  })()
+
+  const newsTask = (async () => {
+    const page = 1
+    const pageSize = 5
+    const res = await fetch(`https://m.stock.naver.com/api/news/stock/${stock}?page=${page}&pageSize=${pageSize}`)
+    if (!res.ok) throw new Error(`Stock news data unavailable (${res.status})`)
+    const rawArr: unknown = await res.json()
+    const raw0 = Array.isArray(rawArr) && rawArr.length > 0 ? rawArr[0] : null
+    const raw = isRecord(raw0) ? raw0 : { items: [] as unknown[] }
+    const itemsRaw = Array.isArray(raw.items) ? raw.items : []
+
+    return itemsRaw.map((i) => {
+      if (!isRecord(i)) return { id: null, title: '', body: '', publisher: null, datetime: '' }
+      return {
+        id: typeof i.id === 'number' ? i.id : typeof i.id === 'string' ? Number(i.id) : null,
+        title: typeof i.title === 'string' ? i.title : String(i.title ?? ''),
+        body: typeof i.body === 'string' ? i.body : String(i.body ?? ''),
+        publisher: typeof i.officeName === 'string' ? i.officeName : null,
+        datetime: typeof i.datetime === 'string' ? i.datetime : String(i.datetime ?? ''),
+      }
+    }).slice(0, 5)
+  })()
+
+  const investorFlowTask = (async () => {
+    const res = await fetch(`https://m.stock.naver.com/api/stock/${stock}/trend`)
+    if (!res.ok) throw new Error(`Investor flow data unavailable (${res.status})`)
+    const rawData: unknown = await res.json()
+    const rows = Array.isArray(rawData) ? rawData : []
+
+    const flow = rows.map((d) => {
+      if (!isRecord(d)) {
+        return {
+          date: '',
+          foreignNetBuy: null,
+          foreignHoldRatio: null,
+          institutionNetBuy: null,
+          individualNetBuy: null,
+          closePrice: null,
+          direction: 'UNCHANGED',
+          volume: null,
+        }
+      }
+
+      const direction = isRecord(d.compareToPreviousPrice) && typeof d.compareToPreviousPrice.name === 'string'
+        ? d.compareToPreviousPrice.name
+        : 'UNCHANGED'
+
+      return {
+        date: typeof d.bizdate === 'string' ? d.bizdate : String(d.bizdate ?? ''),
+        foreignNetBuy: d.foreignerPureBuyQuant ?? null,
+        foreignHoldRatio: d.foreignerHoldRatio ?? null,
+        institutionNetBuy: d.organPureBuyQuant ?? null,
+        individualNetBuy: d.individualPureBuyQuant ?? null,
+        closePrice: d.closePrice ?? null,
+        direction,
+        volume: d.accumulatedTradingVolume ?? null,
+      }
+    })
+
+    return {
+      stock,
+      days: flow.length,
+      flow,
+      source: 'naver-finance',
+    }
+  })()
+
+  const disclosureTask = (async () => {
+    const page = 1
+    const pageSize = 5
+    const res = await fetch(`https://m.stock.naver.com/api/stock/${stock}/disclosure?page=${page}&pageSize=${pageSize}`)
+    if (!res.ok) throw new Error(`Disclosure data unavailable (${res.status})`)
+    const raw: unknown = await res.json()
+    const itemsRaw = Array.isArray(raw) ? raw : []
+
+    return itemsRaw.map((d) => {
+      if (!isRecord(d)) return { title: '', datetime: '' }
+      return {
+        title: typeof d.title === 'string' ? d.title : String(d.title ?? ''),
+        datetime: typeof d.datetime === 'string' ? d.datetime : String(d.datetime ?? ''),
+      }
+    }).slice(0, 5)
+  })()
+
+  const [detailSet, newsSet, investorFlowSet, disclosureSet] = await Promise.allSettled([
+    detailTask,
+    newsTask,
+    investorFlowTask,
+    disclosureTask,
+  ] as const)
+
+  const detail = detailSet.status === 'fulfilled' ? detailSet.value : null
+  const news = newsSet.status === 'fulfilled' ? newsSet.value : []
+  const investorFlow = investorFlowSet.status === 'fulfilled' ? investorFlowSet.value : null
+  const disclosures = disclosureSet.status === 'fulfilled' ? disclosureSet.value : []
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-stock-brief',
+    stock,
+    name: detail?.name ?? null,
+    detail,
+    news,
+    investorFlow,
+    disclosures,
+    at,
   })
 })
 

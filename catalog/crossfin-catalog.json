@@ -369,6 +369,17 @@
       "price": "$0.15",
       "tags": ["korea", "crypto", "bundle", "kimchi-premium", "arbitrage", "agent-ready"],
       "playgroundLabel": "Kimchi Stats"
+    },
+    {
+      "id": "crossfin_stock_brief",
+      "name": "CrossFin Stock Brief",
+      "description": "One-call Korean stock analysis: fundamentals, news, investor flow, disclosures.",
+      "category": "korea-bundle",
+      "path": "/api/premium/market/korea/stock-brief",
+      "sampleQuery": "stock=005930",
+      "price": "$0.10",
+      "tags": ["korea", "stocks", "bundle", "fundamentals", "news", "investor-flow", "agent-ready"],
+      "playgroundLabel": "Stock Brief"
     }
   ]
 }
