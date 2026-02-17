@@ -349,6 +349,16 @@
       "price": "$0.20",
       "tags": ["korea", "bundle", "morning-brief", "market-summary", "agent-ready"],
       "playgroundLabel": "Morning Brief"
+    },
+    {
+      "id": "crossfin_crypto_snapshot",
+      "name": "CrossFin Crypto Snapshot",
+      "description": "One-call crypto market overview: kimchi premium, 5-exchange prices, Bithumb volume, FX rate.",
+      "category": "korea-bundle",
+      "path": "/api/premium/crypto/snapshot",
+      "price": "$0.15",
+      "tags": ["korea", "crypto", "bundle", "snapshot", "exchange", "agent-ready"],
+      "playgroundLabel": "Crypto Snapshot"
     }
   ]
 }

@@ -932,6 +932,53 @@ app.get('/api/openapi.json', (c) => {
           },
         },
       },
+      '/api/premium/crypto/snapshot': {
+        get: {
+          operationId: 'cryptoSnapshot',
+          summary: 'Crypto Snapshot bundle — $0.15 USDC',
+          description: 'One-call crypto market overview combining 5-exchange BTC price comparison, kimchi premium, Bithumb volume analysis, and USD/KRW FX rate. Payment: $0.15 USDC on Base via x402.',
+          tags: ['Paid — x402'],
+          responses: {
+            '200': {
+              description: 'Crypto snapshot bundle response',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      paid: { type: 'boolean' },
+                      service: { type: 'string' },
+                      kimchiPremium: { type: 'object', properties: {
+                        avgPremiumPct: { type: 'number' },
+                        topPair: { type: 'string' },
+                        pairsTracked: { type: 'integer' },
+                        premiums: { type: 'array', items: { type: 'object' } },
+                      }, required: ['avgPremiumPct', 'topPair', 'pairsTracked', 'premiums'] },
+                      fxRate: { type: 'object', properties: { usdKrw: { type: 'number' } }, required: ['usdKrw'] },
+                      exchanges: { type: 'object', properties: {
+                        upbit: { type: ['object', 'null'], properties: { krw: { type: 'number' }, usd: { type: 'number' } }, required: ['krw', 'usd'] },
+                        bithumb: { type: ['object', 'null'], properties: { krw: { type: 'number' }, usd: { type: 'number' } }, required: ['krw', 'usd'] },
+                        korbit: { type: ['object', 'null'], properties: { krw: { type: 'number' }, usd: { type: 'number' } }, required: ['krw', 'usd'] },
+                        coinone: { type: ['object', 'null'], properties: { krw: { type: 'number' }, usd: { type: 'number' } }, required: ['krw', 'usd'] },
+                        gopax: { type: ['object', 'null'], properties: { krw: { type: 'number' }, usd: { type: 'number' } }, required: ['krw', 'usd'] },
+                        spread: { type: 'object', properties: { minUsd: { type: 'number' }, maxUsd: { type: 'number' }, spreadPct: { type: 'number' } }, required: ['minUsd', 'maxUsd', 'spreadPct'] },
+                      }, required: ['upbit', 'bithumb', 'korbit', 'coinone', 'gopax', 'spread'] },
+                      volumeAnalysis: { type: 'object', properties: {
+                        totalVolume24hKrw: { type: 'number' },
+                        totalVolume24hUsd: { type: 'number' },
+                        topByVolume: { type: 'array', items: { type: 'object' } },
+                      }, required: ['totalVolume24hKrw', 'totalVolume24hUsd', 'topByVolume'] },
+                      at: { type: 'string', format: 'date-time' },
+                    },
+                    required: ['paid', 'service', 'kimchiPremium', 'fxRate', 'exchanges', 'volumeAnalysis', 'at'],
+                  },
+                },
+              },
+            },
+            '402': { description: 'Payment required — $0.15 USDC on Base mainnet' },
+          },
+        },
+      },
       '/api/premium/news/korea/headlines': {
         get: {
           operationId: 'koreaHeadlines',
@@ -1719,6 +1766,19 @@ app.use(
               output: {
                 example: { paid: true, service: 'crossfin-morning-brief', kimchiPremium: { avgPremiumPct: 2.15, topPair: 'BTC', pairsTracked: 10 }, fxRate: { usdKrw: 1450 }, indices: { kospi: { price: 2650, changePct: 0.5 }, kosdaq: { price: 850, changePct: -0.3 } }, momentum: { topGainers: [], topLosers: [] }, headlines: [], at: '2026-02-17T00:00:00.000Z' },
                 schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, kimchiPremium: { type: 'object' }, fxRate: { type: 'object' }, indices: { type: 'object' }, momentum: { type: 'object' }, headlines: { type: 'array' } }, required: ['paid', 'service', 'kimchiPremium', 'fxRate', 'indices'] },
+              },
+            }),
+          },
+        },
+        'GET /api/premium/crypto/snapshot': {
+          accepts: { scheme: 'exact', price: '$0.15', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
+          description: 'Crypto Snapshot — one-call crypto market overview combining 5-exchange price comparison, kimchi premium, Bithumb volume analysis, and FX rate. Replaces 4+ individual API calls.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              output: {
+                example: { paid: true, service: 'crossfin-crypto-snapshot', kimchiPremium: { avgPremiumPct: 2.15, pairsTracked: 10 }, fxRate: { usdKrw: 1450 }, exchanges: { upbit: {}, bithumb: {}, korbit: {}, coinone: {}, gopax: {} }, volumeAnalysis: { totalVolume24hUsd: 5000000 }, at: '2026-02-17T00:00:00.000Z' },
+                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, kimchiPremium: { type: 'object' }, fxRate: { type: 'object' }, exchanges: { type: 'object' }, volumeAnalysis: { type: 'object' } }, required: ['paid', 'service', 'kimchiPremium', 'fxRate'] },
               },
             }),
           },
@@ -5916,6 +5976,216 @@ app.get('/api/premium/news/korea/headlines', async (c) => {
     url: feedUrl,
     items,
     at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/crypto/snapshot', async (c) => {
+  const at = new Date().toISOString()
+  const coin = 'BTC'
+
+  const bithumbPromise = fetchBithumbAll()
+  const globalPricesPromise = fetchGlobalPrices()
+  const krwRatePromise = fetchKrwRate()
+
+  type KimchiPremiumRow = ReturnType<typeof calcPremiums>[number]
+  type ExchangePrice = { krw: number; usd: number }
+  type VolumeTopRow = {
+    coin: string
+    volume24hKrw: number
+    volume24hUsd: number
+    change24hPct: number
+    volumeSharePct: number
+  }
+
+  const exchangesTask = (async () => {
+    const fetchJson = async (url: string): Promise<unknown> => {
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`Request failed: ${url}`)
+      return res.json() as Promise<unknown>
+    }
+
+    const [upbitSet, bithumbSet, korbitSet, coinoneSet, gopaxSet] = await Promise.allSettled([
+      fetchJson(`https://api.upbit.com/v1/ticker?markets=KRW-${coin}`),
+      fetchJson(`https://api.bithumb.com/public/ticker/${coin}_KRW`),
+      fetchJson(`https://api.korbit.co.kr/v1/ticker/detailed?currency_pair=${coin.toLowerCase()}_krw`),
+      fetchJson(`https://api.coinone.co.kr/ticker?currency=${coin.toLowerCase()}`),
+      fetchJson(`https://api.gopax.co.kr/trading-pairs/${coin}-KRW/ticker`),
+    ] as const)
+
+    const toPositiveNumber = (v: unknown): number | null => {
+      const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN
+      return Number.isFinite(n) && n > 0 ? n : null
+    }
+
+    let upbitKrw: number | null = null
+    if (upbitSet.status === 'fulfilled') {
+      const raw = upbitSet.value
+      if (Array.isArray(raw) && raw.length > 0 && isRecord(raw[0])) {
+        upbitKrw = toPositiveNumber(raw[0].trade_price)
+      }
+    }
+
+    let bithumbKrw: number | null = null
+    if (bithumbSet.status === 'fulfilled') {
+      const raw = bithumbSet.value
+      if (isRecord(raw) && isRecord(raw.data)) {
+        bithumbKrw = toPositiveNumber(raw.data.closing_price)
+      }
+    }
+
+    let korbitKrw: number | null = null
+    if (korbitSet.status === 'fulfilled') {
+      const raw = korbitSet.value
+      if (isRecord(raw)) {
+        korbitKrw = toPositiveNumber(raw.last)
+      }
+    }
+
+    let coinoneKrw: number | null = null
+    if (coinoneSet.status === 'fulfilled') {
+      const raw = coinoneSet.value
+      if (isRecord(raw)) {
+        coinoneKrw = toPositiveNumber(raw.last)
+      }
+    }
+
+    let gopaxKrw: number | null = null
+    if (gopaxSet.status === 'fulfilled') {
+      const raw = gopaxSet.value
+      if (isRecord(raw)) {
+        gopaxKrw = toPositiveNumber(raw.price)
+      }
+    }
+
+    return {
+      upbitKrw,
+      bithumbKrw,
+      korbitKrw,
+      coinoneKrw,
+      gopaxKrw,
+    }
+  })()
+
+  const [bithumbSet, globalSet, krwSet, exchangesSet] = await Promise.allSettled([
+    bithumbPromise,
+    globalPricesPromise,
+    krwRatePromise,
+    exchangesTask,
+  ] as const)
+
+  const usdKrw = krwSet.status === 'fulfilled' ? krwSet.value : 1450
+
+  const kimchiPremium = (() => {
+    if (bithumbSet.status !== 'fulfilled' || globalSet.status !== 'fulfilled') {
+      return { avgPremiumPct: 0, topPair: '', pairsTracked: 0, premiums: [] as KimchiPremiumRow[] }
+    }
+
+    const premiums = calcPremiums(bithumbSet.value, globalSet.value, usdKrw)
+    const avg = premiums.length > 0
+      ? round2(premiums.reduce((s, p) => s + p.premiumPct, 0) / premiums.length)
+      : 0
+
+    return {
+      avgPremiumPct: avg,
+      topPair: premiums[0]?.coin ?? '',
+      pairsTracked: premiums.length,
+      premiums: premiums.slice(0, 5),
+    }
+  })()
+
+  const volumeAnalysis = (() => {
+    if (bithumbSet.status !== 'fulfilled') {
+      return { totalVolume24hKrw: 0, totalVolume24hUsd: 0, topByVolume: [] as VolumeTopRow[] }
+    }
+
+    const bithumbData = bithumbSet.value
+    const coins: Array<{ coin: string; volume24hKrw: number; change24hPct: number }> = []
+
+    for (const [symbol, data] of Object.entries(bithumbData)) {
+      if (symbol === 'date' || typeof data !== 'object' || !data) continue
+      const d = data as Record<string, string>
+
+      const volume24hKrw = parseFloat(d.acc_trade_value_24H || '0')
+      if (!Number.isFinite(volume24hKrw) || volume24hKrw <= 0) continue
+
+      const change24hPct = parseFloat(d.fluctate_rate_24H || '0')
+      coins.push({
+        coin: symbol,
+        volume24hKrw,
+        change24hPct: Number.isFinite(change24hPct) ? change24hPct : 0,
+      })
+    }
+
+    const totalVolume24hKrw = coins.reduce((s, row) => s + row.volume24hKrw, 0)
+    const sorted = [...coins].sort((a, b) => b.volume24hKrw - a.volume24hKrw)
+
+    const withShare = (row: { coin: string; volume24hKrw: number; change24hPct: number }): VolumeTopRow => {
+      const sharePct = totalVolume24hKrw > 0 ? (row.volume24hKrw / totalVolume24hKrw) * 100 : 0
+      return {
+        coin: row.coin,
+        volume24hKrw: round2(row.volume24hKrw),
+        volume24hUsd: round2(row.volume24hKrw / usdKrw),
+        change24hPct: round2(row.change24hPct),
+        volumeSharePct: round2(sharePct),
+      }
+    }
+
+    return {
+      totalVolume24hKrw: round2(totalVolume24hKrw),
+      totalVolume24hUsd: round2(totalVolume24hKrw / usdKrw),
+      topByVolume: sorted.slice(0, 5).map((row) => withShare(row)),
+    }
+  })()
+
+  const exchanges = (() => {
+    if (exchangesSet.status !== 'fulfilled') {
+      return {
+        upbit: null as ExchangePrice | null,
+        bithumb: null as ExchangePrice | null,
+        korbit: null as ExchangePrice | null,
+        coinone: null as ExchangePrice | null,
+        gopax: null as ExchangePrice | null,
+        spread: { minUsd: 0, maxUsd: 0, spreadPct: 0 },
+      }
+    }
+
+    const toExchangePrice = (krw: number | null): ExchangePrice | null => {
+      if (krw === null) return null
+      return { krw, usd: round2(krw / usdKrw) }
+    }
+
+    const out = {
+      upbit: toExchangePrice(exchangesSet.value.upbitKrw),
+      bithumb: toExchangePrice(exchangesSet.value.bithumbKrw),
+      korbit: toExchangePrice(exchangesSet.value.korbitKrw),
+      coinone: toExchangePrice(exchangesSet.value.coinoneKrw),
+      gopax: toExchangePrice(exchangesSet.value.gopaxKrw),
+    }
+
+    const usdValues = [out.upbit, out.bithumb, out.korbit, out.coinone, out.gopax]
+      .map((p) => p?.usd)
+      .filter((v): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0)
+
+    const minUsd = usdValues.length > 0 ? Math.min(...usdValues) : 0
+    const maxUsd = usdValues.length > 0 ? Math.max(...usdValues) : 0
+    const spreadPct = minUsd > 0 ? round2(((maxUsd - minUsd) / minUsd) * 100) : 0
+
+    return {
+      ...out,
+      spread: { minUsd: round2(minUsd), maxUsd: round2(maxUsd), spreadPct },
+    }
+  })()
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-crypto-snapshot',
+    kimchiPremium,
+    fxRate: {
+      usdKrw: round2(usdKrw),
+    },
+    exchanges,
+    volumeAnalysis,
+    at,
   })
 })
 
