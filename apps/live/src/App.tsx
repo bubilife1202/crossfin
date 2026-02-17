@@ -111,6 +111,49 @@ interface OnChainTx {
   timeStamp: string;
 }
 
+interface ExchangeStatus {
+  exchange: string;
+  status: "online" | "offline";
+}
+
+interface RouteStatusData {
+  healthy: boolean;
+  exchanges: ExchangeStatus[];
+}
+
+interface RouteFeeEntry {
+  exchange: string;
+  tradingFeePct: number;
+  withdrawalFees: Record<string, number>;
+}
+
+interface RouteFeeData {
+  coin: string;
+  fees: RouteFeeEntry[];
+}
+
+interface RoutePairEntry {
+  coin: string;
+  binanceSymbol: string;
+  bithumbKrw: number | null;
+  binanceUsd: number | null;
+  transferTimeMin: number;
+  bridgeSupported: boolean;
+}
+
+interface RoutePairsData {
+  krwUsdRate: number;
+  pairs: RoutePairEntry[];
+}
+
+interface AcpStatusData {
+  protocol: string;
+  version: string;
+  capabilities: string[];
+  supported_exchanges: string[];
+  execution_mode: string;
+}
+
 /* ─── Helpers ─── */
 
 function timeAgo(iso: string): string {
@@ -184,6 +227,10 @@ export default function App() {
   const [connected, setConnected] = useState(true);
   const [progress, setProgress] = useState(0);
   const progressRef = useRef(0);
+  const [routeStatus, setRouteStatus] = useState<RouteStatusData | null>(null);
+  const [routeFees, setRouteFees] = useState<RouteFeeData | null>(null);
+  const [routePairs, setRoutePairs] = useState<RoutePairsData | null>(null);
+  const [acpStatus, setAcpStatus] = useState<AcpStatusData | null>(null);
 
   const refresh = useCallback(async () => {
     const results = await Promise.allSettled([
@@ -193,13 +240,17 @@ export default function App() {
       fetchJson<HealthData>(`${API}/api/health`),
       fetchJson<SurvivalData>(`${API}/api/survival/status`),
       fetchOnChainTxs(),
+      fetchJson<RouteStatusData>(`${API}/api/route/status`),
+      fetchJson<RouteFeeData>(`${API}/api/route/fees?coin=XRP`),
+      fetchJson<RoutePairsData>(`${API}/api/route/pairs`),
+      fetchJson<AcpStatusData>(`${API}/api/acp/status`),
     ]);
 
     const vals = results.map((r) =>
       r.status === "fulfilled" ? r.value : null,
     );
 
-    const [arbRaw, statsRaw, analyticsRaw, healthVal, survivalVal, txsVal] =
+    const [arbRaw, statsRaw, analyticsRaw, healthVal, survivalVal, txsVal, routeStatusVal, routeFeesVal, routePairsVal, acpStatusVal] =
       vals as [
         ArbitrageRaw | null,
         RegistryStatsRaw | null,
@@ -207,6 +258,10 @@ export default function App() {
         HealthData | null,
         SurvivalData | null,
         OnChainTx[] | null,
+        RouteStatusData | null,
+        RouteFeeData | null,
+        RoutePairsData | null,
+        AcpStatusData | null,
       ];
 
     const arbVal: ArbitrageData | null = arbRaw
@@ -255,6 +310,10 @@ export default function App() {
     setHealth(healthVal);
     setSurvival(survivalVal);
     if (txsVal && txsVal.length > 0) setOnChainTxs(txsVal);
+    setRouteStatus(routeStatusVal);
+    setRouteFees(routeFeesVal);
+    setRoutePairs(routePairsVal);
+    setAcpStatus(acpStatusVal);
 
     const anyOk = arbVal ?? statsVal ?? analyticsVal ?? healthVal;
     setConnected(!!anyOk);
@@ -287,6 +346,12 @@ export default function App() {
   const topServices = analytics?.topServices ?? [];
   const recentCalls = analytics?.recentCalls ?? [];
   const pairs = arb?.pairs ?? [];
+  const onlineExchanges = routeStatus?.exchanges?.filter(e => e.status === "online").length ?? 0;
+  const totalExchangeCount = routeStatus?.exchanges?.length ?? 6;
+  const bridgeCoins = (routePairs?.pairs ?? []).filter(p => p.bridgeSupported);
+  const feeEntries = routeFees?.fees ?? [];
+  const lowestTradingFee = feeEntries.length > 0 ? Math.min(...feeEntries.map(f => f.tradingFeePct)) : null;
+  const xrpTransferTime = routePairs?.pairs?.find(p => p.coin.toUpperCase() === "XRP")?.transferTimeMin;
 
   const maxServiceCalls = topServices.length
     ? Math.max(...topServices.map((s) => s.calls))
@@ -450,6 +515,145 @@ export default function App() {
             </div>
           </section>
         )}
+
+        {/* Routing Engine */}
+        <div className="routingSection">
+          <section className="panel routingPanel">
+            <div className="panelHeader">
+              <h2 className="panelTitle">Exchange Network</h2>
+              <span className="panelBadge">
+                {onlineExchanges}/{totalExchangeCount} Online
+              </span>
+            </div>
+            <div className="exchangeGrid">
+              {(routeStatus?.exchanges ?? []).length === 0 && (
+                <p className="emptyText">Loading exchanges...</p>
+              )}
+              {(routeStatus?.exchanges ?? []).map((ex) => {
+                const isKorea = ["bithumb", "upbit", "coinone", "korbit", "gopax"].includes(
+                  ex.exchange.toLowerCase(),
+                );
+                return (
+                  <div key={ex.exchange} className={`exchangeCard ${ex.status}`}>
+                    <div className="exchangeCardTop">
+                      <span className="exchangeName">{ex.exchange}</span>
+                      <span
+                        className={`statusDotSmall ${ex.status === "online" ? "green" : "red"}`}
+                      />
+                    </div>
+                    <span className="exchangeRegion">
+                      {isKorea ? "Korea" : "Global"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="panelHeader">
+              <h2 className="panelTitle">Transfer Fees (XRP)</h2>
+              <span className="panelBadge">Compare routes</span>
+            </div>
+            <div className="tableWrap">
+              <table className="dataTable">
+                <thead>
+                  <tr>
+                    <th>Exchange</th>
+                    <th>Trading Fee %</th>
+                    <th>XRP Withdrawal</th>
+                    <th>Transfer Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {feeEntries.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="emptyRow">
+                        Loading fees...
+                      </td>
+                    </tr>
+                  )}
+                  {feeEntries.map((f) => (
+                    <tr key={f.exchange} className="fadeIn">
+                      <td className="coinCell">{f.exchange}</td>
+                      <td
+                        className={`pctCell ${f.tradingFeePct === lowestTradingFee ? "positive" : ""}`}
+                      >
+                        {f.tradingFeePct.toFixed(3)}%
+                      </td>
+                      <td className="feeCell">
+                        {f.withdrawalFees?.XRP != null
+                          ? `${f.withdrawalFees.XRP} XRP`
+                          : "\u2014"}
+                      </td>
+                      <td className="dirCell">
+                        {xrpTransferTime != null
+                          ? `~${xrpTransferTime} min`
+                          : "\u2014"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="panelHeader">
+              <h2 className="panelTitle">Bridge Coins</h2>
+              <span className="panelBadge">Live prices</span>
+            </div>
+            <div className="tableWrap">
+              <table className="dataTable">
+                <thead>
+                  <tr>
+                    <th>Coin</th>
+                    <th>Bithumb (KRW)</th>
+                    <th>Binance (USD)</th>
+                    <th>Transfer Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bridgeCoins.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="emptyRow">
+                        Loading pairs...
+                      </td>
+                    </tr>
+                  )}
+                  {bridgeCoins.map((p) => (
+                    <tr key={p.coin} className="fadeIn">
+                      <td className="coinCell">{p.coin}</td>
+                      <td>
+                        {p.bithumbKrw != null
+                          ? `${p.bithumbKrw.toLocaleString()} KRW`
+                          : "\u2014"}
+                      </td>
+                      <td>
+                        {p.binanceUsd != null
+                          ? `$${p.binanceUsd.toLocaleString()}`
+                          : "\u2014"}
+                      </td>
+                      <td className="dirCell">~{p.transferTimeMin} min</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {acpStatus && (
+            <div className="acpCard">
+              <span className="acpBadge">ACP {acpStatus.version}</span>
+              <span className="acpMode">{acpStatus.execution_mode}</span>
+              <div className="acpCapabilities">
+                {acpStatus.capabilities.map((cap) => (
+                  <span key={cap} className="acpCapBadge">{cap}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Row 3.5: Live Kimchi Premium Table */}
         <section className="panel">

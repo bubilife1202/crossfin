@@ -940,6 +940,129 @@
   color: var(--muted2);
 }
 
+.routingSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.routingPanel {
+  border-left: 3px solid var(--cyan);
+}
+
+.exchangeGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.exchangeCard {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.exchangeCard:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.exchangeCard.online {
+  border-top: 2px solid var(--green);
+}
+
+.exchangeCard.offline {
+  border-top: 2px solid var(--red);
+}
+
+.exchangeCardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.exchangeName {
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.exchangeRegion {
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.feeCell {
+  font-family: var(--mono);
+  font-size: 0.84rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.acpCard {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  transition: border-color 200ms ease;
+}
+
+.acpCard:hover {
+  border-color: var(--border-hover);
+}
+
+.acpBadge {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--cyan-dim);
+  color: var(--cyan);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.acpMode {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.acpCapabilities {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.acpCapBadge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
 @keyframes fadeIn {
   from { opacity: 0.4; }
   to   { opacity: 1; }
@@ -963,6 +1086,9 @@
     grid-template-columns: 1fr;
   }
   .survivalMetrics {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .exchangeGrid {
     grid-template-columns: repeat(3, 1fr);
   }
 }
@@ -1025,6 +1151,13 @@
   .survivalFeedHeader span:nth-child(4),
   .survivalEvent span:nth-child(4) {
     display: none;
+  }
+  .exchangeGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .acpCapabilities {
+    margin-left: 0;
+    width: 100%;
   }
   .footerInner {
     flex-direction: column;
