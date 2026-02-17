@@ -941,7 +941,7 @@ app.get('/api/openapi.json', (c) => {
         get: {
           operationId: 'cryptoSnapshot',
           summary: 'Crypto Snapshot bundle — $0.15 USDC',
-          description: 'One-call crypto market overview combining 5-exchange BTC price comparison, kimchi premium, Bithumb volume analysis, and USD/KRW FX rate. Payment: $0.15 USDC on Base via x402.',
+          description: 'One-call crypto market overview combining 4-exchange BTC price comparison (Upbit/Bithumb/Coinone/GoPax), kimchi premium, Bithumb volume analysis, and USD/KRW FX rate. Payment: $0.15 USDC on Base via x402.',
           tags: ['Paid — x402'],
           responses: {
             '200': {
@@ -963,11 +963,10 @@ app.get('/api/openapi.json', (c) => {
                       exchanges: { type: 'object', properties: {
                         upbit: { type: ['object', 'null'], properties: { krw: { type: 'number' }, usd: { type: 'number' } }, required: ['krw', 'usd'] },
                         bithumb: { type: ['object', 'null'], properties: { krw: { type: 'number' }, usd: { type: 'number' } }, required: ['krw', 'usd'] },
-                        korbit: { type: ['object', 'null'], properties: { krw: { type: 'number' }, usd: { type: 'number' } }, required: ['krw', 'usd'] },
                         coinone: { type: ['object', 'null'], properties: { krw: { type: 'number' }, usd: { type: 'number' } }, required: ['krw', 'usd'] },
                         gopax: { type: ['object', 'null'], properties: { krw: { type: 'number' }, usd: { type: 'number' } }, required: ['krw', 'usd'] },
                         spread: { type: 'object', properties: { minUsd: { type: 'number' }, maxUsd: { type: 'number' }, spreadPct: { type: 'number' } }, required: ['minUsd', 'maxUsd', 'spreadPct'] },
-                      }, required: ['upbit', 'bithumb', 'korbit', 'coinone', 'gopax', 'spread'] },
+                      }, required: ['upbit', 'bithumb', 'coinone', 'gopax', 'spread'] },
                       volumeAnalysis: { type: 'object', properties: {
                         totalVolume24hKrw: { type: 'number' },
                         totalVolume24hUsd: { type: 'number' },
@@ -1823,14 +1822,14 @@ app.use(
         },
         'GET /api/premium/crypto/korea/5exchange': {
           accepts: { scheme: 'exact', price: '$0.08', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Compare crypto prices across ALL 5 Korean exchanges (Upbit, Bithumb, Korbit, Coinone, GoPax) for any coin. Shows inter-exchange spread for arbitrage.',
+          description: 'Compare crypto prices across 4 Korean exchanges (Upbit, Bithumb, Coinone, GoPax) for any coin. Shows inter-exchange spread for arbitrage.',
           mimeType: 'application/json',
           extensions: {
             ...declareDiscoveryExtension({
               input: { coin: 'BTC' },
               inputSchema: { properties: { coin: { type: 'string', description: 'Crypto symbol (BTC, ETH, XRP, etc.)' } } },
               output: {
-                example: { paid: true, service: 'crossfin-crypto-5exchange', coin: 'BTC', exchangeCount: 5, exchanges: [{ exchange: 'Upbit', priceKrw: 102130000, volume24h: 1579 }], spread: { minPriceKrw: 102072000, maxPriceKrw: 102890000, spreadPct: 0.8 } },
+                example: { paid: true, service: 'crossfin-crypto-5exchange', coin: 'BTC', exchangeCount: 4, exchanges: [{ exchange: 'Upbit', priceKrw: 102130000, volume24h: 1579 }], spread: { minPriceKrw: 102072000, maxPriceKrw: 102890000, spreadPct: 0.8 } },
                 schema: { properties: { paid: { type: 'boolean' }, coin: { type: 'string' }, exchangeCount: { type: 'number' }, exchanges: { type: 'array' }, spread: { type: 'object' } }, required: ['paid', 'coin', 'exchanges', 'spread'] },
               },
             }),
@@ -2022,12 +2021,12 @@ app.use(
         },
         'GET /api/premium/crypto/snapshot': {
           accepts: { scheme: 'exact', price: '$0.15', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Crypto Snapshot — one-call crypto market overview combining 5-exchange price comparison, kimchi premium, Bithumb volume analysis, and FX rate. Replaces 4+ individual API calls.',
+          description: 'Crypto Snapshot — one-call crypto market overview combining 4-exchange price comparison (Upbit/Bithumb/Coinone/GoPax), kimchi premium, Bithumb volume analysis, and FX rate. Replaces 4+ individual API calls.',
           mimeType: 'application/json',
           extensions: {
             ...declareDiscoveryExtension({
               output: {
-                example: { paid: true, service: 'crossfin-crypto-snapshot', kimchiPremium: { avgPremiumPct: 2.15, pairsTracked: 10 }, fxRate: { usdKrw: 1450 }, exchanges: { upbit: {}, bithumb: {}, korbit: {}, coinone: {}, gopax: {} }, volumeAnalysis: { totalVolume24hUsd: 5000000 }, at: '2026-02-17T00:00:00.000Z' },
+                example: { paid: true, service: 'crossfin-crypto-snapshot', kimchiPremium: { avgPremiumPct: 2.15, pairsTracked: 10 }, fxRate: { usdKrw: 1450 }, exchanges: { upbit: {}, bithumb: {}, coinone: {}, gopax: {} }, volumeAnalysis: { totalVolume24hUsd: 5000000 }, at: '2026-02-17T00:00:00.000Z' },
                 schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, kimchiPremium: { type: 'object' }, fxRate: { type: 'object' }, exchanges: { type: 'object' }, volumeAnalysis: { type: 'object' } }, required: ['paid', 'service', 'kimchiPremium', 'fxRate'] },
               },
             }),
@@ -2048,14 +2047,14 @@ app.use(
         },
         'GET /api/premium/route/find': {
           accepts: { scheme: 'exact', price: '$0.10', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Optimal Route Finder — finds the cheapest/fastest crypto transfer route across 6 exchanges (Bithumb, Upbit, Coinone, Korbit, GoPax, Binance). Compares bridge coins, fees, and transfer times.',
+          description: 'Optimal Route Finder — finds the cheapest/fastest crypto transfer route across 5 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance). Compares bridge coins, fees, and transfer times.',
           mimeType: 'application/json',
           extensions: {
             ...declareDiscoveryExtension({
               input: { from: 'bithumb:KRW', to: 'binance:USDC', amount: 1000000, strategy: 'cheapest' },
               inputSchema: { properties: { from: { type: 'string', description: 'Source exchange:currency (e.g., bithumb:KRW)' }, to: { type: 'string', description: 'Destination exchange:currency (e.g., binance:USDC)' }, amount: { type: 'number', description: 'Amount in source currency' }, strategy: { type: 'string', description: 'cheapest | fastest | balanced' } } },
               output: {
-                example: { paid: true, service: 'crossfin-route-finder', request: { from: 'bithumb:KRW', to: 'binance:USDC', amount: 1000000, strategy: 'cheapest' }, optimal: { bridgeCoin: 'XRP', totalCostPct: 0.45, estimatedMinutes: 5, steps: [] }, alternatives: [], meta: { exchangesChecked: 6, bridgeCoinsEvaluated: 5 } },
+                example: { paid: true, service: 'crossfin-route-finder', request: { from: 'bithumb:KRW', to: 'binance:USDC', amount: 1000000, strategy: 'cheapest' }, optimal: { bridgeCoin: 'XRP', totalCostPct: 0.45, totalTimeMinutes: 5, steps: [] }, alternatives: [], meta: { routesEvaluated: 12 } },
                 schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, optimal: { type: 'object' }, alternatives: { type: 'array' }, meta: { type: 'object' } }, required: ['paid', 'service', 'optimal'] },
               },
             }),
@@ -4639,7 +4638,7 @@ const TRACKED_PAIRS: Record<string, string> = {
   BTC: 'BTCUSDT', ETH: 'ETHUSDT', XRP: 'XRPUSDT',
   SOL: 'SOLUSDT', DOGE: 'DOGEUSDT', ADA: 'ADAUSDT',
   DOT: 'DOTUSDT', LINK: 'LINKUSDT', AVAX: 'AVAXUSDT',
-  EOS: 'EOSUSDT', TRX: 'TRXUSDT', MATIC: 'MATICUSDT',
+  TRX: 'TRXUSDT',
 }
 
 const DEFAULT_CROSS_EXCHANGE_COINS = ['BTC', 'ETH', 'XRP', 'DOGE', 'ADA', 'SOL'] as const
@@ -4650,17 +4649,16 @@ const BINANCE_FEES_PCT = 0.10 // Binance spot fee
 // --- Routing Engine: Exchange trading fees (%) ---
 const EXCHANGE_FEES: Record<string, number> = {
   bithumb: 0.25, upbit: 0.25, coinone: 0.20,
-  korbit: 0.20, gopax: 0.20, binance: 0.10,
+  gopax: 0.20, binance: 0.10,
 }
 
 // --- Routing Engine: Withdrawal fees per exchange per coin (fixed amount in coin units) ---
 const WITHDRAWAL_FEES: Record<string, Record<string, number>> = {
-  bithumb: { BTC: 0.0005, ETH: 0.005, XRP: 1.0, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.5, AVAX: 0.01, EOS: 0.5, TRX: 1.0, MATIC: 15.0 },
-  upbit: { BTC: 0.0005, ETH: 0.01, XRP: 1.0, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.5, AVAX: 0.01, EOS: 0.5, TRX: 1.0, MATIC: 15.0 },
-  coinone: { BTC: 0.0005, ETH: 0.01, XRP: 1.0, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.5, AVAX: 0.01, EOS: 0.5, TRX: 1.0, MATIC: 15.0 },
-  korbit: { BTC: 0.0005, ETH: 0.01, XRP: 1.0, SOL: 0.02, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.5 },
-  gopax: { BTC: 0.0005, ETH: 0.01, XRP: 1.0, SOL: 0.01, DOGE: 5.0, ADA: 1.0 },
-  binance: { BTC: 0.0002, ETH: 0.0016, XRP: 0.25, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.3, AVAX: 0.01, EOS: 0.1, TRX: 1.0, MATIC: 0.1, USDT: 1.0, USDC: 1.0 },
+  bithumb: { BTC: 0.0005, ETH: 0.005, XRP: 1.0, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.5, AVAX: 0.01, TRX: 1.0 },
+  upbit: { BTC: 0.0005, ETH: 0.01, XRP: 1.0, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.5, AVAX: 0.01, TRX: 1.0 },
+  coinone: { BTC: 0.0005, ETH: 0.01, XRP: 1.0, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.5, AVAX: 0.01, TRX: 1.0 },
+  gopax: { BTC: 0.0005, ETH: 0.01, XRP: 1.0, SOL: 0.01, DOGE: 5.0, ADA: 1.0, TRX: 1.0, LINK: 0.5, AVAX: 0.01 },
+  binance: { BTC: 0.0002, ETH: 0.0016, XRP: 0.25, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.3, AVAX: 0.01, TRX: 1.0, USDT: 1.0, USDC: 1.0 },
 }
 
 function getWithdrawalFee(exchange: string, coin: string): number {
@@ -4668,16 +4666,16 @@ function getWithdrawalFee(exchange: string, coin: string): number {
 }
 
 // --- Routing Engine: Supported exchanges ---
-const ROUTING_EXCHANGES = ['bithumb', 'upbit', 'coinone', 'korbit', 'gopax', 'binance'] as const
+const ROUTING_EXCHANGES = ['bithumb', 'upbit', 'coinone', 'gopax', 'binance'] as const
 type RoutingExchange = typeof ROUTING_EXCHANGES[number]
 
 // --- Routing Engine: Bridge coins for cross-exchange transfers ---
-const BRIDGE_COINS = ['XRP', 'SOL', 'EOS', 'TRX', 'ETH', 'BTC', 'ADA', 'DOGE', 'AVAX', 'DOT', 'LINK', 'MATIC'] as const
+const BRIDGE_COINS = ['XRP', 'SOL', 'TRX', 'ETH', 'BTC', 'ADA', 'DOGE', 'AVAX', 'DOT', 'LINK'] as const
 
 // --- Decision Layer: Transfer times (minutes) per coin ---
 const TRANSFER_TIME_MIN: Record<string, number> = {
   BTC: 20, ETH: 5, XRP: 0.5, SOL: 1, DOGE: 10, ADA: 5,
-  DOT: 5, LINK: 5, AVAX: 2, EOS: 1, TRX: 1, MATIC: 5,
+  DOT: 5, LINK: 5, AVAX: 2, TRX: 1,
 }
 const DEFAULT_TRANSFER_TIME_MIN = 10
 
@@ -4889,18 +4887,6 @@ async function fetchKoreanExchangePrice(
       const lastPrice = ticker?.last
       if (typeof lastPrice !== 'string' || !lastPrice) return null
       return { priceKrw: parseFloat(lastPrice as string), asks: [] }
-    }
-    if (exchange === 'korbit') {
-      try {
-        const res = await fetch(
-          `https://api.korbit.co.kr/v1/ticker/detailed?currency_pair=${coinUpper.toLowerCase()}_krw`,
-          { headers: { 'User-Agent': 'crossfin-api/1.0 (+https://crossfin.dev)' } },
-        )
-        if (!res.ok) return null
-        const data = await res.json() as { last?: string }
-        if (!data.last) return null
-        return { priceKrw: parseFloat(data.last), asks: [] }
-      } catch { return null }
     }
     if (exchange === 'gopax') {
       try {
@@ -6316,10 +6302,9 @@ app.get('/api/premium/market/korea/index-flow', async (c) => {
 app.get('/api/premium/crypto/korea/5exchange', async (c) => {
   const coin = (c.req.query('coin') ?? 'BTC').toUpperCase()
 
-  const [upbitRes, bithumbRes, korbitRes, coinoneRes, gopaxRes] = await Promise.allSettled([
+  const [upbitRes, bithumbRes, coinoneRes, gopaxRes] = await Promise.allSettled([
     fetch(`https://api.upbit.com/v1/ticker?markets=KRW-${coin}`).then(r => r.json()),
     fetch(`https://api.bithumb.com/public/ticker/${coin}_KRW`).then(r => r.json()),
-    fetch(`https://api.korbit.co.kr/v1/ticker/detailed?currency_pair=${coin.toLowerCase()}_krw`).then(r => r.json()),
     fetch(`https://api.coinone.co.kr/ticker?currency=${coin.toLowerCase()}`).then(r => r.json()),
     fetch(`https://api.gopax.co.kr/trading-pairs/${coin}-KRW/ticker`).then(r => r.json()),
   ])
@@ -6333,10 +6318,6 @@ app.get('/api/premium/crypto/korea/5exchange', async (c) => {
     const d = (bithumbRes.value as any).data
     exchanges.push({ exchange: 'Bithumb', priceKrw: Number(d.closing_price), volume24h: Number(d.units_traded_24H || 0), change24hPct: Number(d.fluctate_rate_24H || 0) })
   }
-  if (korbitRes.status === 'fulfilled' && (korbitRes.value as any)?.last) {
-    const d = korbitRes.value as any
-    exchanges.push({ exchange: 'Korbit', priceKrw: Number(d.last), volume24h: Number(d.volume || 0), change24hPct: null })
-  }
   if (coinoneRes.status === 'fulfilled' && (coinoneRes.value as any)?.last) {
     const d = coinoneRes.value as any
     exchanges.push({ exchange: 'Coinone', priceKrw: Number(d.last), volume24h: Number(d.volume || 0), change24hPct: null })
@@ -6347,8 +6328,8 @@ app.get('/api/premium/crypto/korea/5exchange', async (c) => {
   }
 
   const prices = exchanges.map(e => e.priceKrw).filter(p => p > 0)
-  const minPrice = Math.min(...prices)
-  const maxPrice = Math.max(...prices)
+  const minPrice = prices.length > 0 ? Math.min(...prices) : 0
+  const maxPrice = prices.length > 0 ? Math.max(...prices) : 0
   const spreadPct = minPrice > 0 ? Math.round((maxPrice - minPrice) / minPrice * 10000) / 100 : 0
 
   return c.json({
@@ -6358,7 +6339,7 @@ app.get('/api/premium/crypto/korea/5exchange', async (c) => {
     exchangeCount: exchanges.length,
     exchanges,
     spread: { minPriceKrw: minPrice, maxPriceKrw: maxPrice, spreadPct },
-    source: 'upbit+bithumb+korbit+coinone+gopax',
+    source: 'upbit+bithumb+coinone+gopax',
     at: new Date().toISOString(),
   })
 })
@@ -6847,10 +6828,9 @@ app.get('/api/premium/crypto/snapshot', async (c) => {
       return res.json() as Promise<unknown>
     }
 
-    const [upbitSet, bithumbSet, korbitSet, coinoneSet, gopaxSet] = await Promise.allSettled([
+    const [upbitSet, bithumbSet, coinoneSet, gopaxSet] = await Promise.allSettled([
       fetchJson(`https://api.upbit.com/v1/ticker?markets=KRW-${coin}`),
       fetchJson(`https://api.bithumb.com/public/ticker/${coin}_KRW`),
-      fetchJson(`https://api.korbit.co.kr/v1/ticker/detailed?currency_pair=${coin.toLowerCase()}_krw`),
       fetchJson(`https://api.coinone.co.kr/ticker?currency=${coin.toLowerCase()}`),
       fetchJson(`https://api.gopax.co.kr/trading-pairs/${coin}-KRW/ticker`),
     ] as const)
@@ -6876,14 +6856,6 @@ app.get('/api/premium/crypto/snapshot', async (c) => {
       }
     }
 
-    let korbitKrw: number | null = null
-    if (korbitSet.status === 'fulfilled') {
-      const raw = korbitSet.value
-      if (isRecord(raw)) {
-        korbitKrw = toPositiveNumber(raw.last)
-      }
-    }
-
     let coinoneKrw: number | null = null
     if (coinoneSet.status === 'fulfilled') {
       const raw = coinoneSet.value
@@ -6903,7 +6875,6 @@ app.get('/api/premium/crypto/snapshot', async (c) => {
     return {
       upbitKrw,
       bithumbKrw,
-      korbitKrw,
       coinoneKrw,
       gopaxKrw,
     }
@@ -6985,7 +6956,6 @@ app.get('/api/premium/crypto/snapshot', async (c) => {
       return {
         upbit: null as ExchangePrice | null,
         bithumb: null as ExchangePrice | null,
-        korbit: null as ExchangePrice | null,
         coinone: null as ExchangePrice | null,
         gopax: null as ExchangePrice | null,
         spread: { minUsd: 0, maxUsd: 0, spreadPct: 0 },
@@ -7000,12 +6970,11 @@ app.get('/api/premium/crypto/snapshot', async (c) => {
     const out = {
       upbit: toExchangePrice(exchangesSet.value.upbitKrw),
       bithumb: toExchangePrice(exchangesSet.value.bithumbKrw),
-      korbit: toExchangePrice(exchangesSet.value.korbitKrw),
       coinone: toExchangePrice(exchangesSet.value.coinoneKrw),
       gopax: toExchangePrice(exchangesSet.value.gopaxKrw),
     }
 
-    const usdValues = [out.upbit, out.bithumb, out.korbit, out.coinone, out.gopax]
+    const usdValues = [out.upbit, out.bithumb, out.coinone, out.gopax]
       .map((p) => p?.usd)
       .filter((v): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0)
 
@@ -8626,6 +8595,16 @@ app.get('/api/premium/route/find', async (c) => {
     throw new HTTPException(400, { message: 'Format: exchange:currency (e.g., bithumb:KRW, binance:USDC)' })
   }
 
+  const fromEx = fromExchange.toLowerCase()
+  const toEx = toExchange.toLowerCase()
+  const supported = ROUTING_EXCHANGES.join(', ')
+  if (!ROUTING_EXCHANGES.includes(fromEx as RoutingExchange)) {
+    throw new HTTPException(400, { message: `Unsupported from exchange: ${fromEx}. Supported: ${supported}` })
+  }
+  if (!ROUTING_EXCHANGES.includes(toEx as RoutingExchange)) {
+    throw new HTTPException(400, { message: `Unsupported to exchange: ${toEx}. Supported: ${supported}` })
+  }
+
   const amount = Number(amountRaw)
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new HTTPException(400, { message: 'amount must be a positive number' })
@@ -8634,7 +8613,7 @@ app.get('/api/premium/route/find', async (c) => {
   const strategy = (['cheapest', 'fastest', 'balanced'].includes(strategyRaw) ? strategyRaw : 'cheapest') as RoutingStrategy
 
   const { optimal, alternatives, meta } = await findOptimalRoute(
-    fromExchange, fromCurrency, toExchange, toCurrency, amount, strategy, c.env.DB,
+    fromEx, fromCurrency, toEx, toCurrency, amount, strategy, c.env.DB,
   )
 
   return c.json({
@@ -8714,10 +8693,6 @@ app.get('/api/route/status', async (c) => {
     fetch('https://api.bithumb.com/public/ticker/BTC_KRW').then((r) => r.ok),
     fetch('https://api.upbit.com/v1/ticker?markets=KRW-BTC').then((r) => r.ok),
     fetch('https://api.coinone.co.kr/public/v2/ticker_new/KRW/BTC').then((r) => r.ok),
-    fetch(
-      'https://api.korbit.co.kr/v1/ticker/detailed?currency_pair=btc_krw',
-      { headers: { 'User-Agent': 'crossfin-api/1.0 (+https://crossfin.dev)' } },
-    ).then((r) => r.ok),
     fetch('https://api.gopax.co.kr/trading-pairs/BTC-KRW/ticker').then((r) => r.ok),
     fetchGlobalPrices(c.env.DB).then((prices) => {
       const btc = prices[btcSymbol]
@@ -8725,7 +8700,7 @@ app.get('/api/route/status', async (c) => {
     }),
   ])
 
-  const names = ['bithumb', 'upbit', 'coinone', 'korbit', 'gopax', 'binance']
+  const names = ['bithumb', 'upbit', 'coinone', 'gopax', 'binance']
   const statuses = names.map((name, i) => ({
     exchange: name,
     status: checks[i]?.status === 'fulfilled' && (checks[i] as PromiseFulfilledResult<boolean>).value ? 'online' : 'offline',
