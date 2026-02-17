@@ -6184,6 +6184,7 @@ const BASE_RPC_URLS = [
   'https://base.llamarpc.com',
   'https://base-rpc.publicnode.com',
 ] as const
+const BASE_RPC_TIMEOUT_MS = 4_000
 const BASE_USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
 const ERC20_TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
 const USDC_DECIMALS = 6
@@ -6205,17 +6206,25 @@ function topicToAddress(topic: string): string {
 async function baseRpc<T>(method: string, params: unknown[]): Promise<T> {
   for (const url of BASE_RPC_URLS) {
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-      })
-      if (!res.ok) throw new Error(`Base RPC unavailable (${res.status})`)
-      const data: unknown = await res.json()
-      if (!isRecord(data)) throw new Error('Base RPC invalid response')
-      if (data.error) throw new Error('Base RPC error')
-      if (!('result' in data)) throw new Error('Base RPC missing result')
-      return data.result as T
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), BASE_RPC_TIMEOUT_MS)
+
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+          signal: controller.signal,
+        })
+        if (!res.ok) throw new Error(`Base RPC unavailable (${res.status})`)
+        const data: unknown = await res.json()
+        if (!isRecord(data)) throw new Error('Base RPC invalid response')
+        if (data.error) throw new Error('Base RPC error')
+        if (!('result' in data)) throw new Error('Base RPC missing result')
+        return data.result as T
+      } finally {
+        clearTimeout(timeoutId)
+      }
     } catch {
       // Try next RPC URL
     }
@@ -6249,7 +6258,7 @@ async function fetchRecentUsdcTransfers(walletAddress: string, limit: number): P
 
   const toTopic = toTopicAddress(walletAddress)
   // Public RPC endpoints often limit eth_getLogs ranges; keep ranges conservative.
-  const ranges = [8_000, 40_000, 120_000]
+  const ranges = [8_000, 40_000]
 
   let logs: RpcLog[] = []
   for (const span of ranges) {
