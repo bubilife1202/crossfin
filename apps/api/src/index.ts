@@ -979,6 +979,63 @@ app.get('/api/openapi.json', (c) => {
           },
         },
       },
+      '/api/premium/kimchi/stats': {
+        get: {
+          operationId: 'kimchiStats',
+          summary: 'Kimchi Stats bundle — $0.15 USDC',
+          description: 'Comprehensive kimchi premium analysis combining current premiums, 24h trend from D1 snapshots, top arbitrage signal (EXECUTE/WAIT/SKIP), and cross-exchange BTC spread across Korean exchanges. Payment: $0.15 USDC on Base via x402.',
+          tags: ['Paid — x402'],
+          responses: {
+            '200': {
+              description: 'Kimchi stats bundle response',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      paid: { type: 'boolean' },
+                      service: { type: 'string' },
+                      current: { type: 'object', properties: {
+                        avgPremiumPct: { type: 'number' },
+                        topPair: { type: 'object', properties: { coin: { type: 'string' }, premiumPct: { type: 'number' } }, required: ['coin', 'premiumPct'] },
+                        bottomPair: { type: 'object', properties: { coin: { type: 'string' }, premiumPct: { type: 'number' } }, required: ['coin', 'premiumPct'] },
+                        pairsTracked: { type: 'integer' },
+                        premiums: { type: 'array', items: { type: 'object' } },
+                      }, required: ['avgPremiumPct', 'topPair', 'bottomPair', 'pairsTracked', 'premiums'] },
+                      trend: { type: 'object', properties: {
+                        direction: { type: 'string', enum: ['rising', 'falling', 'stable'] },
+                        current24hAvg: { type: 'number' },
+                        previous24hAvg: { type: 'number' },
+                        changePct: { type: 'number' },
+                      }, required: ['direction', 'current24hAvg', 'previous24hAvg', 'changePct'] },
+                      bestOpportunity: { type: 'object', properties: {
+                        coin: { type: 'string' },
+                        premiumPct: { type: 'number' },
+                        action: { type: 'string', enum: ['EXECUTE', 'WAIT', 'SKIP'] },
+                        confidence: { type: 'number' },
+                        reason: { type: 'string' },
+                      }, required: ['coin', 'premiumPct', 'action', 'confidence', 'reason'] },
+                      crossExchangeSpread: { type: 'object', properties: {
+                        coin: { type: 'string' },
+                        upbitKrw: { type: ['number', 'null'] },
+                        bithumbKrw: { type: ['number', 'null'] },
+                        coinoneKrw: { type: ['number', 'null'] },
+                        spreadPct: { type: 'number' },
+                        bestBuy: { type: 'string' },
+                        bestSell: { type: 'string' },
+                      }, required: ['coin', 'upbitKrw', 'bithumbKrw', 'coinoneKrw', 'spreadPct', 'bestBuy', 'bestSell'] },
+                      fxRate: { type: 'object', properties: { usdKrw: { type: 'number' } }, required: ['usdKrw'] },
+                      at: { type: 'string', format: 'date-time' },
+                    },
+                    required: ['paid', 'service', 'current', 'trend', 'bestOpportunity', 'crossExchangeSpread', 'fxRate', 'at'],
+                  },
+                },
+              },
+            },
+            '402': { description: 'Payment required — $0.15 USDC on Base mainnet' },
+          },
+        },
+      },
       '/api/premium/news/korea/headlines': {
         get: {
           operationId: 'koreaHeadlines',
@@ -1779,6 +1836,19 @@ app.use(
               output: {
                 example: { paid: true, service: 'crossfin-crypto-snapshot', kimchiPremium: { avgPremiumPct: 2.15, pairsTracked: 10 }, fxRate: { usdKrw: 1450 }, exchanges: { upbit: {}, bithumb: {}, korbit: {}, coinone: {}, gopax: {} }, volumeAnalysis: { totalVolume24hUsd: 5000000 }, at: '2026-02-17T00:00:00.000Z' },
                 schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, kimchiPremium: { type: 'object' }, fxRate: { type: 'object' }, exchanges: { type: 'object' }, volumeAnalysis: { type: 'object' } }, required: ['paid', 'service', 'kimchiPremium', 'fxRate'] },
+              },
+            }),
+          },
+        },
+        'GET /api/premium/kimchi/stats': {
+          accepts: { scheme: 'exact', price: '$0.15', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
+          description: 'Kimchi Stats — comprehensive kimchi premium analysis combining current premiums, 24h trend, top arbitrage opportunity with EXECUTE/WAIT/SKIP signal, and cross-exchange spread. One call replaces 3+ individual endpoints.',
+          mimeType: 'application/json',
+          extensions: {
+            ...declareDiscoveryExtension({
+              output: {
+                example: { paid: true, service: 'crossfin-kimchi-stats', current: { avgPremiumPct: 2.15, pairsTracked: 10 }, trend: { direction: 'rising', change24hPct: 0.3 }, bestOpportunity: { coin: 'BTC', action: 'WAIT', confidence: 0.6 }, crossExchangeSpread: { spreadPct: 0.18 }, at: '2026-02-17T00:00:00.000Z' },
+                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, current: { type: 'object' }, trend: { type: 'object' }, bestOpportunity: { type: 'object' }, crossExchangeSpread: { type: 'object' } }, required: ['paid', 'service', 'current'] },
               },
             }),
           },
@@ -6185,6 +6255,209 @@ app.get('/api/premium/crypto/snapshot', async (c) => {
     },
     exchanges,
     volumeAnalysis,
+    at,
+  })
+})
+
+app.get('/api/premium/kimchi/stats', async (c) => {
+  const at = new Date().toISOString()
+
+  type KimchiPremiumRow = ReturnType<typeof calcPremiums>[number]
+
+  const currentTask = (async () => {
+    const bithumbPromise = fetchBithumbAll()
+    const globalPricesPromise = fetchGlobalPrices()
+    const krwRatePromise = fetchKrwRate()
+
+    const [bithumbSet, globalSet, krwSet] = await Promise.allSettled([
+      bithumbPromise,
+      globalPricesPromise,
+      krwRatePromise,
+    ] as const)
+
+    const usdKrw = krwSet.status === 'fulfilled' ? krwSet.value : 1450
+
+    const premiums: KimchiPremiumRow[] =
+      bithumbSet.status === 'fulfilled' && globalSet.status === 'fulfilled'
+        ? calcPremiums(bithumbSet.value, globalSet.value, usdKrw)
+        : []
+
+    const avgPremiumPct = premiums.length > 0
+      ? round2(premiums.reduce((s, p) => s + p.premiumPct, 0) / premiums.length)
+      : 0
+
+    const byPct = [...premiums].sort((a, b) => b.premiumPct - a.premiumPct)
+    const top = byPct[0] ?? null
+    const bottom = byPct.length > 0 ? byPct[byPct.length - 1] ?? null : null
+
+    return {
+      usdKrw,
+      premiums,
+      avgPremiumPct,
+      topPair: top ? { coin: top.coin, premiumPct: top.premiumPct } : { coin: '', premiumPct: 0 },
+      bottomPair: bottom ? { coin: bottom.coin, premiumPct: bottom.premiumPct } : { coin: '', premiumPct: 0 },
+      pairsTracked: premiums.length,
+    }
+  })()
+
+  const trendTask = (async () => {
+    try {
+      const currentSql = "SELECT AVG(premium_pct) as avg FROM kimchi_snapshots WHERE datetime(created_at) >= datetime('now', '-24 hours')"
+      const prevSql = "SELECT AVG(premium_pct) as avg FROM kimchi_snapshots WHERE datetime(created_at) >= datetime('now', '-48 hours') AND datetime(created_at) < datetime('now', '-24 hours')"
+
+      const [curRow, prevRow] = await Promise.all([
+        c.env.DB.prepare(currentSql).first<{ avg: number | string | null }>(),
+        c.env.DB.prepare(prevSql).first<{ avg: number | string | null }>(),
+      ])
+
+      const current24hAvg = round2(Number(curRow?.avg ?? 0))
+      const previous24hAvg = round2(Number(prevRow?.avg ?? 0))
+      const changePct = round2(current24hAvg - previous24hAvg)
+
+      const direction: 'rising' | 'falling' | 'stable' =
+        changePct > 0.3 ? 'rising' : changePct < -0.3 ? 'falling' : 'stable'
+
+      return { direction, current24hAvg, previous24hAvg, changePct }
+    } catch {
+      return { direction: 'stable' as const, current24hAvg: 0, previous24hAvg: 0, changePct: 0 }
+    }
+  })()
+
+  const bestOpportunityTask = (async () => {
+    try {
+      const current = await currentTask
+      const premiums = current.premiums
+      if (premiums.length === 0) {
+        return { coin: '', premiumPct: 0, action: 'SKIP' as const, confidence: 0.1, reason: 'No premium data available' }
+      }
+
+      const topPremium = premiums.reduce((best, p) => (p.premiumPct > best.premiumPct ? p : best), premiums[0]!)
+      const coin = topPremium.coin
+      const premiumPct = topPremium.premiumPct
+
+      const [orderbookSet, trendSet] = await Promise.allSettled([
+        fetchBithumbOrderbook(coin),
+        getPremiumTrend(c.env.DB, coin, 6),
+      ] as const)
+
+      const ob = orderbookSet.status === 'fulfilled' ? orderbookSet.value : { bids: [], asks: [] }
+      const asks = (ob.asks as Array<{ price: string; quantity: string }>).slice(0, 10)
+
+      const totalFeesPct = BITHUMB_FEES_PCT + BINANCE_FEES_PCT
+      const netProfitPct = Math.abs(premiumPct) - totalFeesPct
+      const TRADE_SIZE_KRW = 15_000_000
+      const slippageEstimatePct = estimateSlippage(asks, TRADE_SIZE_KRW)
+      const transferTimeMin = getTransferTime(coin)
+      const volatilityPct = trendSet.status === 'fulfilled' ? trendSet.value.volatilityPct : 0
+
+      const { action, confidence, reason } = computeAction(
+        netProfitPct,
+        slippageEstimatePct,
+        transferTimeMin,
+        volatilityPct,
+      )
+
+      return { coin, premiumPct, action, confidence, reason }
+    } catch {
+      return { coin: '', premiumPct: 0, action: 'SKIP' as const, confidence: 0.1, reason: 'Failed to compute opportunity' }
+    }
+  })()
+
+  const crossExchangeSpreadTask = (async () => {
+    type ExchangeId = 'upbit' | 'bithumb' | 'coinone'
+    const coin = 'BTC' as const
+
+    const [upbitSet, coinoneSet, currentSet] = await Promise.allSettled([
+      fetchUpbitTicker('KRW-BTC'),
+      fetchCoinoneTicker('BTC'),
+      currentTask,
+    ] as const)
+
+    const upbitKrw = upbitSet.status === 'fulfilled'
+      ? (typeof upbitSet.value.trade_price === 'number' ? upbitSet.value.trade_price : Number(upbitSet.value.trade_price ?? NaN))
+      : null
+
+    const coinoneKrw = coinoneSet.status === 'fulfilled'
+      ? Number(coinoneSet.value.last ?? NaN)
+      : null
+
+    let bithumbKrw: number | null = null
+    if (currentSet.status === 'fulfilled') {
+      const btcRow = currentSet.value.premiums.find((p) => p.coin === 'BTC')
+      bithumbKrw = btcRow ? btcRow.bithumbKrw : null
+    }
+
+    const exchanges: Array<{ exchange: ExchangeId; priceKrw: number }> = []
+    if (typeof upbitKrw === 'number' && Number.isFinite(upbitKrw) && upbitKrw > 0) exchanges.push({ exchange: 'upbit', priceKrw: upbitKrw })
+    if (typeof bithumbKrw === 'number' && Number.isFinite(bithumbKrw) && bithumbKrw > 0) exchanges.push({ exchange: 'bithumb', priceKrw: bithumbKrw })
+    if (typeof coinoneKrw === 'number' && Number.isFinite(coinoneKrw) && coinoneKrw > 0) exchanges.push({ exchange: 'coinone', priceKrw: coinoneKrw })
+
+    let spreadPct = 0
+    let bestBuy: string = ''
+    let bestSell: string = ''
+    if (exchanges.length >= 2) {
+      exchanges.sort((a, b) => a.priceKrw - b.priceKrw)
+      const low = exchanges[0]!
+      const high = exchanges[exchanges.length - 1]!
+      spreadPct = low.priceKrw > 0 ? round2(((high.priceKrw - low.priceKrw) / low.priceKrw) * 100) : 0
+      bestBuy = low.exchange
+      bestSell = high.exchange
+    }
+
+    const safeUpbit = typeof upbitKrw === 'number' && Number.isFinite(upbitKrw) && upbitKrw > 0 ? upbitKrw : null
+    const safeCoinone = typeof coinoneKrw === 'number' && Number.isFinite(coinoneKrw) && coinoneKrw > 0 ? coinoneKrw : null
+    const safeBithumb = typeof bithumbKrw === 'number' && Number.isFinite(bithumbKrw) && bithumbKrw > 0 ? bithumbKrw : null
+
+    return {
+      coin,
+      upbitKrw: safeUpbit,
+      bithumbKrw: safeBithumb,
+      coinoneKrw: safeCoinone,
+      spreadPct,
+      bestBuy,
+      bestSell,
+    }
+  })()
+
+  const [currentSet, trendSet, opportunitySet, spreadSet] = await Promise.allSettled([
+    currentTask,
+    trendTask,
+    bestOpportunityTask,
+    crossExchangeSpreadTask,
+  ] as const)
+
+  const current = currentSet.status === 'fulfilled'
+    ? currentSet.value
+    : { usdKrw: 1450, premiums: [] as KimchiPremiumRow[], avgPremiumPct: 0, topPair: { coin: '', premiumPct: 0 }, bottomPair: { coin: '', premiumPct: 0 }, pairsTracked: 0 }
+
+  const trend = trendSet.status === 'fulfilled'
+    ? trendSet.value
+    : { direction: 'stable' as const, current24hAvg: 0, previous24hAvg: 0, changePct: 0 }
+
+  const bestOpportunity = opportunitySet.status === 'fulfilled'
+    ? opportunitySet.value
+    : { coin: '', premiumPct: 0, action: 'SKIP' as const, confidence: 0.1, reason: 'Failed to compute opportunity' }
+
+  const crossExchangeSpread = spreadSet.status === 'fulfilled'
+    ? spreadSet.value
+    : { coin: 'BTC' as const, upbitKrw: null as number | null, bithumbKrw: null as number | null, coinoneKrw: null as number | null, spreadPct: 0, bestBuy: '', bestSell: '' }
+
+  return c.json({
+    paid: true,
+    service: 'crossfin-kimchi-stats',
+    current: {
+      avgPremiumPct: current.avgPremiumPct,
+      topPair: current.topPair,
+      bottomPair: current.bottomPair,
+      pairsTracked: current.pairsTracked,
+      premiums: current.premiums,
+    },
+    trend,
+    bestOpportunity,
+    crossExchangeSpread,
+    fxRate: {
+      usdKrw: round2(current.usdKrw),
+    },
     at,
   })
 })

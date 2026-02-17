@@ -359,6 +359,16 @@
       "price": "$0.15",
       "tags": ["korea", "crypto", "bundle", "snapshot", "exchange", "agent-ready"],
       "playgroundLabel": "Crypto Snapshot"
+    },
+    {
+      "id": "crossfin_kimchi_stats",
+      "name": "CrossFin Kimchi Stats",
+      "description": "Comprehensive kimchi premium analysis: current spreads, 24h trend, top arbitrage signal, cross-exchange spread.",
+      "category": "korea-bundle",
+      "path": "/api/premium/kimchi/stats",
+      "price": "$0.15",
+      "tags": ["korea", "crypto", "bundle", "kimchi-premium", "arbitrage", "agent-ready"],
+      "playgroundLabel": "Kimchi Stats"
     }
   ]
 }
