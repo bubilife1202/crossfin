@@ -1,6 +1,6 @@
 # CrossFin MCP Server
 
-MCP server for CrossFin — 13 tools for service discovery, local ledger, and paid API execution.
+MCP server for CrossFin — 16 tools for service discovery, local ledger, routing engine, and paid API execution.
 
 ## Install (npm)
 
@@ -36,6 +36,12 @@ crossfin-mcp
 - `get_kimchi_premium`
 - `get_analytics`
 - `get_guide`
+
+### Routing engine
+
+- `find_optimal_route` — find optimal crypto transfer route across 6 exchanges
+- `list_exchange_fees` — compare trading and withdrawal fees across exchanges
+- `compare_exchange_prices` — compare live prices for a coin across Korean exchanges
 
 ### Paid execution
 
