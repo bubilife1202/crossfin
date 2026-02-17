@@ -14,6 +14,10 @@
  */
 
 import { setTimeout as delay } from 'node:timers/promises'
+import dns from 'node:dns'
+
+// Some environments have flaky IPv6 connectivity; prefer IPv4 for CI reliability.
+dns.setDefaultResultOrder('ipv4first')
 
 function parseArgs(argv) {
   const out = new Map()
@@ -52,13 +56,25 @@ function toInt(value, fallback) {
 }
 
 async function fetchWithTimeout(url, init, timeoutMs) {
-  const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), timeoutMs)
-  try {
-    return await fetch(url, { ...init, signal: ctrl.signal })
-  } finally {
-    clearTimeout(t)
+  let lastErr
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), timeoutMs)
+    try {
+      return await fetch(url, { ...init, signal: ctrl.signal })
+    } catch (err) {
+      lastErr = err
+      if (attempt < 2) {
+        // Brief retry for transient network/DNS issues.
+        await delay(150)
+        continue
+      }
+      throw err
+    } finally {
+      clearTimeout(t)
+    }
   }
+  throw lastErr
 }
 
 async function readTextSafe(res, limit = 2000) {
@@ -71,7 +87,13 @@ async function readTextSafe(res, limit = 2000) {
 }
 
 async function fetchJson(url, init, timeoutMs) {
-  const res = await fetchWithTimeout(url, init, timeoutMs)
+  let res
+  try {
+    res = await fetchWithTimeout(url, init, timeoutMs)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(`fetch failed for ${url}: ${msg}`)
+  }
   const text = await readTextSafe(res, 100_000)
   let json
   try {
@@ -119,7 +141,13 @@ async function ok200Json(url, timeoutMs) {
 }
 
 async function expect402Paywall(url, timeoutMs) {
-  const res = await fetchWithTimeout(url, { method: 'GET', redirect: 'manual' }, timeoutMs)
+  let res
+  try {
+    res = await fetchWithTimeout(url, { method: 'GET', redirect: 'manual' }, timeoutMs)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(`fetch failed for ${url}: ${msg}`)
+  }
   const header = res.headers.get('PAYMENT-REQUIRED')
   if (res.status !== 402) {
     const text = await readTextSafe(res, 600)
@@ -155,7 +183,13 @@ async function postFunnelEvent(baseUrl, timeoutMs, runId) {
 }
 
 async function checkLiveSite(liveUrl, timeoutMs) {
-  const res = await fetchWithTimeout(liveUrl, { method: 'GET', redirect: 'manual' }, timeoutMs)
+  let res
+  try {
+    res = await fetchWithTimeout(liveUrl, { method: 'GET', redirect: 'manual' }, timeoutMs)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(`fetch failed for ${liveUrl}: ${msg}`)
+  }
   assert(res.status >= 200 && res.status < 400, `Live site expected 2xx/3xx but got ${res.status}`)
 }
 
@@ -199,6 +233,13 @@ async function runOnce(baseUrl, liveUrl, timeoutMs, runId) {
   const arbitrage = await ok200Json(`${baseUrl}/api/arbitrage/demo`, timeoutMs)
   assert(isRecord(arbitrage), 'arbitrage demo must be an object')
   assert(Array.isArray(arbitrage.preview), 'arbitrage.preview must be an array')
+  assert(arbitrage.preview.length > 0, 'arbitrage.preview must not be empty')
+  assert(Number(arbitrage.pairsShown ?? 0) === arbitrage.preview.length, 'arbitrage.pairsShown must match preview length')
+  assert(Number(arbitrage.totalPairsAvailable ?? 0) > 0, 'arbitrage.totalPairsAvailable must be > 0')
+
+  const onchain = await ok200Json(`${baseUrl}/api/onchain/usdc-transfers?limit=1`, timeoutMs)
+  assert(isRecord(onchain), 'onchain transfers must be an object')
+  assert(Array.isArray(onchain.transfers), 'onchain.transfers must be an array')
 
   const analytics = await ok200Json(`${baseUrl}/api/analytics/overview`, timeoutMs)
   assert(isRecord(analytics), 'analytics overview must be an object')
@@ -258,4 +299,3 @@ main().catch((err) => {
   console.error(`[smoke] failed: ${err instanceof Error ? err.message : String(err)}`)
   process.exit(1)
 })
-
