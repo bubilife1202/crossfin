@@ -4492,10 +4492,10 @@ async function fetchGlobalPrices(): Promise<Record<string, number>> {
 
     const isValidPrices = (prices: Record<string, number>): boolean => {
       const btc = prices[TRACKED_PAIRS.BTC]
-      const eth = prices[TRACKED_PAIRS.ETH]
       if (typeof btc !== 'number' || !Number.isFinite(btc) || btc <= 1000) return false
-      if (typeof eth !== 'number' || !Number.isFinite(eth) || eth <= 10) return false
-      return Object.keys(prices).length >= 3
+      // We can operate with partial coverage (demo + some paid endpoints),
+      // so only require at least one sane price.
+      return Object.keys(prices).length >= 1
     }
 
     // 1) Binance (USDT ~= USD) batch endpoint
@@ -4549,6 +4549,49 @@ async function fetchGlobalPrices(): Promise<Record<string, number>> {
 
       if (isValidPrices(prices)) {
         globalAny.__crossfinGlobalPricesCache = { value: prices, expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS, source: 'cryptocompare' }
+        return prices
+      }
+    } catch {
+      // Continue to fallback
+    }
+
+    // 3) CoinGecko fallback (simple price)
+    try {
+      const COINGECKO_IDS: Record<string, string> = {
+        BTC: 'bitcoin',
+        ETH: 'ethereum',
+        XRP: 'ripple',
+        SOL: 'solana',
+        DOGE: 'dogecoin',
+        ADA: 'cardano',
+        DOT: 'polkadot',
+        LINK: 'chainlink',
+        AVAX: 'avalanche-2',
+        EOS: 'eos',
+        TRX: 'tron',
+        MATIC: 'matic-network',
+      }
+
+      const ids = Array.from(new Set(Object.values(COINGECKO_IDS))).join(',')
+      const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids)}&vs_currencies=usd`
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`CoinGecko price feed unavailable (${res.status})`)
+      const data: unknown = await res.json()
+      if (!isRecord(data)) throw new Error('CoinGecko price feed invalid response')
+
+      const prices: Record<string, number> = {}
+      for (const [coin, binanceSymbol] of Object.entries(TRACKED_PAIRS)) {
+        const id = COINGECKO_IDS[coin]
+        if (!id) continue
+        const row = data[id]
+        if (!isRecord(row)) continue
+        const price = row.usd
+        if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) continue
+        prices[binanceSymbol] = price
+      }
+
+      if (isValidPrices(prices)) {
+        globalAny.__crossfinGlobalPricesCache = { value: prices, expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS, source: 'coingecko' }
         return prices
       }
     } catch {
@@ -6045,7 +6088,11 @@ app.get('/api/arbitrage/demo', async (c) => {
 
 // === On-chain USDC transfers (Base mainnet) ===
 
-const BASE_RPC_URL = 'https://mainnet.base.org'
+const BASE_RPC_URLS = [
+  'https://mainnet.base.org',
+  'https://base.llamarpc.com',
+  'https://base-rpc.publicnode.com',
+] as const
 const BASE_USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
 const ERC20_TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
 const USDC_DECIMALS = 6
@@ -6065,17 +6112,25 @@ function topicToAddress(topic: string): string {
 }
 
 async function baseRpc<T>(method: string, params: unknown[]): Promise<T> {
-  const res = await fetch(BASE_RPC_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-  })
-  if (!res.ok) throw new HTTPException(502, { message: 'Base RPC unavailable' })
-  const data: unknown = await res.json()
-  if (!isRecord(data)) throw new HTTPException(502, { message: 'Base RPC invalid response' })
-  if (data.error) throw new HTTPException(502, { message: 'Base RPC error' })
-  if (!('result' in data)) throw new HTTPException(502, { message: 'Base RPC missing result' })
-  return data.result as T
+  for (const url of BASE_RPC_URLS) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+      })
+      if (!res.ok) throw new Error(`Base RPC unavailable (${res.status})`)
+      const data: unknown = await res.json()
+      if (!isRecord(data)) throw new Error('Base RPC invalid response')
+      if (data.error) throw new Error('Base RPC error')
+      if (!('result' in data)) throw new Error('Base RPC missing result')
+      return data.result as T
+    } catch {
+      // Try next RPC URL
+    }
+  }
+
+  throw new HTTPException(502, { message: 'Base RPC unavailable' })
 }
 
 type RpcLog = {
