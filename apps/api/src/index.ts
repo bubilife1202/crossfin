@@ -6248,7 +6248,8 @@ async function fetchRecentUsdcTransfers(walletAddress: string, limit: number): P
   if (!Number.isFinite(latest) || latest <= 0) throw new HTTPException(502, { message: 'Base RPC unavailable' })
 
   const toTopic = toTopicAddress(walletAddress)
-  const ranges = [50_000, 250_000, 1_000_000]
+  // Public RPC endpoints often limit eth_getLogs ranges; keep ranges conservative.
+  const ranges = [8_000, 40_000, 120_000]
 
   let logs: RpcLog[] = []
   for (const span of ranges) {
@@ -6256,7 +6257,7 @@ async function fetchRecentUsdcTransfers(walletAddress: string, limit: number): P
     const filter = {
       address: BASE_USDC_ADDRESS,
       fromBlock: `0x${fromBlock.toString(16)}`,
-      toBlock: 'latest',
+      toBlock: `0x${latest.toString(16)}`,
       topics: [ERC20_TRANSFER_TOPIC, null, toTopic],
     }
     const out = await baseRpc<RpcLog[]>('eth_getLogs', [filter])
@@ -6330,40 +6331,38 @@ app.get('/api/onchain/usdc-transfers', async (c) => {
   type Cached = { transfers: UsdcTransfer[]; expiresAt: number }
   const globalAny = globalThis as unknown as {
     __crossfinUsdcTransfersCache?: Cached
-    __crossfinUsdcTransfersInFlight?: Promise<UsdcTransfer[]> | null
+    __crossfinUsdcTransfersInFlight?: Promise<void> | null
   }
 
   const now = Date.now()
   const cached = globalAny.__crossfinUsdcTransfersCache
-  if (cached && now < cached.expiresAt) {
-    return c.json({
-      wallet,
-      contract: BASE_USDC_ADDRESS,
-      token: { symbol: 'USDC', decimals: USDC_DECIMALS },
-      transfers: cached.transfers.slice(0, limit),
-      at: new Date().toISOString(),
-    })
-  }
+  const fresh = Boolean(cached && now < cached.expiresAt)
 
-  if (!globalAny.__crossfinUsdcTransfersInFlight) {
-    globalAny.__crossfinUsdcTransfersInFlight = fetchRecentUsdcTransfers(wallet, 20)
+  // Never block the live dashboard on slow RPC calls. Refresh the cache in the background.
+  if (!fresh && !globalAny.__crossfinUsdcTransfersInFlight) {
+    const refreshPromise = fetchRecentUsdcTransfers(wallet, 20)
+      .then((transfers) => {
+        globalAny.__crossfinUsdcTransfersCache = { transfers, expiresAt: Date.now() + CACHE_TTL_MS }
+      })
       .catch((err) => {
         console.error('usdc-transfers fetch failed', err)
-        return []
+        const fallback = cached?.transfers ?? []
+        globalAny.__crossfinUsdcTransfersCache = { transfers: fallback, expiresAt: Date.now() + CACHE_TTL_MS }
       })
       .finally(() => {
         globalAny.__crossfinUsdcTransfersInFlight = null
       })
-  }
 
-  const transfers = await globalAny.__crossfinUsdcTransfersInFlight
-  globalAny.__crossfinUsdcTransfersCache = { transfers, expiresAt: now + CACHE_TTL_MS }
+    globalAny.__crossfinUsdcTransfersInFlight = refreshPromise
+    c.executionCtx.waitUntil(refreshPromise)
+  }
 
   return c.json({
     wallet,
     contract: BASE_USDC_ADDRESS,
     token: { symbol: 'USDC', decimals: USDC_DECIMALS },
-    transfers: transfers.slice(0, limit),
+    transfers: (cached?.transfers ?? []).slice(0, limit),
+    fresh,
     at: new Date().toISOString(),
   })
 })
