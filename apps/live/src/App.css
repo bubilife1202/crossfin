@@ -929,17 +929,6 @@
 
 /* ─── Route Finder ─── */
 
-.routeFinderPanel {
-  border-left: 3px solid var(--cyan);
-}
-
-.routeFinderSubtext {
-  margin: 0 0 16px;
-  font-size: 0.84rem;
-  color: var(--muted);
-  line-height: 1.5;
-}
-
 .routeInputCard {
   background: var(--bg2);
   border: 1px solid var(--border);
