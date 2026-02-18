@@ -448,6 +448,31 @@ export default function App() {
     setRouteError(null);
   };
 
+  const swapRouteFromTo = () => {
+    const nextFrom = routeTo;
+    const nextTo = routeFrom;
+    const nextFromCur = isKoreanExchange(nextFrom) ? "KRW" : "USDC";
+    const nextToCur = isKoreanExchange(nextTo) ? "KRW" : "USDC";
+
+    setRouteFrom(nextFrom);
+    setRouteTo(nextTo);
+    setRouteFromCur(nextFromCur);
+    setRouteToCur(nextToCur);
+
+    const currentAmount = parseRouteAmount(routeAmount);
+    const defaultAmount = nextFromCur === "KRW" ? "5,000,000" : "1,000";
+    if (currentAmount <= 0) {
+      setRouteAmount(defaultAmount);
+    } else if ((nextFromCur === "KRW" && currentAmount < 10000) || (nextFromCur !== "KRW" && currentAmount < 10)) {
+      setRouteAmount(defaultAmount);
+    } else {
+      setRouteAmount(formatRouteNum(String(currentAmount), nextFromCur));
+    }
+
+    setRouteResult(null);
+    setRouteError(null);
+  };
+
   const handleRouteAmountChange = (raw: string) => {
     setRouteAmount(formatRouteNum(raw, routeFromCur));
   };
@@ -576,8 +601,16 @@ export default function App() {
                   ))}
                 </select>
               </div>
-              <div className="routeInputGroup routeArrow">
-                <span className="arrowIcon">→</span>
+              <div className="routeSwapWrap">
+                <button
+                  type="button"
+                  className="routeSwapBtn"
+                  onClick={swapRouteFromTo}
+                  aria-label="Swap from and to exchanges"
+                  title="Swap from and to"
+                >
+                  <span className="swapIcon">⇄</span>
+                </button>
               </div>
               <div className="routeInputGroup">
                 <label htmlFor="routeToEx">To</label>
@@ -1094,6 +1127,17 @@ export default function App() {
               <h2 className="panelTitle">Transfer Fees (XRP)</h2>
               <span className="panelBadge">Compare routes</span>
             </div>
+            {acpStatus && (
+              <div className="acpCard acpCardInline">
+                <span className="acpBadge">ACP {acpStatus.version}</span>
+                <span className="acpMode">{acpStatus.execution_mode}</span>
+                <div className="acpCapabilities">
+                  {acpStatus.capabilities.map((cap) => (
+                    <span key={cap} className="acpCapBadge">{cap}</span>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="tableWrap">
               <table className="dataTable">
                 <thead>
@@ -1137,17 +1181,6 @@ export default function App() {
             </div>
           </section>
 
-          {acpStatus && (
-            <div className="acpCard">
-              <span className="acpBadge">ACP {acpStatus.version}</span>
-              <span className="acpMode">{acpStatus.execution_mode}</span>
-              <div className="acpCapabilities">
-                {acpStatus.capabilities.map((cap) => (
-                  <span key={cap} className="acpCapBadge">{cap}</span>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Kimchi Premium Table */}
