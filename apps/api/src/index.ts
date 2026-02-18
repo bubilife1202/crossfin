@@ -4138,9 +4138,25 @@ async function ensureRegistrySeeded(
       const isCrossfin = seed.isCrossfin ? 1 : 0
 
       return db.prepare(
-        `INSERT OR IGNORE INTO services
+        `INSERT INTO services
           (id, name, description, provider, category, endpoint, method, price, currency, network, pay_to, tags, input_schema, output_example, status, is_crossfin)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           name = excluded.name,
+           description = excluded.description,
+           provider = excluded.provider,
+           category = excluded.category,
+           endpoint = excluded.endpoint,
+           method = excluded.method,
+           price = excluded.price,
+           currency = excluded.currency,
+           network = excluded.network,
+           pay_to = excluded.pay_to,
+           tags = excluded.tags,
+           input_schema = excluded.input_schema,
+           output_example = excluded.output_example,
+           status = excluded.status,
+           is_crossfin = excluded.is_crossfin`
       ).bind(
         seed.id,
         seed.name,
