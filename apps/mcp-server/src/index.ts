@@ -492,7 +492,7 @@ server.registerTool(
     description:
       'Find the cheapest/fastest path to move money across Asian exchanges. ' +
       'Example: KRW on Bithumb → USDC on Binance. ' +
-      'Supports 5 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance) and 12 bridge coins. ' +
+      'Supports 5 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance) and 11 bridge coins (incl. KAIA). ' +
       'Paid tool: calls /api/premium/route/find ($0.10) via x402 (requires EVM_PRIVATE_KEY).',
     inputSchema: z.object({
       from: z

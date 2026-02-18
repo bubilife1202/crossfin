@@ -5494,9 +5494,7 @@ async function fetchGlobalPrices(db?: D1Database): Promise<Record<string, number
         DOT: 'polkadot',
         LINK: 'chainlink',
         AVAX: 'avalanche-2',
-        EOS: 'eos',
         TRX: 'tron',
-        MATIC: 'matic-network',
       }
 
       const ids = Array.from(new Set(Object.values(COINGECKO_IDS))).join(',')
