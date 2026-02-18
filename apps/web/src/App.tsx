@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent as ReactFormEvent } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import './App.css'
 import {
@@ -106,6 +106,7 @@ function App() {
       .replaceAll('&', '&amp;')
       .replaceAll('<', '&lt;')
       .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
   }
 
   function jsonSyntaxHighlight(json: string): string {
@@ -259,7 +260,7 @@ function App() {
     void loadServices({ q: '' })
   }, [loadServices])
 
-  function onSearchSubmit(e: ReactFormEvent<HTMLFormElement>) {
+  function onSearchSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const q = query.trim()
     void loadServices({ q })
