@@ -218,6 +218,8 @@ const ROUTE_EXCHANGES = [
   { value: "coinone", label: "Coinone" },
   { value: "gopax", label: "GoPax" },
   { value: "binance", label: "Binance" },
+  { value: "okx", label: "OKX" },
+  { value: "bybit", label: "Bybit" },
 ];
 
 function isKoreanExchange(ex: string): boolean {
@@ -394,7 +396,7 @@ export default function App() {
   const recentCalls = analytics?.recentCalls ?? [];
   const pairs = arb?.pairs ?? [];
   const onlineExchanges = routeStatus?.exchanges?.filter(e => e.status === "online").length ?? 0;
-  const totalExchangeCount = routeStatus?.exchanges?.length ?? 5;
+  const totalExchangeCount = routeStatus?.exchanges?.length ?? 7;
   const bridgeCoins = (routePairs?.pairs ?? []).filter(p => p.bridgeSupported);
   const feeEntries = routeFees?.fees ?? [];
   const lowestTradingFee = feeEntries.length > 0 ? Math.min(...feeEntries.map(f => f.tradingFeePct)) : null;
@@ -408,11 +410,26 @@ export default function App() {
   const routeOptimal = routeResult?.optimal_route;
   const routeAlts = routeResult?.alternatives ?? [];
   const routeAllRoutes = routeOptimal ? [routeOptimal, ...routeAlts] : [];
+  const savingsCurrency = routeToCur === "KRW" ? "KRW" : "USD";
+
+  const formatSavings = (value: number): string => {
+    if (savingsCurrency === "KRW") return `₩${Math.max(0, Math.round(value)).toLocaleString()}`;
+    return `$${Math.max(0, Math.round(value)).toLocaleString()}`;
+  };
 
   // Calculate savings vs worst route
   const worstRoute = routeAllRoutes.length > 1 ? routeAllRoutes[routeAllRoutes.length - 1] : null;
+  const averageRouteOutput = routeAllRoutes.length > 0
+    ? routeAllRoutes.reduce((sum, row) => sum + row.estimatedOutput, 0) / routeAllRoutes.length
+    : null;
   const savingsVsWorst = routeOptimal && worstRoute
     ? Math.round(routeOptimal.estimatedOutput - worstRoute.estimatedOutput)
+    : 0;
+  const savingsVsAverage = routeOptimal && averageRouteOutput !== null
+    ? Math.round(routeOptimal.estimatedOutput - averageRouteOutput)
+    : 0;
+  const savingsPctVsWorst = routeOptimal && worstRoute && worstRoute.estimatedOutput > 0
+    ? ((routeOptimal.estimatedOutput - worstRoute.estimatedOutput) / worstRoute.estimatedOutput) * 100
     : 0;
 
   const handleRouteFromChange = (ex: string) => {
@@ -655,6 +672,17 @@ export default function App() {
                 </div>
               </div>
 
+              {savingsVsWorst > 0 && (
+                <div className="routeSavingsHero">
+                  <span className="routeSavingsEyebrow">Estimated Savings</span>
+                  <span className="routeSavingsValue">{formatSavings(savingsVsWorst)}</span>
+                  <span className="routeSavingsMeta">
+                    vs worst route ({savingsPctVsWorst.toFixed(2)}%)
+                    {savingsVsAverage > 0 ? ` · +${formatSavings(savingsVsAverage)} vs average route` : ""}
+                  </span>
+                </div>
+              )}
+
               {/* Stats row */}
               <div className="routeStatsRow">
                 <div className="routeStat">
@@ -665,12 +693,12 @@ export default function App() {
                   <span className="routeStatVal">{routeTimeStr(routeOptimal.totalTimeMinutes)}</span>
                   <span className="routeStatLabel">Est. Time</span>
                 </div>
-                {savingsVsWorst > 0 && (
+                {savingsVsAverage > 0 && (
                   <div className="routeStat">
                     <span className="routeStatVal routeSavings">
-                      +{routeToCur === "KRW" ? `₩${savingsVsWorst.toLocaleString()}` : `$${savingsVsWorst.toLocaleString()}`}
+                      +{formatSavings(savingsVsAverage)}
                     </span>
-                    <span className="routeStatLabel">vs worst route</span>
+                    <span className="routeStatLabel">vs avg route</span>
                   </div>
                 )}
               </div>
@@ -809,7 +837,7 @@ export default function App() {
               <div className="agentDemoFeatures">
                 <div className="agentDemoFeature">
                   <span className="agentFeatureIcon">🔍</span>
-                  <span>Real-time routing across 5 exchanges</span>
+                  <span>Real-time routing across {totalExchangeCount} exchanges</span>
                 </div>
                 <div className="agentDemoFeature">
                   <span className="agentFeatureIcon">💱</span>

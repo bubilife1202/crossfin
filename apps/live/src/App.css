@@ -1448,6 +1448,41 @@
   color: var(--muted2);
 }
 
+.routeSavingsHero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(34, 197, 94, 0.24);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(0, 212, 255, 0.06));
+}
+
+.routeSavingsEyebrow {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted2);
+}
+
+.routeSavingsValue {
+  font-family: var(--mono);
+  font-size: 1.72rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
+}
+
+.routeSavingsMeta {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .routeStatsRow {
   display: flex;
   justify-content: center;
