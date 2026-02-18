@@ -26,6 +26,7 @@ type Bindings = {
   CROSSFIN_GUARDIAN_ENABLED?: string
   TELEGRAM_BOT_TOKEN?: string
   TELEGRAM_WEBHOOK_SECRET?: string
+  ZAI_API_KEY?: string
 }
 
 type Variables = {
@@ -114,7 +115,12 @@ function parseTelegramRouteCommand(text: string): {
   return { fromExchange, fromCurrency, toExchange, toCurrency, amount, strategy }
 }
 
-async function telegramSendMessage(botToken: string, chatId: string | number, text: string): Promise<void> {
+async function telegramSendMessage(
+  botToken: string,
+  chatId: string | number,
+  text: string,
+  parseMode?: 'Markdown',
+): Promise<void> {
   await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -122,8 +128,169 @@ async function telegramSendMessage(botToken: string, chatId: string | number, te
       chat_id: chatId,
       text,
       disable_web_page_preview: true,
+      parse_mode: parseMode,
     }),
   })
+}
+
+interface GlmMessage {
+  role: string
+  content?: string
+  tool_calls?: Array<{
+    id: string
+    type: string
+    function: {
+      name: string
+      arguments: string
+    }
+  }>
+  tool_call_id?: string
+}
+
+interface GlmTool {
+  type: 'function'
+  function: {
+    name: string
+    description: string
+    parameters: Record<string, unknown>
+  }
+}
+
+const CROSSFIN_TELEGRAM_TOOLS: GlmTool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'find_route',
+      description: 'Find the cheapest/fastest crypto transfer route across 7 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit). Use when user asks about sending crypto, transferring money, or finding best exchange path.',
+      parameters: {
+        type: 'object',
+        properties: {
+          from_exchange: { type: 'string', description: 'Source exchange (bithumb/upbit/coinone/gopax/binance/okx/bybit)', enum: ['bithumb', 'upbit', 'coinone', 'gopax', 'binance', 'okx', 'bybit'] },
+          from_currency: { type: 'string', description: 'Source currency (KRW/USDC/USDT)', enum: ['KRW', 'USDC', 'USDT'] },
+          to_exchange: { type: 'string', description: 'Destination exchange', enum: ['bithumb', 'upbit', 'coinone', 'gopax', 'binance', 'okx', 'bybit'] },
+          to_currency: { type: 'string', description: 'Destination currency', enum: ['KRW', 'USDC', 'USDT'] },
+          amount: { type: 'number', description: 'Amount to transfer' },
+          strategy: { type: 'string', description: 'Routing strategy', enum: ['cheapest', 'fastest', 'balanced'] },
+        },
+        required: ['from_exchange', 'from_currency', 'to_exchange', 'to_currency', 'amount'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_prices',
+      description: 'Get live crypto prices across Korean and global exchanges. Use when user asks about prices, rates, or how much a coin costs.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_exchange_status',
+      description: 'Check which exchanges are online/offline. Use when user asks about exchange status or if an exchange is working.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_kimchi_premium',
+      description: 'Get the kimchi premium — price difference between Korean and global crypto exchanges. Use when user asks about kimchi premium, price spread, arbitrage, or Korean crypto premium.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_fees',
+      description: 'Compare trading and withdrawal fees across exchanges. Use when user asks about fees, costs, or which exchange is cheapest.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+]
+
+const CROSSFIN_TELEGRAM_SYSTEM_PROMPT = 'You are CrossFin Bot — an AI assistant for cross-border crypto routing. You help users find the cheapest way to transfer crypto between Korean exchanges (Bithumb, Upbit, Coinone, GoPax) and global exchanges (Binance, OKX, Bybit). You can check live prices, exchange status, kimchi premium, and fees. Respond concisely in the same language the user uses. If the user writes in Korean, respond in Korean. If in English, respond in English.'
+
+async function glmChatCompletion(apiKey: string, messages: GlmMessage[], tools: GlmTool[]): Promise<GlmMessage> {
+  const res = await fetch('https://api.z.ai/api/paas/v4/chat/completions', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: 'glm-5',
+      messages,
+      tools,
+      tool_choice: 'auto',
+      temperature: 0.3,
+      max_tokens: 2048,
+      stream: false,
+    }),
+  })
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`GLM-5 API error ${res.status}: ${errText.slice(0, 200)}`)
+  }
+  const data = await res.json() as { choices: Array<{ message: GlmMessage }> }
+  const message = data.choices[0]?.message
+  if (!message) throw new Error('GLM-5 API returned no message')
+  return message
+}
+
+async function executeTelegramTool(name: string, args: Record<string, unknown>, db: D1Database): Promise<string> {
+  switch (name) {
+    case 'find_route': {
+      const fromExchange = String(args.from_exchange ?? '').trim().toLowerCase()
+      const fromCurrency = String(args.from_currency ?? '').trim().toUpperCase()
+      const toExchange = String(args.to_exchange ?? '').trim().toLowerCase()
+      const toCurrency = String(args.to_currency ?? '').trim().toUpperCase()
+      const amount = Number(args.amount ?? NaN)
+      const strategyRaw = String(args.strategy ?? 'cheapest').trim().toLowerCase()
+      const strategy: RoutingStrategy =
+        strategyRaw === 'fastest' ? 'fastest' : strategyRaw === 'balanced' ? 'balanced' : 'cheapest'
+
+      if (!ROUTING_EXCHANGES.includes(fromExchange as RoutingExchange)) {
+        throw new Error(`Invalid from_exchange: ${fromExchange}`)
+      }
+      if (!ROUTING_EXCHANGES.includes(toExchange as RoutingExchange)) {
+        throw new Error(`Invalid to_exchange: ${toExchange}`)
+      }
+      if (!fromCurrency || !toCurrency) {
+        throw new Error('from_currency and to_currency are required')
+      }
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error('amount must be a positive number')
+      }
+
+      const route = await findOptimalRoute(
+        fromExchange,
+        fromCurrency,
+        toExchange,
+        toCurrency,
+        amount,
+        strategy,
+        db,
+      )
+      return JSON.stringify(route)
+    }
+    case 'get_prices': {
+      const data = await getRoutePairsPayload(db)
+      return JSON.stringify(data)
+    }
+    case 'get_exchange_status': {
+      const data = await getRouteStatusPayload(db)
+      return JSON.stringify(data)
+    }
+    case 'get_kimchi_premium': {
+      const data = await getArbitrageDemoPayload(db)
+      return JSON.stringify(data)
+    }
+    case 'get_fees': {
+      const data = getRouteFeesPayload(null)
+      return JSON.stringify(data)
+    }
+    default:
+      throw new Error(`Unknown tool: ${name}`)
+  }
 }
 
 function toHex(bytes: Uint8Array): string {
@@ -8027,7 +8194,7 @@ app.get('/api/premium/market/cross-exchange', async (c) => {
 
 // === Free Demo — delayed kimchi premium (no paywall) ===
 
-app.get('/api/arbitrage/demo', async (c) => {
+async function getArbitrageDemoPayload(db: D1Database): Promise<Record<string, unknown>> {
   const buildPreview = (rows: Array<{ coin: string; premiumPct: number }>) =>
     rows.slice(0, 3).map((p) => {
       const absPremiumPct = Math.abs(p.premiumPct)
@@ -8051,7 +8218,7 @@ app.get('/api/arbitrage/demo', async (c) => {
   try {
     const [bithumbData, binancePrices, krwRate] = await Promise.all([
       fetchBithumbAll(),
-      fetchGlobalPrices(c.env.DB),
+      fetchGlobalPrices(db),
       fetchKrwRate(),
     ])
 
@@ -8062,7 +8229,7 @@ app.get('/api/arbitrage/demo', async (c) => {
     const avgPremium = Math.round(premiums.reduce((s, p) => s + p.premiumPct, 0) / premiums.length * 100) / 100
     const executeCandidates = preview.filter((p) => p.decision.action === 'EXECUTE').length
 
-    return c.json({
+    return {
       demo: true,
       dataSource: 'live',
       note: 'Free preview — top 3 pairs with AI decision layer. Pay $0.10 USDC for full analysis.',
@@ -8075,7 +8242,7 @@ app.get('/api/arbitrage/demo', async (c) => {
       executeCandidates,
       marketCondition: executeCandidates >= 2 ? 'favorable' : executeCandidates === 1 ? 'neutral' : 'unfavorable',
       at: new Date().toISOString(),
-    })
+    }
   } catch {
     // Fallback: use last persisted snapshot if upstream price feeds are rate-limited.
     type SnapshotRow = { coin: string; premiumPct: number | string; krwUsdRate: number | string; createdAt: string }
@@ -8098,7 +8265,7 @@ app.get('/api/arbitrage/demo', async (c) => {
         WHERE rn = 1
       `
 
-      const res = await c.env.DB.prepare(sql).all<SnapshotRow>()
+      const res = await db.prepare(sql).all<SnapshotRow>()
       rows = res.results ?? []
     } catch (err) {
       console.error('snapshot fallback failed', err)
@@ -8132,7 +8299,7 @@ app.get('/api/arbitrage/demo', async (c) => {
         { coin: 'XRP', premiumPct: 0.0 },
       ]
       const fallbackPreview = buildPreview(fallbackPremiums)
-      return c.json({
+      return {
         demo: true,
         dataSource: 'fallback',
         note: 'Demo fallback — live price feeds are temporarily unavailable.',
@@ -8145,10 +8312,10 @@ app.get('/api/arbitrage/demo', async (c) => {
         executeCandidates: 0,
         marketCondition: 'unfavorable',
         at: new Date().toISOString(),
-      })
+      }
     }
 
-    return c.json({
+    return {
       demo: true,
       dataSource: 'snapshot',
       note: 'Snapshot preview — live price feeds are rate-limited. Pay $0.10 USDC for full analysis.',
@@ -8162,8 +8329,12 @@ app.get('/api/arbitrage/demo', async (c) => {
       marketCondition: executeCandidates >= 2 ? 'favorable' : executeCandidates === 1 ? 'neutral' : 'unfavorable',
       snapshotAt,
       at: new Date().toISOString(),
-    })
+    }
   }
+}
+
+app.get('/api/arbitrage/demo', async (c) => {
+  return c.json(await getArbitrageDemoPayload(c.env.DB))
 })
 
 // === On-chain USDC transfers (Base mainnet) ===
@@ -9106,9 +9277,7 @@ app.get('/api/route/exchanges', (c) => {
   return c.json({ service: 'crossfin-route-exchanges', exchanges, at: new Date().toISOString() })
 })
 
-// GET /api/route/fees — Fee comparison table (free)
-app.get('/api/route/fees', (c) => {
-  const coinRaw = c.req.query('coin')
+function getRouteFeesPayload(coinRaw: string | null | undefined): Record<string, unknown> {
   const coin = coinRaw ? coinRaw.toUpperCase() : null
 
   const fees = ROUTING_EXCHANGES.map((ex) => {
@@ -9125,13 +9294,12 @@ app.get('/api/route/fees', (c) => {
     }
   })
 
-  return c.json({ service: 'crossfin-route-fees', coin: coin ?? 'all', fees, at: new Date().toISOString() })
-})
+  return { service: 'crossfin-route-fees', coin: coin ?? 'all', fees, at: new Date().toISOString() }
+}
 
-// GET /api/route/pairs — Supported pairs with live prices (free)
-app.get('/api/route/pairs', async (c) => {
+async function getRoutePairsPayload(db: D1Database): Promise<Record<string, unknown>> {
   const [bithumbResult, globalResult, krwResult] = await Promise.allSettled([
-    fetchBithumbAll(), fetchGlobalPrices(c.env.DB), fetchKrwRate(),
+    fetchBithumbAll(), fetchGlobalPrices(db), fetchKrwRate(),
   ])
   const bithumbAll = bithumbResult.status === 'fulfilled' ? bithumbResult.value : {}
   const globalPrices: Record<string, number> = globalResult.status === 'fulfilled' ? globalResult.value : {}
@@ -9150,30 +9318,29 @@ app.get('/api/route/pairs', async (c) => {
     }
   })
 
-  return c.json({ service: 'crossfin-route-pairs', krwUsdRate: krwRate, pairs, at: new Date().toISOString() })
-})
+  return { service: 'crossfin-route-pairs', krwUsdRate: krwRate, pairs, at: new Date().toISOString() }
+}
 
-// GET /api/route/status — Exchange API health check (free)
-app.get('/api/route/status', async (c) => {
+async function checkRouteHttpOk(url: string, timeoutMs: number): Promise<boolean> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, { signal: controller.signal })
+    const ok = res.ok
+    await res.body?.cancel()
+    return ok
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+async function getRouteStatusPayload(db: D1Database): Promise<Record<string, unknown>> {
   const btcSymbol = TRACKED_PAIRS.BTC ?? 'BTCUSDT'
   const ROUTE_HEALTH_TIMEOUT_MS = 4500
 
-  const checkHttpOk = async (url: string): Promise<boolean> => {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), ROUTE_HEALTH_TIMEOUT_MS)
-    try {
-      const res = await fetch(url, { signal: controller.signal })
-      const ok = res.ok
-      await res.body?.cancel()
-      return ok
-    } catch {
-      return false
-    } finally {
-      clearTimeout(timeoutId)
-    }
-  }
-
-  const globalFeedOnlinePromise = fetchGlobalPrices(c.env.DB)
+  const globalFeedOnlinePromise = fetchGlobalPrices(db)
     .then((prices) => {
       const btc = prices[btcSymbol]
       return typeof btc === 'number' && Number.isFinite(btc) && btc > 1000
@@ -9181,10 +9348,10 @@ app.get('/api/route/status', async (c) => {
     .catch(() => false)
 
   const [bithumbOnline, upbitOnline, coinoneOnline, gopaxOnline, globalFeedOnline] = await Promise.all([
-    checkHttpOk('https://api.bithumb.com/public/ticker/BTC_KRW'),
-    checkHttpOk('https://api.upbit.com/v1/ticker?markets=KRW-BTC'),
-    checkHttpOk('https://api.coinone.co.kr/public/v2/ticker_new/KRW/BTC'),
-    checkHttpOk('https://api.gopax.co.kr/trading-pairs/BTC-KRW/ticker'),
+    checkRouteHttpOk('https://api.bithumb.com/public/ticker/BTC_KRW', ROUTE_HEALTH_TIMEOUT_MS),
+    checkRouteHttpOk('https://api.upbit.com/v1/ticker?markets=KRW-BTC', ROUTE_HEALTH_TIMEOUT_MS),
+    checkRouteHttpOk('https://api.coinone.co.kr/public/v2/ticker_new/KRW/BTC', ROUTE_HEALTH_TIMEOUT_MS),
+    checkRouteHttpOk('https://api.gopax.co.kr/trading-pairs/BTC-KRW/ticker', ROUTE_HEALTH_TIMEOUT_MS),
     globalFeedOnlinePromise,
   ])
 
@@ -9204,7 +9371,7 @@ app.get('/api/route/status', async (c) => {
   }))
 
   const allOnline = statuses.every((s) => s.status === 'online')
-  return c.json({
+  return {
     service: 'crossfin-route-status',
     healthy: allOnline,
     exchanges: statuses,
@@ -9213,7 +9380,22 @@ app.get('/api/route/status', async (c) => {
       symbol: btcSymbol,
     },
     at: new Date().toISOString(),
-  })
+  }
+}
+
+// GET /api/route/fees — Fee comparison table (free)
+app.get('/api/route/fees', (c) => {
+  return c.json(getRouteFeesPayload(c.req.query('coin')))
+})
+
+// GET /api/route/pairs — Supported pairs with live prices (free)
+app.get('/api/route/pairs', async (c) => {
+  return c.json(await getRoutePairsPayload(c.env.DB))
+})
+
+// GET /api/route/status — Exchange API health check (free)
+app.get('/api/route/status', async (c) => {
+  return c.json(await getRouteStatusPayload(c.env.DB))
 })
 
 // ============================================================
@@ -9373,63 +9555,232 @@ app.post('/api/telegram/webhook', async (c) => {
   const chatId = body?.message?.chat?.id
   const text = String(body?.message?.text ?? '').trim()
 
-  if (!chatId || !text.startsWith('/')) {
+  if (!chatId || !text) {
     return c.json({ ok: true, ignored: true })
   }
 
-  if (!text.startsWith('/route')) {
-    await telegramSendMessage(
-      botToken,
-      chatId,
-      'Supported command:\n/route fromExchange:FROM_CUR toExchange:TO_CUR amount [cheapest|fastest|balanced]\nExample: /route bithumb:KRW binance:USDC 5000000 cheapest',
-    )
-    return c.json({ ok: true, handled: true })
+  const helpText = [
+    'CrossFin Bot commands:',
+    '/route fromExchange:FROM_CUR toExchange:TO_CUR amount [cheapest|fastest|balanced]',
+    '/price',
+    '/status',
+    '/kimchi',
+    '/fees',
+    '/help',
+    '',
+    'Example: /route bithumb:KRW binance:USDC 5000000 cheapest',
+  ].join('\n')
+
+  if (text.startsWith('/')) {
+    const commandRaw = text.split(/\s+/)[0] ?? ''
+    const command = commandRaw.split('@')[0]?.toLowerCase() ?? ''
+
+    try {
+      if (command === '/help' || command === '/start') {
+        await telegramSendMessage(botToken, chatId, helpText)
+        return c.json({ ok: true, handled: true, mode: 'slash' })
+      }
+
+      if (command === '/route') {
+        const parsed = parseTelegramRouteCommand(text)
+        if (!parsed) {
+          await telegramSendMessage(botToken, chatId, helpText)
+          return c.json({ ok: true, handled: true, mode: 'slash' })
+        }
+
+        const { optimal, alternatives } = await findOptimalRoute(
+          parsed.fromExchange,
+          parsed.fromCurrency,
+          parsed.toExchange,
+          parsed.toCurrency,
+          parsed.amount,
+          parsed.strategy,
+          c.env.DB,
+        )
+
+        if (!optimal) {
+          await telegramSendMessage(
+            botToken,
+            chatId,
+            'No valid route found. Try another exchange pair or lower amount.',
+          )
+          return c.json({ ok: true, handled: true, routeFound: false, mode: 'slash' })
+        }
+
+        const altCount = alternatives.length
+        const summary = optimal.summary
+        const outputText = summary?.output ?? `${optimal.estimatedOutput.toLocaleString()} ${parsed.toCurrency}`
+        const reply = [
+          `Best route: ${optimal.bridgeCoin} (${parsed.strategy})`,
+          `${parsed.fromExchange.toUpperCase()}:${parsed.fromCurrency} -> ${parsed.toExchange.toUpperCase()}:${parsed.toCurrency}`,
+          `Input: ${parsed.amount.toLocaleString()} ${parsed.fromCurrency}`,
+          `Output: ${outputText}`,
+          `Total cost: ${optimal.totalCostPct.toFixed(3)}%`,
+          `ETA: ${optimal.totalTimeMinutes.toFixed(1)} min`,
+          `Decision: ${optimal.action} (${Math.round(optimal.confidence * 100)}% confidence)`,
+          `${optimal.reason}`,
+          `Alternatives evaluated: ${altCount}`,
+        ].join('\n')
+
+        await telegramSendMessage(botToken, chatId, reply)
+        return c.json({ ok: true, handled: true, routeFound: true, mode: 'slash' })
+      }
+
+      if (command === '/price') {
+        const payload = await getRoutePairsPayload(c.env.DB)
+        const pairsRaw = (payload as { pairs?: unknown }).pairs
+        const pairs = Array.isArray(pairsRaw) ? pairsRaw : []
+        const top = pairs.slice(0, 8).map((item) => {
+          const row = isRecord(item) ? item : {}
+          const coin = String(row.coin ?? '')
+          const krw = row.bithumbKrw === null || row.bithumbKrw === undefined ? 'n/a' : `${Number(row.bithumbKrw).toLocaleString()} KRW`
+          const usd = row.binanceUsd === null || row.binanceUsd === undefined ? 'n/a' : `$${Number(row.binanceUsd).toLocaleString()}`
+          return `${coin}: ${krw} | ${usd}`
+        })
+
+        const reply = ['Live prices (Bithumb KRW | Binance USD):', ...top].join('\n')
+        await telegramSendMessage(botToken, chatId, reply)
+        return c.json({ ok: true, handled: true, mode: 'slash' })
+      }
+
+      if (command === '/status') {
+        const payload = await getRouteStatusPayload(c.env.DB)
+        const exchangesRaw = (payload as { exchanges?: unknown }).exchanges
+        const exchanges = Array.isArray(exchangesRaw) ? exchangesRaw : []
+        const lines = exchanges.map((item) => {
+          const row = isRecord(item) ? item : {}
+          const exchange = String(row.exchange ?? 'unknown')
+          const status = String(row.status ?? 'offline')
+          return `${exchange.toUpperCase()}: ${status}`
+        })
+        const healthy = Boolean((payload as { healthy?: unknown }).healthy)
+        const reply = [`Exchange status (${healthy ? 'healthy' : 'degraded'}):`, ...lines].join('\n')
+        await telegramSendMessage(botToken, chatId, reply)
+        return c.json({ ok: true, handled: true, mode: 'slash' })
+      }
+
+      if (command === '/kimchi') {
+        const payload = await getArbitrageDemoPayload(c.env.DB)
+        const avgPremiumPct = Number((payload as { avgPremiumPct?: unknown }).avgPremiumPct ?? 0)
+        const marketCondition = String((payload as { marketCondition?: unknown }).marketCondition ?? 'unknown')
+        const previewRaw = (payload as { preview?: unknown }).preview
+        const preview = Array.isArray(previewRaw) ? previewRaw : []
+        const lines = preview.map((item) => {
+          const row = isRecord(item) ? item : {}
+          const coin = String(row.coin ?? '')
+          const premiumPct = Number(row.premiumPct ?? 0)
+          const decision = isRecord(row.decision) ? row.decision : {}
+          const action = String(decision.action ?? 'WAIT')
+          return `${coin}: ${premiumPct.toFixed(2)}% (${action})`
+        })
+
+        const reply = [
+          `Kimchi premium (demo): avg ${avgPremiumPct.toFixed(2)}%`,
+          `Market condition: ${marketCondition}`,
+          ...lines,
+        ].join('\n')
+        await telegramSendMessage(botToken, chatId, reply)
+        return c.json({ ok: true, handled: true, mode: 'slash' })
+      }
+
+      if (command === '/fees') {
+        const payload = getRouteFeesPayload(null)
+        const feesRaw = (payload as { fees?: unknown }).fees
+        const fees = Array.isArray(feesRaw) ? feesRaw : []
+        const lines = fees.map((item) => {
+          const row = isRecord(item) ? item : {}
+          const exchange = String(row.exchange ?? 'unknown')
+          const tradingFeePct = Number(row.tradingFeePct ?? 0)
+          const withdrawalFees = isRecord(row.withdrawalFees) ? row.withdrawalFees : {}
+          const xrpFee = Number(withdrawalFees.XRP ?? 0)
+          const usdtFee = Number(withdrawalFees.USDT ?? 0)
+          return `${exchange.toUpperCase()}: trade ${tradingFeePct.toFixed(2)}%, withdraw XRP ${xrpFee}, USDT ${usdtFee}`
+        })
+        const reply = ['Exchange fees (quick view):', ...lines].join('\n')
+        await telegramSendMessage(botToken, chatId, reply)
+        return c.json({ ok: true, handled: true, mode: 'slash' })
+      }
+
+      await telegramSendMessage(botToken, chatId, helpText)
+      return c.json({ ok: true, handled: true, mode: 'slash', fallback: 'help' })
+    } catch (err) {
+      const message = err instanceof HTTPException ? err.message : (err instanceof Error ? err.message : 'Failed to process command')
+      await telegramSendMessage(botToken, chatId, `Route error: ${message}`)
+      return c.json({ ok: true, handled: true, error: message, mode: 'slash' })
+    }
   }
 
   try {
-    const parsed = parseTelegramRouteCommand(text)
-    if (!parsed) return c.json({ ok: true, ignored: true })
-
-    const { optimal, alternatives } = await findOptimalRoute(
-      parsed.fromExchange,
-      parsed.fromCurrency,
-      parsed.toExchange,
-      parsed.toCurrency,
-      parsed.amount,
-      parsed.strategy,
-      c.env.DB,
-    )
-
-    if (!optimal) {
-      await telegramSendMessage(
-        botToken,
-        chatId,
-        'No valid route found. Try another exchange pair or lower amount.',
-      )
-      return c.json({ ok: true, handled: true, routeFound: false })
+    const zaiApiKey = (c.env.ZAI_API_KEY ?? '').trim()
+    if (!zaiApiKey) {
+      await telegramSendMessage(botToken, chatId, 'AI mode is not configured yet (missing ZAI_API_KEY). Use /help to see slash commands.')
+      return c.json({ ok: true, handled: true, mode: 'ai', configured: false })
     }
 
-    const altCount = alternatives.length
-    const summary = optimal.summary
-    const outputText = summary?.output ?? `${optimal.estimatedOutput.toLocaleString()} ${parsed.toCurrency}`
-    const reply = [
-      `Best route: ${optimal.bridgeCoin} (${parsed.strategy})`,
-      `${parsed.fromExchange.toUpperCase()}:${parsed.fromCurrency} -> ${parsed.toExchange.toUpperCase()}:${parsed.toCurrency}`,
-      `Input: ${parsed.amount.toLocaleString()} ${parsed.fromCurrency}`,
-      `Output: ${outputText}`,
-      `Total cost: ${optimal.totalCostPct.toFixed(3)}%`,
-      `ETA: ${optimal.totalTimeMinutes.toFixed(1)} min`,
-      `Decision: ${optimal.action} (${Math.round(optimal.confidence * 100)}% confidence)`,
-      `${optimal.reason}`,
-      `Alternatives evaluated: ${altCount}`,
-    ].join('\n')
+    const messages: GlmMessage[] = [
+      { role: 'system', content: CROSSFIN_TELEGRAM_SYSTEM_PROMPT },
+      { role: 'user', content: text },
+    ]
+    const maxToolLoops = 3
+    let finalReply = ''
 
-    await telegramSendMessage(botToken, chatId, reply)
-    return c.json({ ok: true, handled: true, routeFound: true })
+    for (let loop = 0; loop < maxToolLoops; loop += 1) {
+      const assistantMessage = await glmChatCompletion(zaiApiKey, messages, CROSSFIN_TELEGRAM_TOOLS)
+      messages.push({
+        role: 'assistant',
+        content: assistantMessage.content,
+        tool_calls: assistantMessage.tool_calls,
+      })
+
+      const toolCalls = assistantMessage.tool_calls ?? []
+      if (toolCalls.length === 0) {
+        finalReply = (assistantMessage.content ?? '').trim()
+        break
+      }
+
+      for (const toolCall of toolCalls) {
+        if (toolCall.type !== 'function') continue
+
+        let toolArgs: Record<string, unknown> = {}
+        const rawArgs = toolCall.function.arguments
+        if (rawArgs && rawArgs.trim()) {
+          try {
+            const parsed = JSON.parse(rawArgs) as unknown
+            if (isRecord(parsed)) {
+              toolArgs = parsed
+            }
+          } catch {
+            toolArgs = {}
+          }
+        }
+
+        let toolResult = ''
+        try {
+          toolResult = await executeTelegramTool(toolCall.function.name, toolArgs, c.env.DB)
+        } catch (toolErr) {
+          const toolError = toolErr instanceof Error ? toolErr.message : 'tool execution failed'
+          toolResult = JSON.stringify({ error: toolError, tool: toolCall.function.name })
+        }
+
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: toolResult,
+        })
+      }
+    }
+
+    if (!finalReply) {
+      const lastToolMessage = [...messages].reverse().find((msg) => msg.role === 'tool' && typeof msg.content === 'string')
+      finalReply = lastToolMessage?.content?.trim() || 'I gathered partial data, but could not complete the response in time. Please try again.'
+    }
+
+    await telegramSendMessage(botToken, chatId, finalReply)
+    return c.json({ ok: true, handled: true, mode: 'ai' })
   } catch (err) {
-    const message = err instanceof HTTPException ? err.message : (err instanceof Error ? err.message : 'Failed to process command')
-    await telegramSendMessage(botToken, chatId, `Route error: ${message}`)
-    return c.json({ ok: true, handled: true, error: message })
+    const message = err instanceof Error ? err.message : 'Failed to process AI request'
+    await telegramSendMessage(botToken, chatId, `AI error: ${message}`)
+    return c.json({ ok: true, handled: true, error: message, mode: 'ai' })
   }
 })
 
