@@ -2,7 +2,7 @@
 
 **The only way AI agents access Asian crypto markets.**
 
-CrossFin is a financial router for AI agents. It finds the cheapest path to move money across 5 Korean exchanges and Binance, pays for APIs with crypto (x402 protocol), and gives agents real-time access to market data that's normally locked behind Korean-language interfaces and IP restrictions.
+CrossFin is a financial router for AI agents. It finds the cheapest path to move money across 7 exchanges (Bithumb, Upbit, Coinone, GoPax + Binance, OKX, Bybit), pays for APIs with crypto (x402 protocol), and gives agents real-time access to market data that's normally locked behind Korean-language interfaces and IP restrictions.
 
 **Live:** [crossfin.dev](https://crossfin.dev) | **Demo:** [live.crossfin.dev](https://live.crossfin.dev)
 
@@ -36,14 +36,14 @@ Restart Claude Desktop. Done. 16 tools available immediately.
 
 **Ask your agent:**
 
-- "빗썸에서 바이낸스로 500만원 USDC 만들려면 가장 싼 방법이 뭐야?" → Routing engine evaluates 11 bridge coins across 5 exchanges, returns optimal path with fees
+- "빗썸에서 바이낸스로 500만원 USDC 만들려면 가장 싼 방법이 뭐야?" → Routing engine evaluates 11 bridge coins across 7 exchanges, returns optimal path with fees
 - "지금 김치 프리미엄 얼마야?" → Real-time price spread between Korean and global exchanges for 11 crypto pairs
 - "삼성전자 외국인 매수 동향 알려줘" → Korean stock investor flow data (foreign/institutional/individual)
 - "오늘 한국 시장 브리핑해줘" → Morning Brief bundle: kimchi premium + FX + KOSPI/KOSDAQ + stock momentum + headlines
 
 **For developers/agents:**
 
-- `find_optimal_route` — cheapest/fastest/balanced path across Bithumb, Upbit, Coinone, GoPax, Binance using 11 bridge coins (BTC, ETH, XRP, SOL, DOGE, ADA, DOT, LINK, AVAX, TRX, KAIA)
+- `find_optimal_route` — cheapest/fastest/balanced path across Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit using 11 bridge coins (BTC, ETH, XRP, SOL, DOGE, ADA, DOT, LINK, AVAX, TRX, KAIA)
 - `get_kimchi_premium` — real-time Korean vs. global price spread
 - `compare_exchange_prices` — live price comparison across Korean exchanges
 - `call_paid_service` — call any of 35 paid APIs with automatic x402 USDC payment
@@ -87,7 +87,7 @@ Supports bidirectional routing: Korea → Global and Global → Korea.
 
 | Tool | What it does |
 |------|-------------|
-| `find_optimal_route` | Optimal crypto transfer path across 5 exchanges (paid, $0.10) |
+| `find_optimal_route` | Optimal crypto transfer path across 7 exchanges (paid, $0.10) |
 | `list_exchange_fees` | Trading + withdrawal fee comparison |
 | `compare_exchange_prices` | Live price comparison across Korean exchanges |
 | `get_kimchi_premium` | Korean vs. global price spread (free preview) |
@@ -250,6 +250,7 @@ apps/
   mcp-server/   MCP Server (16 tools, npm: crossfin-mcp)
   web/          Gateway Dashboard (crossfin.dev)
   live/         Live Demo (live.crossfin.dev)
+  docs/         Documentation (docs.crossfin.dev)
 ```
 
 ## Links
@@ -258,6 +259,7 @@ apps/
 - [Live Demo](https://live.crossfin.dev) — Real-time routing demo
 - [Agent Guide](https://crossfin.dev/api/docs/guide) — Structured JSON for agents
 - [OpenAPI Spec](https://crossfin.dev/api/openapi.json) — Machine-readable API spec
+- [Docs](https://docs.crossfin.dev) — Developer documentation
 - [npm: crossfin-mcp](https://www.npmjs.com/package/crossfin-mcp) — MCP server package
 
 ## Built with AI

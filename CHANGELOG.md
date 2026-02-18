@@ -16,7 +16,7 @@
 ## [1.8.1] - 2026-02-18
 
 ### Added
-- **Routing Engine**: Complete crypto transfer routing across 5 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance)
+- **Routing Engine**: Complete crypto transfer routing across 7 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit)
   - `GET /api/premium/route/find` ($0.10) — optimal route with bridge coin comparison, slippage, fees
   - `GET /api/route/exchanges` — supported exchanges list (free)
   - `GET /api/route/fees` — fee comparison table (free)

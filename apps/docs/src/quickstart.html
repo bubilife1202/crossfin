@@ -13,10 +13,11 @@
       <a class="active" href="/quickstart.html">Quickstart</a>
       <a href="/api.html">API</a>
       <a href="/mcp.html">MCP</a>
+      <a href="https://crossfin.dev" target="_blank" rel="noopener">crossfin.dev</a>
     </nav>
 
     <h1>Quickstart</h1>
-    <p>Start in under 2 minutes with free endpoints, then move to paid x402 routes.</p>
+    <p>Start in under 2 minutes with free endpoints across 7 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit).</p>
 
     <section class="card">
       <h2>1) Check health</h2>
@@ -24,21 +25,31 @@
     </section>
 
     <section class="card">
-      <h2>2) Explore exchange network</h2>
+      <h2>2) Explore exchange network (7 exchanges)</h2>
       <pre><code>curl https://crossfin.dev/api/route/exchanges
 curl https://crossfin.dev/api/route/status
 curl "https://crossfin.dev/api/route/fees?coin=XRP"</code></pre>
+      <p>Returns all 7 exchanges with supported coins, online status, and fee schedules.</p>
     </section>
 
     <section class="card">
       <h2>3) Free arbitrage preview</h2>
       <pre><code>curl https://crossfin.dev/api/arbitrage/demo</code></pre>
+      <p>Top 3 kimchi premium pairs with EXECUTE/WAIT/SKIP decisions.</p>
     </section>
 
     <section class="card">
-      <h2>4) Paid optimal route (x402)</h2>
+      <h2>4) Free ACP routing quote</h2>
+      <pre><code>curl -X POST https://crossfin.dev/api/acp/quote \
+  -H "Content-Type: application/json" \
+  -d '{"from":"bithumb:KRW","to":"binance:USDC","amount":5000000}'</code></pre>
+      <p>Returns optimal route with bridge coin, fees, and alternatives. No payment required.</p>
+    </section>
+
+    <section class="card">
+      <h2>5) Paid optimal route (x402)</h2>
       <pre><code>GET /api/premium/route/find?from=bithumb:KRW&amp;to=binance:USDC&amp;amount=5000000&amp;strategy=cheapest</code></pre>
-      <p>Use an x402-capable client with Base USDC settlement.</p>
+      <p>Full route analysis ($0.10). Use an x402-capable client with Base USDC settlement.</p>
     </section>
   </main>
 </body>

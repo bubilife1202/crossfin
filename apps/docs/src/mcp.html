@@ -13,14 +13,16 @@
       <a href="/quickstart.html">Quickstart</a>
       <a href="/api.html">API</a>
       <a class="active" href="/mcp.html">MCP</a>
+      <a href="https://crossfin.dev" target="_blank" rel="noopener">crossfin.dev</a>
     </nav>
 
     <h1>MCP Integration</h1>
-    <p>Use CrossFin tools in Claude Desktop or any MCP client.</p>
+    <p>16 tools for Claude Desktop or any MCP client. Routes across 7 exchanges with 11 bridge coins.</p>
 
     <section class="card">
       <h2>Install</h2>
       <pre><code>npx -y crossfin-mcp</code></pre>
+      <p>npm: <a href="https://www.npmjs.com/package/crossfin-mcp" target="_blank" rel="noopener">crossfin-mcp</a></p>
     </section>
 
     <section class="card">
@@ -36,15 +38,38 @@
     }
   }
 }</code></pre>
+      <p>No EVM key? Free tools work without one. Paid tools require a Base wallet with USDC.</p>
     </section>
 
     <section class="card">
-      <h2>Useful tools</h2>
+      <h2>All 16 Tools</h2>
       <ul>
-        <li><code>get_kimchi_premium</code></li>
-        <li><code>list_exchange_fees</code></li>
-        <li><code>compare_exchange_prices</code></li>
-        <li><code>find_optimal_route</code> (paid)</li>
+        <li><code>find_optimal_route</code> &mdash; optimal path across 7 exchanges ($0.10)</li>
+        <li><code>list_exchange_fees</code> &mdash; trading + withdrawal fees (free)</li>
+        <li><code>compare_exchange_prices</code> &mdash; live price comparison (free)</li>
+        <li><code>get_kimchi_premium</code> &mdash; Korean vs global spread (free)</li>
+        <li><code>call_paid_service</code> &mdash; call any paid API with x402</li>
+        <li><code>search_services</code> &mdash; search 184+ services (free)</li>
+        <li><code>list_services</code> &mdash; browse service catalog (free)</li>
+        <li><code>get_service</code> &mdash; service details (free)</li>
+        <li><code>list_categories</code> &mdash; service categories (free)</li>
+        <li><code>get_guide</code> &mdash; full agent guide (free)</li>
+        <li><code>get_analytics</code> &mdash; gateway usage stats (free)</li>
+        <li><code>create_wallet</code> &mdash; local ledger wallet (free)</li>
+        <li><code>get_balance</code> &mdash; check wallet balance (free)</li>
+        <li><code>transfer</code> &mdash; transfer between wallets (free)</li>
+        <li><code>list_transactions</code> &mdash; transaction history (free)</li>
+        <li><code>set_budget</code> &mdash; daily spend limit (free)</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Example prompts</h2>
+      <ul>
+        <li>"빗썸에서 바이낸스로 500만원 USDC 만들려면 가장 싼 방법이 뭐야?"</li>
+        <li>"지금 김치 프리미엄 얼마야?"</li>
+        <li>"거래소별 XRP 가격 비교해줘"</li>
+        <li>"오늘 한국 시장 브리핑해줘"</li>
       </ul>
     </section>
   </main>

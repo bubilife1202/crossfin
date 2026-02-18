@@ -13,40 +13,91 @@
       <a href="/quickstart.html">Quickstart</a>
       <a class="active" href="/api.html">API</a>
       <a href="/mcp.html">MCP</a>
+      <a href="https://crossfin.dev" target="_blank" rel="noopener">crossfin.dev</a>
     </nav>
 
-    <h1>API Reference (Core)</h1>
+    <h1>API Reference</h1>
+    <p>Base URL: <code>https://crossfin.dev</code> &mdash; 7 exchanges: Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit</p>
 
     <section class="card">
-      <h2>Routing</h2>
+      <h2>Routing (Free)</h2>
       <ul>
-        <li><code>GET /api/route/status</code> - exchange network health</li>
-        <li><code>GET /api/route/pairs</code> - bridge pair availability</li>
-        <li><code>GET /api/route/fees</code> - fee and transfer table</li>
-        <li><code>GET /api/premium/route/find</code> - full paid route planner</li>
+        <li><code>GET /api/route/exchanges</code> &mdash; supported exchanges and coins</li>
+        <li><code>GET /api/route/status</code> &mdash; exchange network health (7/7 online)</li>
+        <li><code>GET /api/route/pairs</code> &mdash; bridge pairs with live prices</li>
+        <li><code>GET /api/route/fees</code> &mdash; trading + withdrawal fee table</li>
       </ul>
     </section>
 
     <section class="card">
-      <h2>Arbitrage</h2>
+      <h2>Routing (Paid, x402)</h2>
       <ul>
-        <li><code>GET /api/arbitrage/demo</code> - free top-3 decisions</li>
-        <li><code>GET /api/premium/arbitrage/opportunities</code> - paid full scan</li>
+        <li><code>GET /api/premium/route/find</code> &mdash; full optimal route analysis ($0.10)</li>
       </ul>
     </section>
 
     <section class="card">
-      <h2>ACP</h2>
+      <h2>Arbitrage &amp; Kimchi Premium</h2>
       <ul>
-        <li><code>GET /api/acp/status</code></li>
-        <li><code>POST /api/acp/quote</code></li>
-        <li><code>POST /api/acp/execute</code> (simulation)</li>
+        <li><code>GET /api/arbitrage/demo</code> &mdash; free top-3 decisions (EXECUTE/WAIT/SKIP)</li>
+        <li><code>GET /api/premium/arbitrage/kimchi</code> &mdash; full 11-pair kimchi premium ($0.05)</li>
+        <li><code>GET /api/premium/arbitrage/opportunities</code> &mdash; full arbitrage scan ($0.10)</li>
+        <li><code>GET /api/premium/arbitrage/kimchi/history</code> &mdash; 7-day history ($0.05)</li>
       </ul>
     </section>
 
     <section class="card">
-      <h2>OpenAPI</h2>
-      <pre><code>curl https://crossfin.dev/api/openapi.json</code></pre>
+      <h2>Korean Market Data</h2>
+      <ul>
+        <li><code>GET /api/premium/market/fx/usdkrw</code> &mdash; USD/KRW rate ($0.01)</li>
+        <li><code>GET /api/premium/market/upbit/ticker</code> &mdash; Upbit ticker ($0.02)</li>
+        <li><code>GET /api/premium/market/upbit/orderbook</code> &mdash; Upbit orderbook ($0.02)</li>
+        <li><code>GET /api/premium/market/coinone/ticker</code> &mdash; Coinone ticker ($0.02)</li>
+        <li><code>GET /api/premium/bithumb/orderbook</code> &mdash; Bithumb orderbook ($0.02)</li>
+        <li><code>GET /api/premium/crypto/korea/5exchange</code> &mdash; cross-exchange prices ($0.08)</li>
+        <li><code>GET /api/premium/news/korea/headlines</code> &mdash; Korean crypto news ($0.03)</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Korean Stock APIs</h2>
+      <ul>
+        <li><code>GET /api/premium/market/korea/indices</code> &mdash; KOSPI &amp; KOSDAQ ($0.03)</li>
+        <li><code>GET /api/premium/market/korea/stocks/momentum</code> &mdash; top movers ($0.05)</li>
+        <li><code>GET /api/premium/market/korea/investor-flow</code> &mdash; investor flow ($0.05)</li>
+        <li><code>GET /api/premium/market/korea/etf</code> &mdash; 1,070+ ETFs ($0.03)</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Bundles</h2>
+      <ul>
+        <li><code>GET /api/premium/morning/brief</code> &mdash; Morning Brief ($0.20)</li>
+        <li><code>GET /api/premium/crypto/snapshot</code> &mdash; Crypto Snapshot ($0.15)</li>
+        <li><code>GET /api/premium/kimchi/stats</code> &mdash; Kimchi Stats ($0.15)</li>
+        <li><code>GET /api/premium/market/korea/stock-brief</code> &mdash; Stock Brief ($0.10)</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>ACP (Agent Commerce Protocol)</h2>
+      <ul>
+        <li><code>GET /api/acp/status</code> &mdash; ACP protocol status</li>
+        <li><code>POST /api/acp/quote</code> &mdash; routing quote (free preview)</li>
+        <li><code>POST /api/acp/execute</code> &mdash; execute simulation</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Registry &amp; Discovery (Free)</h2>
+      <ul>
+        <li><code>GET /api/registry</code> &mdash; all services</li>
+        <li><code>GET /api/registry/search?q=</code> &mdash; full-text search</li>
+        <li><code>GET /api/registry/categories</code> &mdash; categories with counts</li>
+        <li><code>GET /.well-known/crossfin.json</code> &mdash; agent auto-discovery</li>
+        <li><code>GET /api/openapi.json</code> &mdash; OpenAPI 3.1 spec</li>
+        <li><code>GET /api/docs/guide</code> &mdash; structured agent guide</li>
+      </ul>
     </section>
   </main>
 </body>
