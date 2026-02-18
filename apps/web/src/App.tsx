@@ -101,36 +101,6 @@ function App() {
 
   const pgEndpoints = CROSSFIN_PLAYGROUND_ENDPOINTS
 
-  function escapeHtml(value: string): string {
-    return value
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-  }
-
-  function jsonSyntaxHighlight(json: string): string {
-    const escaped = escapeHtml(json)
-    return escaped.replace(
-      /("(\\u[\dA-Fa-f]{4}|\\[^u]|[^"\\])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[Ee][+-]?\d+)?)/g,
-      (match) => {
-        let cls = 'pgJsonNumber'
-        if (match.startsWith('"')) {
-          if (match.endsWith(':')) {
-            cls = 'pgJsonKey'
-          } else {
-            cls = 'pgJsonString'
-          }
-        } else if (/^(true|false)$/.test(match)) {
-          cls = 'pgJsonBool'
-        } else if (match === 'null') {
-          cls = 'pgJsonNull'
-        }
-        return `<span class="${cls}">${match}</span>`
-      },
-    )
-  }
-
   async function sendPlaygroundRequest() {
     setPgLoading(true)
     setPgResult(null)
@@ -337,7 +307,13 @@ function App() {
     <div className="page">
       <header className="topbar">
         <div className="topbarInner">
-          <a href="#" className="brand" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>CrossFin</a>
+          <button
+            type="button"
+            className="brand brandButton"
+            onClick={() => { window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+          >
+            CrossFin
+          </button>
           <nav className="nav">
             {TAB_IDS.map((tab) => (
               <a
@@ -363,25 +339,68 @@ function App() {
             >
               Live Demo
             </a>
+            <a
+              href="https://docs.crossfin.dev"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Docs
+            </a>
           </nav>
         </div>
       </header>
 
       <main className="content">
         <section className="heroCompact">
-          <div className="heroBadge">x402 Agent Services Gateway</div>
-          <h1>The Gateway <span className="heroAccent">for Agent Services</span></h1>
+          <div className="heroBadge">Cross-Border Crypto Routing Engine</div>
+          <h1>The only way AI agents <span className="heroAccent">access Asian crypto markets</span></h1>
           <p className="heroSub">
-            Discover x402 services and access Korean market data. Pay per-call with USDC on Base.
+            Route capital across 7 exchanges with 11 bridge coins. Real-time kimchi premium, arbitrage signals, and 35+ paid APIs. Agents pay per-call with USDC via x402.
           </p>
 
           <div className="heroCtas">
-            <a className="button primary" href="#services" onClick={(e) => { e.preventDefault(); switchTab('services') }}>
-              Browse Services
+            <a className="button primary" href="https://live.crossfin.dev" target="_blank" rel="noopener noreferrer">
+              Try Live Demo
             </a>
-            <a className="button" href="#developers" onClick={(e) => { e.preventDefault(); switchTab('developers') }}>
+            <button type="button" className="button" onClick={() => switchTab('developers')}>
               Get Started
-            </a>
+            </button>
+            <button type="button" className="button" onClick={() => switchTab('services')}>
+              Browse Services
+            </button>
+          </div>
+
+          <div className="heroPills">
+            <span className="pill">7 Exchanges</span>
+            <span className="pill">11 Bridge Coins</span>
+            <span className="pill">x402 Native</span>
+            <span className="pill">MCP + ACP</span>
+            <span className="pill">35+ APIs</span>
+          </div>
+        </section>
+
+        <section className="featuresShowcase">
+          <div className="featuresGrid">
+            <div className="featureCard">
+              <div className="featureIcon">&#x21C4;</div>
+              <h3>Routing Engine</h3>
+              <p>Find the cheapest path across Bithumb, Upbit, Coinone, GoPax, Binance, OKX, and Bybit. Compares 11 bridge coins factoring fees, slippage, and transfer time.</p>
+            </div>
+            <div className="featureCard">
+              <div className="featureIcon">&#x25B2;</div>
+              <h3>Kimchi Premium</h3>
+              <p>Real-time Korean vs. global price spread for 11 crypto pairs. Arbitrage decisions with EXECUTE/WAIT/SKIP signals and confidence scores.</p>
+            </div>
+            <div className="featureCard">
+              <div className="featureIcon">&#x26A1;</div>
+              <h3>x402 Payments</h3>
+              <p>No API keys. No subscriptions. Agents pay per call with USDC on Base. $0.01 for FX rates, $0.10 for full routing analysis.</p>
+            </div>
+            <div className="featureCard">
+              <div className="featureIcon">&#x2699;</div>
+              <h3>MCP Integration</h3>
+              <p>16 tools for Claude Desktop. One command install: npx crossfin-mcp. Works with any MCP-compatible client.</p>
+            </div>
           </div>
         </section>
 
@@ -969,8 +988,9 @@ console.log(await res.json());`}</code></pre>
           <div className="pgPanel">
             <div className="pgControls">
               <div className="pgSelectWrap">
-                <label className="pgLabel">Endpoint</label>
+                <label className="pgLabel" htmlFor="playground-endpoint">Endpoint</label>
                 <select
+                  id="playground-endpoint"
                   className="pgSelect"
                   value={pgEndpoint}
                   onChange={(e) => setPgEndpoint(e.target.value)}
@@ -1015,10 +1035,7 @@ console.log(await res.json());`}</code></pre>
                     <span className="pgTime">{pgResult.timeMs}ms</span>
                   </div>
                   <div className="pgBody">
-                    <pre
-                      className="pgPre"
-                      dangerouslySetInnerHTML={{ __html: jsonSyntaxHighlight(pgResult.body) }}
-                    />
+                    <pre className="pgPre"><code>{pgResult.body}</code></pre>
                   </div>
                 </>
               ) : (
