@@ -6569,20 +6569,20 @@ app.get('/api/premium/crypto/korea/5exchange', async (c) => {
 app.get('/api/premium/crypto/korea/exchange-status', async (c) => {
   const res = await fetch('https://api.bithumb.com/public/assetsstatus/ALL')
   if (!res.ok) throw new HTTPException(502, { message: 'Exchange status data unavailable' })
-  const raw = await res.json() as any
-  const data = raw.data ?? {}
+  const raw: unknown = await res.json()
+  const data = isRecord(raw) && isRecord(raw.data) ? raw.data : {}
 
-  const coins: any[] = []
+  const coins: Array<{ symbol: string; withdrawalEnabled: boolean; depositEnabled: boolean }> = []
   let disabledCount = 0
   for (const [symbol, status] of Object.entries(data)) {
-    const s = status as any
+    const s = isRecord(status) ? status : {}
     const withdrawalOk = s.withdrawal_status === 1
     const depositOk = s.deposit_status === 1
     if (!withdrawalOk || !depositOk) disabledCount++
     coins.push({ symbol, withdrawalEnabled: withdrawalOk, depositEnabled: depositOk })
   }
 
-  coins.sort((a: any, b: any) => {
+  coins.sort((a, b) => {
     const aDisabled = !a.withdrawalEnabled || !a.depositEnabled ? 0 : 1
     const bDisabled = !b.withdrawalEnabled || !b.depositEnabled ? 0 : 1
     return aDisabled - bDisabled
@@ -8320,9 +8320,10 @@ app.post('/api/deposits', async (c) => {
 
   // Verify on Basescan
   const basescanUrl = `https://api.basescan.org/api?module=proxy&action=eth_getTransactionReceipt&txhash=${txHash}`
-  const receipt = await fetch(basescanUrl).then((r) => r.json()).catch(() => null) as any
+  const receipt: unknown = await fetch(basescanUrl).then((r) => r.json()).catch(() => null)
+  const receiptResult = isRecord(receipt) && isRecord(receipt.result) ? receipt.result : null
 
-  if (!receipt?.result?.status || receipt.result.status !== '0x1') {
+  if (!receiptResult?.status || receiptResult.status !== '0x1') {
     throw new HTTPException(400, { message: 'Transaction not found or not confirmed on Base mainnet' })
   }
 
@@ -8331,7 +8332,8 @@ app.post('/api/deposits', async (c) => {
   let fromAddress = ''
   const transferTopic = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef' // Transfer event
 
-  for (const log of (receipt.result.logs ?? [])) {
+  const receiptLogs = Array.isArray(receiptResult.logs) ? receiptResult.logs : []
+  for (const log of receiptLogs) {
     if (
       log.address?.toLowerCase() === USDC_BASE_ADDRESS.toLowerCase() &&
       log.topics?.[0] === transferTopic &&
