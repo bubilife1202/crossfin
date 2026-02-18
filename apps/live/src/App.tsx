@@ -154,6 +154,25 @@ interface AcpStatusData {
   execution_mode: string;
 }
 
+interface AcpQuoteRoutePreview {
+  bridgeCoin: string;
+  totalCostPct: number;
+  totalTimeMinutes: number;
+  estimatedOutput: number;
+  estimatedInput?: number;
+}
+
+interface AcpQuoteResponse {
+  protocol: string;
+  version: string;
+  type: "quote";
+  provider: string;
+  quote_id: string;
+  status: string;
+  optimal_route: AcpQuoteRoutePreview | null;
+  alternatives: AcpQuoteRoutePreview[];
+}
+
 /* ─── Helpers ─── */
 
 function timeAgo(iso: string): string {
@@ -276,7 +295,7 @@ export default function App() {
   const [routeToCur, setRouteToCur] = useState("USDC");
   const [routeAmount, setRouteAmount] = useState("5,000,000");
   const [routeStrategy, setRouteStrategy] = useState<"cheapest" | "fastest" | "balanced">("cheapest");
-  const [routeResult, setRouteResult] = useState<any>(null);
+  const [routeResult, setRouteResult] = useState<AcpQuoteResponse | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -387,7 +406,7 @@ export default function App() {
 
   const routeFromSymbol = routeFromCur === "KRW" ? "₩" : "$";
   const routeOptimal = routeResult?.optimal_route;
-  const routeAlts: any[] = routeResult?.alternatives || [];
+  const routeAlts = routeResult?.alternatives ?? [];
   const routeAllRoutes = routeOptimal ? [routeOptimal, ...routeAlts] : [];
 
   // Calculate savings vs worst route
@@ -416,7 +435,7 @@ export default function App() {
     setRouteAmount(formatRouteNum(raw, routeFromCur));
   };
 
-  const findRoute = async () => {
+  const findRoute = useCallback(async () => {
     const amount = parseRouteAmount(routeAmount);
     if (routeFromCur === "KRW" && amount < 10000) {
       setRouteError("Minimum amount: ₩10,000");
@@ -442,18 +461,19 @@ export default function App() {
           strategy: routeStrategy,
         }),
       });
-      const data = await res.json();
+      const data = (await res.json()) as AcpQuoteResponse;
       if (!data.optimal_route) {
         setRouteError("No route found. Check inputs and try again.");
         return;
       }
       setRouteResult(data);
-    } catch (e: any) {
-      setRouteError(`API error: ${e.message}`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setRouteError(`API error: ${msg}`);
     } finally {
       setRouteLoading(false);
     }
-  };
+  }, [routeAmount, routeFrom, routeFromCur, routeStrategy, routeTo, routeToCur]);
 
   const formatRouteOutput = (val: number): string => {
     if (routeToCur === "BTC") return val.toFixed(6);
@@ -485,7 +505,7 @@ export default function App() {
       hasAutoRun.current = true;
       findRoute();
     }
-  }, [routePairs]);
+  }, [findRoute, routePairs]);
 
   return (
     <div className="dashboard">
@@ -659,7 +679,7 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {routeAllRoutes.slice(0, 5).map((r: any) => {
+                        {routeAllRoutes.slice(0, 5).map((r: AcpQuoteRoutePreview) => {
                           const costClass = r.totalCostPct < 0.5
                             ? "routeCostGood"
                             : r.totalCostPct < 1.0
@@ -822,7 +842,7 @@ export default function App() {
     }
   }
 }`}</pre>
-              <button className="copyBtn" onClick={copyMcpConfig}>
+              <button type="button" className="copyBtn" onClick={copyMcpConfig}>
                 {copied ? "✓ Copied" : "Copy"}
               </button>
             </div>

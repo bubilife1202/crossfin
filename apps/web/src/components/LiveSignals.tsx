@@ -17,7 +17,7 @@ function formatTime(iso: string): string {
 
 export default function LiveSignals() {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
-  const [lastRefresh, setLastRefresh] = useState<number>(Date.now())
+  const [lastRefresh, setLastRefresh] = useState<number>(0)
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -64,7 +64,7 @@ export default function LiveSignals() {
           <div className="livePanelTitle">Live Kimchi Premium</div>
         </div>
         <div className="liveError">{state.message}</div>
-        <button className="liveRetry" onClick={() => { setState({ status: 'loading' }); void load() }}>
+        <button type="button" className="liveRetry" onClick={() => { setState({ status: 'loading' }); void load() }}>
           Retry
         </button>
       </div>

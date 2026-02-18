@@ -4894,7 +4894,7 @@ interface Route {
   totalTimeMinutes: number
   estimatedInput: number
   estimatedOutput: number
-  bridgeCoin: string
+  bridgeCoin: (typeof BRIDGE_COINS)[number]
   action: 'EXECUTE' | 'WAIT' | 'SKIP'
   confidence: number
   reason: string
@@ -4913,6 +4913,9 @@ interface RouteMeta {
   exchangeRates: { KRW_USD: number }
   pricesUsed: Record<string, Record<string, number>>
   routesEvaluated: number
+  bridgeCoinsTotal: number
+  evaluatedCoins: Array<(typeof BRIDGE_COINS)[number]>
+  skippedCoins?: Array<(typeof BRIDGE_COINS)[number]>
   analysisTimestamp: string
   disclaimer: string
 }
