@@ -5573,8 +5573,39 @@ async function fetchGlobalPrices(db?: D1Database): Promise<Record<string, number
     throw new HTTPException(502, { message: 'Price feed unavailable' })
   })()
 
-  globalAny.__crossfinGlobalPricesInFlight = promise
-  return promise.finally(() => {
+  const gapFill = promise.then(async (prices) => {
+    const missing = Object.entries(TRACKED_PAIRS).filter(([, sym]) => !(sym in prices))
+    if (missing.length === 0) return prices
+
+    const BINANCE_INDIVIDUAL_URLS = [
+      'https://data-api.binance.vision',
+      'https://api.binance.com',
+      'https://api1.binance.com',
+    ]
+
+    await Promise.allSettled(missing.map(async ([, symbol]) => {
+      for (const baseUrl of BINANCE_INDIVIDUAL_URLS) {
+        try {
+          const res = await fetch(`${baseUrl}/api/v3/ticker/price?symbol=${symbol}`)
+          if (!res.ok) { await res.body?.cancel(); continue }
+          const data = await res.json() as { symbol?: string; price?: string }
+          const price = Number(data.price ?? NaN)
+          if (Number.isFinite(price) && price > 0) {
+            prices[symbol] = price
+            return
+          }
+        } catch { continue }
+      }
+    }))
+
+    if (globalAny.__crossfinGlobalPricesCache) {
+      globalAny.__crossfinGlobalPricesCache.value = prices
+    }
+    return prices
+  })
+
+  globalAny.__crossfinGlobalPricesInFlight = gapFill
+  return gapFill.finally(() => {
     globalAny.__crossfinGlobalPricesInFlight = null
   })
 }
