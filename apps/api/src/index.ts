@@ -4829,6 +4829,15 @@ interface Route {
   action: 'EXECUTE' | 'WAIT' | 'SKIP'
   confidence: number
   reason: string
+  summary: {
+    input: string
+    output: string
+    outputWithoutFees: string
+    totalFee: string
+    time: string
+    route: string
+    recommendation: 'GOOD_DEAL' | 'PROCEED' | 'EXPENSIVE' | 'VERY_EXPENSIVE'
+  }
 }
 
 interface RouteMeta {
@@ -4949,60 +4958,123 @@ async function findOptimalRoute(
 
   // For each bridge coin, calculate the full path cost
   for (const bridgeCoin of BRIDGE_COINS) {
+    const isGlobalToKorea = fromEx === 'binance' && toEx !== 'binance'
+    const isKoreaToGlobal = fromEx !== 'binance' && toEx === 'binance'
+
     // Check if bridge coin is supported on both exchanges
     const fromFee = EXCHANGE_FEES[fromEx]
     const toFee = EXCHANGE_FEES[toEx]
     const withdrawFee = getWithdrawalFee(fromEx, bridgeCoin)
     if (fromFee === undefined || toFee === undefined) continue
 
+    const fromFeePct = fromFee
+    const toFeePct = toFee
+
     // Check withdrawal support
     const fromWithdrawals = WITHDRAWAL_FEES[fromEx]
     if (!fromWithdrawals?.[bridgeCoin] && fromWithdrawals !== undefined) continue
 
     try {
-      // Step 1: Buy bridge coin on source exchange
-      const sourcePrice = await fetchKoreanExchangePrice(
-        fromEx, bridgeCoin, fromEx === 'bithumb' ? bithumbAll : undefined,
-      )
-      if (!sourcePrice || sourcePrice.priceKrw <= 0) continue
+      const isUsdLike = (cur: string): boolean => cur === 'USDC' || cur === 'USDT' || cur === 'USD'
+      const capitalizeExchange = (ex: string): string => ex ? ex.charAt(0).toUpperCase() + ex.slice(1) : ex
 
-      const buyFeePct = fromFee
-      const buySlippagePct = sourcePrice.asks.length > 0
-        ? estimateSlippage(sourcePrice.asks, amount)
-        : 0.15 // default estimate
-      const effectiveBuyPrice = sourcePrice.priceKrw * (1 + (buySlippagePct / 100))
-      const amountAfterBuyFee = amount * (1 - buyFeePct / 100)
-      const coinsBought = amountAfterBuyFee / effectiveBuyPrice
-
-      // Step 2: Transfer bridge coin to destination exchange
-      const coinsAfterWithdraw = coinsBought - withdrawFee
-      if (coinsAfterWithdraw <= 0) continue
-      const transferTime = getTransferTime(bridgeCoin)
-
-      // Step 3: Sell bridge coin on destination exchange
-      let finalOutput: number
+      let buyFeePct: number
+      let buySlippagePct: number
+      let buyPriceUsed: number
+      let coinsBought: number
+      let coinsAfterWithdraw: number
       let sellPriceUsed: number
-      if (toEx === 'binance') {
+      let finalOutput: number
+      let finalOutputKrw: number | null = null
+      let transferTime: number
+      let outputValueUsdForCost: number
+
+      if (isGlobalToKorea) {
         const binanceSymbol = TRACKED_PAIRS[bridgeCoin]
         const binancePrice = binanceSymbol ? (globalPrices[binanceSymbol] ?? null) : null
         if (!binancePrice) continue
-        sellPriceUsed = binancePrice
-        finalOutput = coinsAfterWithdraw * binancePrice * (1 - toFee / 100)
-      } else {
-        // Selling on another Korean exchange
-        const destPrice = await fetchKoreanExchangePrice(toEx, bridgeCoin)
+
+        buyFeePct = fromFeePct
+        buySlippagePct = 0.10
+        buyPriceUsed = binancePrice
+
+        const effectiveBuyPriceUsd = binancePrice * (1 + (buySlippagePct / 100))
+        const amountAfterBuyFee = amount * (1 - buyFeePct / 100)
+        coinsBought = amountAfterBuyFee / effectiveBuyPriceUsd
+
+        const withdrawFeeFromBinance = getWithdrawalFee('binance', bridgeCoin)
+        coinsAfterWithdraw = coinsBought - withdrawFeeFromBinance
+        if (coinsAfterWithdraw <= 0) continue
+        transferTime = getTransferTime(bridgeCoin)
+
+        const destPrice = await fetchKoreanExchangePrice(
+          toEx,
+          bridgeCoin,
+          toEx === 'bithumb' ? bithumbAll : undefined,
+        )
         if (!destPrice || destPrice.priceKrw <= 0) continue
+
         sellPriceUsed = destPrice.priceKrw
-        finalOutput = coinsAfterWithdraw * destPrice.priceKrw * (1 - toFee / 100)
-        // Convert KRW output to target currency if needed
-        if (toCur === 'USDC' || toCur === 'USDT' || toCur === 'USD') {
-          finalOutput = finalOutput / krwRate
+        finalOutputKrw = coinsAfterWithdraw * destPrice.priceKrw * (1 - toFeePct / 100)
+
+        finalOutput = finalOutputKrw
+        if (isUsdLike(toCur)) finalOutput = finalOutputKrw / krwRate
+
+        outputValueUsdForCost = isUsdLike(toCur) ? finalOutput : (finalOutputKrw / krwRate)
+
+        pricesUsed[bridgeCoin] = {
+          binance_usd: buyPriceUsed,
+          [`${toEx}_krw`]: sellPriceUsed,
         }
+      } else if (isKoreaToGlobal || isDomestic) {
+        const sourcePrice = await fetchKoreanExchangePrice(
+          fromEx,
+          bridgeCoin,
+          fromEx === 'bithumb' ? bithumbAll : undefined,
+        )
+        if (!sourcePrice || sourcePrice.priceKrw <= 0) continue
+
+        buyFeePct = fromFeePct
+        buySlippagePct = sourcePrice.asks.length > 0
+          ? estimateSlippage(sourcePrice.asks, amount)
+          : 0.15 // default estimate
+        buyPriceUsed = sourcePrice.priceKrw
+        const effectiveBuyPrice = sourcePrice.priceKrw * (1 + (buySlippagePct / 100))
+        const amountAfterBuyFee = amount * (1 - buyFeePct / 100)
+        coinsBought = amountAfterBuyFee / effectiveBuyPrice
+
+        coinsAfterWithdraw = coinsBought - withdrawFee
+        if (coinsAfterWithdraw <= 0) continue
+        transferTime = getTransferTime(bridgeCoin)
+
+        if (toEx === 'binance') {
+          const binanceSymbol = TRACKED_PAIRS[bridgeCoin]
+          const binancePrice = binanceSymbol ? (globalPrices[binanceSymbol] ?? null) : null
+          if (!binancePrice) continue
+          sellPriceUsed = binancePrice
+          finalOutput = coinsAfterWithdraw * binancePrice * (1 - toFeePct / 100)
+        } else {
+          const destPrice = await fetchKoreanExchangePrice(toEx, bridgeCoin)
+          if (!destPrice || destPrice.priceKrw <= 0) continue
+          sellPriceUsed = destPrice.priceKrw
+          finalOutput = coinsAfterWithdraw * destPrice.priceKrw * (1 - toFeePct / 100)
+          if (isUsdLike(toCur)) {
+            finalOutput = finalOutput / krwRate
+          }
+        }
+
+        outputValueUsdForCost = finalOutput
+
+        pricesUsed[bridgeCoin] = {
+          [`${fromEx}_krw`]: buyPriceUsed,
+          ...(toEx === 'binance' ? { binance_usd: sellPriceUsed } : { [`${toEx}_krw`]: sellPriceUsed }),
+        }
+      } else {
+        continue
       }
 
-      // Calculate total cost
       const inputValueUsd = fromCur === 'KRW' ? amount / krwRate : amount
-      const totalCostPct = ((inputValueUsd - finalOutput) / inputValueUsd) * 100
+      const totalCostPct = ((inputValueUsd - outputValueUsdForCost) / inputValueUsd) * 100
       const totalTimeMinutes = transferTime + 1 // +1 min for trade execution
 
       // Get volatility for risk assessment
@@ -5014,21 +5086,61 @@ async function findOptimalRoute(
         volatilityPct,
       )
 
-      // Record prices used
-      pricesUsed[bridgeCoin] = {
-        [`${fromEx}_krw`]: sourcePrice.priceKrw,
-        ...(toEx === 'binance' ? { binance_usd: sellPriceUsed } : { [`${toEx}_krw`]: sellPriceUsed }),
+      const estimatedOutput = Math.round(finalOutput * 100) / 100
+      const inputValueUsdRounded = Math.round(inputValueUsd * 100) / 100
+      const totalCostPctRounded = Math.round(totalCostPct * 100) / 100
+      const totalTimeMinutesRounded = Math.round(totalTimeMinutes * 10) / 10
+
+      const formatInput = (): string => {
+        if (fromCur === 'KRW') return `₩${amount.toLocaleString()}`
+        if (isUsdLike(fromCur)) return `$${amount.toLocaleString()} ${fromCur}`
+        return `${amount} ${fromCur}`
       }
+
+      const formatOutput = (value: number): string => {
+        if (isUsdLike(toCur)) return `$${value.toLocaleString()} ${toCur}`
+        if (toCur === 'KRW') return `₩${value.toLocaleString()} KRW`
+        return `${value} ${toCur}`
+      }
+
+      const totalFee = (() => {
+        if (toCur === 'KRW') {
+          const outputKrw = finalOutputKrw ?? finalOutput
+          const feeAmountKrw = Math.abs((inputValueUsd * krwRate) - outputKrw)
+          return `₩${feeAmountKrw.toLocaleString()} (${totalCostPctRounded}%)`
+        }
+        const feeAmountUsd = Math.abs(inputValueUsd - outputValueUsdForCost)
+        return `$${feeAmountUsd.toFixed(2)} (${totalCostPctRounded}%)`
+      })()
+
+      const recommendation: Route['summary']['recommendation'] = totalCostPct < 1
+        ? 'GOOD_DEAL'
+        : totalCostPct < 3
+          ? 'PROCEED'
+          : totalCostPct < 5
+            ? 'EXPENSIVE'
+            : 'VERY_EXPENSIVE'
 
       const route: Route = {
         id: `${fromEx}-${bridgeCoin}-${toEx}`,
+        summary: {
+          input: formatInput(),
+          output: formatOutput(estimatedOutput),
+          outputWithoutFees: toCur === 'KRW'
+            ? formatOutput(Math.round(inputValueUsdRounded * krwRate * 100) / 100)
+            : formatOutput(inputValueUsdRounded),
+          totalFee,
+          time: `~${totalTimeMinutesRounded} minutes`,
+          route: `Buy ${bridgeCoin} on ${capitalizeExchange(fromEx)} → Transfer to ${capitalizeExchange(toEx)} → Sell for ${toCur}`,
+          recommendation,
+        },
         steps: [
           {
             type: 'buy',
             from: { exchange: fromEx, currency: fromCur },
             to: { exchange: fromEx, currency: bridgeCoin },
             estimatedCost: { feePct: buyFeePct, feeAbsolute: 0, slippagePct: buySlippagePct, timeMinutes: 0.5 },
-            priceUsed: sourcePrice.priceKrw,
+            priceUsed: buyPriceUsed,
             amountIn: amount,
             amountOut: coinsBought,
           },
@@ -5044,16 +5156,16 @@ async function findOptimalRoute(
             type: 'sell',
             from: { exchange: toEx, currency: bridgeCoin },
             to: { exchange: toEx, currency: toCur },
-            estimatedCost: { feePct: toFee, feeAbsolute: 0, slippagePct: 0, timeMinutes: 0.5 },
+            estimatedCost: { feePct: toFeePct, feeAbsolute: 0, slippagePct: 0, timeMinutes: 0.5 },
             priceUsed: sellPriceUsed,
             amountIn: coinsAfterWithdraw,
             amountOut: finalOutput,
           },
         ],
-        totalCostPct: Math.round(totalCostPct * 100) / 100,
-        totalTimeMinutes: Math.round(totalTimeMinutes * 10) / 10,
+        totalCostPct: totalCostPctRounded,
+        totalTimeMinutes: totalTimeMinutesRounded,
         estimatedInput: amount,
-        estimatedOutput: Math.round(finalOutput * 100) / 100,
+        estimatedOutput,
         bridgeCoin,
         action: totalCostPct < 2 ? action : 'SKIP',
         confidence: Math.round(confidence * 100) / 100,
@@ -8619,6 +8731,7 @@ app.get('/api/premium/route/find', async (c) => {
   return c.json({
     paid: true,
     service: 'crossfin-route-finder',
+    summary: optimal?.summary ?? null,
     request: { from: fromRaw, to: toRaw, amount, strategy },
     optimal,
     alternatives,
@@ -8743,6 +8856,7 @@ app.post('/api/acp/quote', async (c) => {
     provider: 'crossfin',
     quote_id: `cfq_${crypto.randomUUID().slice(0, 8)}`,
     status: 'quoted',
+    summary: optimal?.summary ?? null,
     request: { from_exchange: fromExchange, from_currency: fromCurrency, to_exchange: toExchange, to_currency: toCurrency, amount, strategy },
     optimal_route: optimal,
     alternatives: alternatives.slice(0, 3),
