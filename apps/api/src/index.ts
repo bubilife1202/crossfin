@@ -150,6 +150,24 @@ function getPublicRateLimitRouteKey(path: string): string | null {
   return null
 }
 
+function getEndpointTelemetryRouteKey(path: string): string | null {
+  const normalized = trimTrailingSlash(path)
+  if (!normalized.startsWith('/api/')) return null
+
+  if (
+    normalized === '/api/analytics/overview' ||
+    normalized === '/api/analytics/funnel/overview' ||
+    normalized === '/api/analytics/funnel/events'
+  ) {
+    return null
+  }
+
+  if (normalized.startsWith('/api/registry/')) return '/api/registry/:id'
+  if (normalized.startsWith('/api/analytics/services/')) return '/api/analytics/services/:serviceId'
+  if (normalized.startsWith('/api/proxy/')) return '/api/proxy/:serviceId'
+  return normalized
+}
+
 function getClientRateLimitKey(c: Context<Env>): string {
   const cfIp = (c.req.header('CF-Connecting-IP') ?? '').trim()
   if (cfIp) return cfIp
@@ -226,6 +244,71 @@ app.use('*', cors({
 }))
 
 app.use('/api/*', publicRateLimit)
+
+let endpointCallsTableReady: Promise<void> | null = null
+
+async function ensureEndpointCallsTable(db: D1Database): Promise<void> {
+  if (!endpointCallsTableReady) {
+    endpointCallsTableReady = db.batch([
+      db.prepare(
+        `CREATE TABLE IF NOT EXISTS endpoint_calls (
+           id TEXT PRIMARY KEY,
+           method TEXT NOT NULL,
+           path TEXT NOT NULL,
+           status TEXT NOT NULL,
+           response_time_ms INTEGER,
+           created_at TEXT NOT NULL DEFAULT (datetime('now'))
+         )`
+      ),
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_endpoint_calls_path_created ON endpoint_calls(path, created_at)'),
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_endpoint_calls_created ON endpoint_calls(created_at)'),
+    ]).then(() => undefined).catch((err) => {
+      endpointCallsTableReady = null
+      throw err
+    })
+  }
+
+  await endpointCallsTableReady
+}
+
+const endpointTelemetry: MiddlewareHandler<Env> = async (c, next) => {
+  const routeKey = getEndpointTelemetryRouteKey(c.req.path)
+  if (!routeKey || c.req.method === 'OPTIONS') {
+    await next()
+    return
+  }
+
+  const startedAt = Date.now()
+  let statusCode = 500
+
+  try {
+    await next()
+    statusCode = c.res.status
+  } catch (err) {
+    statusCode = err instanceof HTTPException ? err.status : 500
+    throw err
+  } finally {
+    const responseTimeMs = Date.now() - startedAt
+    const status = statusCode >= 200 && statusCode < 400 ? 'success' : 'error'
+
+    try {
+      await ensureEndpointCallsTable(c.env.DB)
+      await c.env.DB.prepare(
+        'INSERT INTO endpoint_calls (id, method, path, status, response_time_ms) VALUES (?, ?, ?, ?, ?)'
+      ).bind(
+        `endpoint_call_${crypto.randomUUID()}`,
+        c.req.method,
+        routeKey,
+        status,
+        responseTimeMs,
+      ).run()
+    } catch (err) {
+      console.error('Failed to log endpoint call', err)
+    }
+  }
+}
+
+app.use('/api/*', endpointTelemetry)
 
 function requireAdmin(c: Context<Env>): void {
   const expected = (c.env.CROSSFIN_ADMIN_TOKEN ?? '').trim()
@@ -4610,96 +4693,46 @@ app.get('/api/analytics/funnel/overview', async (c) => {
 
 app.get('/api/analytics/overview', async (c) => {
   await ensureRegistrySeeded(c.env.DB, c.env.PAYMENT_RECEIVER_ADDRESS)
+  await ensureEndpointCallsTable(c.env.DB)
 
   const [callsCountRes, servicesCountRes, crossfinCountRes] = await c.env.DB.batch([
-    c.env.DB.prepare('SELECT COUNT(*) as count FROM service_calls'),
+    c.env.DB.prepare('SELECT COUNT(*) as count FROM endpoint_calls'),
     c.env.DB.prepare("SELECT COUNT(*) as count FROM services WHERE status = 'active'"),
     c.env.DB.prepare("SELECT COUNT(*) as count FROM services WHERE status = 'active' AND is_crossfin = 1"),
   ])
 
-  let totalCalls = Number((callsCountRes?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
+  const totalCalls = Number((callsCountRes?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
   const totalServices = Number((servicesCountRes?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
   const crossfinServices = Number((crossfinCountRes?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
 
   const top = await c.env.DB.prepare(
-    `SELECT s.id as serviceId, s.name as serviceName, COUNT(sc.id) as calls
-     FROM services s
-     LEFT JOIN service_calls sc ON sc.service_id = s.id
-     WHERE s.status = 'active'
-     GROUP BY s.id
+    `SELECT method, path, COUNT(*) as calls
+     FROM endpoint_calls
+     GROUP BY method, path
      ORDER BY calls DESC
      LIMIT 10`
-  ).all<{ serviceId: string; serviceName: string; calls: number | string }>()
+  ).all<{ method: string; path: string; calls: number | string }>()
 
   const recent = await c.env.DB.prepare(
-    `SELECT sc.service_id as serviceId, s.name as serviceName, sc.status as status, sc.response_time_ms as responseTimeMs, sc.created_at as createdAt
-     FROM service_calls sc
-     JOIN services s ON s.id = sc.service_id
-     ORDER BY datetime(sc.created_at) DESC
+    `SELECT method, path, status, response_time_ms as responseTimeMs, created_at as createdAt
+     FROM endpoint_calls
+     ORDER BY datetime(created_at) DESC
      LIMIT 20`
-  ).all<{ serviceId: string; serviceName: string; status: string; responseTimeMs: number | string | null; createdAt: string }>()
+  ).all<{ method: string; path: string; status: string; responseTimeMs: number | string | null; createdAt: string }>()
 
-  let topServices = (top.results ?? []).map((r) => ({
-    serviceId: String(r.serviceId ?? ''),
-    serviceName: String(r.serviceName ?? ''),
+  const topServices = (top.results ?? []).map((r) => ({
+    serviceId: `${String(r.method ?? '').toUpperCase()} ${String(r.path ?? '')}`,
+    serviceName: `${String(r.method ?? '').toUpperCase()} ${String(r.path ?? '')}`,
     calls: Number(r.calls ?? 0),
   }))
 
-  let recentCalls = (recent.results ?? []).map((r) => ({
-    serviceId: String(r.serviceId ?? ''),
-    serviceName: String(r.serviceName ?? ''),
+  const recentCalls = (recent.results ?? []).map((r) => ({
+    serviceId: `${String(r.method ?? '').toUpperCase()} ${String(r.path ?? '')}`,
+    serviceName: `${String(r.method ?? '').toUpperCase()} ${String(r.path ?? '')}`,
     status: String(r.status ?? 'unknown'),
     responseTimeMs: r.responseTimeMs === null || r.responseTimeMs === undefined ? null : Number(r.responseTimeMs),
     createdAt: String(r.createdAt ?? ''),
   }))
-
-  if (totalCalls === 0 && recentCalls.length === 0) {
-    const [auditCountRes, auditTopRes, auditRecentRes] = await c.env.DB.batch([
-      c.env.DB.prepare("SELECT COUNT(*) as count FROM audit_logs WHERE action NOT LIKE 'scheduled.%'"),
-      c.env.DB.prepare(
-        `SELECT action, COUNT(*) as calls
-         FROM audit_logs
-         WHERE action NOT LIKE 'scheduled.%'
-         GROUP BY action
-         ORDER BY calls DESC
-         LIMIT 10`
-      ),
-      c.env.DB.prepare(
-        `SELECT action, result, created_at as createdAt
-         FROM audit_logs
-         WHERE action NOT LIKE 'scheduled.%'
-         ORDER BY datetime(created_at) DESC
-         LIMIT 20`
-      ),
-    ])
-
-    const nonScheduledAuditCount = Number((auditCountRes?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
-
-    if (nonScheduledAuditCount > 0) {
-      totalCalls = nonScheduledAuditCount
-      topServices = (auditTopRes?.results ?? []).map((row) => {
-        const action = String((row as { action?: string }).action ?? 'audit.event')
-        const label = action.replace(/[._]+/g, ' ').trim()
-        return {
-          serviceId: `audit:${action}`,
-          serviceName: label,
-          calls: Number((row as { calls?: number | string }).calls ?? 0),
-        }
-      })
-      recentCalls = (auditRecentRes?.results ?? []).map((row) => {
-        const action = String((row as { action?: string }).action ?? 'audit.event')
-        const result = String((row as { result?: string }).result ?? 'unknown')
-        const label = action.replace(/[._]+/g, ' ').trim()
-        return {
-          serviceId: `audit:${action}`,
-          serviceName: label,
-          status: result === 'success' ? 'success' : 'error',
-          responseTimeMs: null,
-          createdAt: String((row as { createdAt?: string }).createdAt ?? ''),
-        }
-      })
-    }
-  }
 
   return c.json({
     totalCalls,
