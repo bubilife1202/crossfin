@@ -31,6 +31,13 @@
           "format": "string",
           "isSecret": false,
           "name": "CROSSFIN_API_URL"
+        },
+        {
+          "description": "Local ledger file path (default: ~/.crossfin/ledger.json)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "CROSSFIN_LEDGER_PATH"
         }
       ]
     }
