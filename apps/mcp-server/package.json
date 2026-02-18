@@ -1,7 +1,7 @@
 {
   "name": "crossfin-mcp",
   "private": false,
-  "version": "1.8.3",
+  "version": "1.8.4",
   "description": "CrossFin MCP server for service discovery and paid x402 API execution",
   "bin": {
     "crossfin-mcp": "dist/index.js"
