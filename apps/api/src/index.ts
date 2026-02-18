@@ -311,7 +311,7 @@ app.get('/api/docs/guide', (c) => {
     ],
     notes: [
       'Proxy endpoints (/api/proxy/:serviceId) require X-Agent-Key to prevent abuse.',
-      'Korean exchanges (Upbit, Bithumb, Coinone, GoPax) trade in KRW. Binance trades in USDT/USDC.',
+      'Korean exchanges (Upbit, Bithumb, Coinone, GoPax) trade in KRW. Global exchanges (Binance, OKX, Bybit) trade in USDT/USDC.',
       'Routing engine supports bidirectional transfers: Korea→Global and Global→Korea.',
     ],
     crossfinServices: {
@@ -363,17 +363,19 @@ app.get('/api/docs/guide', (c) => {
         { id: 'crossfin_stock_brief', endpoint: '/api/premium/market/korea/stock-brief?stock=005930', price: '$0.10', description: 'Stock Brief — fundamentals + news + investor flow + disclosures for any Korean stock in one call.' },
       ],
       routing_engine: [
-        { id: 'crossfin_route_find', endpoint: '/api/premium/route/find?from=bithumb:KRW&to=binance:USDC&amount=1000000', price: '$0.10', description: 'Find optimal crypto transfer route across 5 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance). Compares 11 bridge coins, estimates fees and slippage. Bidirectional: Korea→Global and Global→Korea.' },
+        { id: 'crossfin_route_find', endpoint: '/api/premium/route/find?from=bithumb:KRW&to=binance:USDC&amount=1000000', price: '$0.10', description: 'Find optimal crypto transfer route across 7 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit). Compares 11 bridge coins, estimates fees and slippage. Bidirectional: Korea→Global and Global→Korea.' },
       ],
     },
     routingEngine: {
-      overview: 'CrossFin Routing Engine finds the cheapest, fastest, or balanced crypto transfer route across 5 exchanges. It compares 11 bridge coins, models trading fees, withdrawal fees, slippage, and transfer times.',
+      overview: 'CrossFin Routing Engine finds the cheapest, fastest, or balanced crypto transfer route across 7 exchanges. It compares 11 bridge coins, models trading fees, withdrawal fees, slippage, and transfer times.',
       supportedExchanges: [
         { id: 'bithumb', country: 'South Korea', tradingFee: '0.25%', note: 'Lowest withdrawal fee policy' },
         { id: 'upbit', country: 'South Korea', tradingFee: '0.25%', note: 'Largest Korean exchange by volume' },
         { id: 'coinone', country: 'South Korea', tradingFee: '0.20%', note: 'Supports KAIA' },
         { id: 'gopax', country: 'South Korea', tradingFee: '0.20%', note: 'Supports KAIA, no DOT' },
         { id: 'binance', country: 'Global', tradingFee: '0.10%', note: 'Global exchange, trades in USDT/USDC' },
+        { id: 'okx', country: 'Global', tradingFee: '0.08%', note: 'Deep global spot liquidity, strong USDT market depth' },
+        { id: 'bybit', country: 'Global', tradingFee: '0.10%', note: 'High Asian spot liquidity with stable public API' },
       ],
       bridgeCoins: ['XRP', 'SOL', 'TRX', 'KAIA', 'ETH', 'BTC', 'ADA', 'DOGE', 'AVAX', 'DOT', 'LINK'],
       bridgeCoinNotes: {
@@ -393,7 +395,7 @@ app.get('/api/docs/guide', (c) => {
       },
       responseIncludes: ['Optimal route with step-by-step execution plan', 'Up to 10 alternative routes ranked by strategy', 'Fee breakdown (trading + withdrawal)', 'Estimated output amount and net profit/loss %', 'Transfer time estimate per bridge coin', 'User-friendly summary with recommendation (GOOD_DEAL/PROCEED/EXPENSIVE/VERY_EXPENSIVE)', 'Live exchange rates used for calculation'],
       freeEndpoints: [
-        { path: '/api/route/exchanges', description: 'List all 5 exchanges with supported coins and fees' },
+        { path: '/api/route/exchanges', description: 'List all 7 exchanges with supported coins and fees' },
         { path: '/api/route/fees', description: 'Full fee comparison table (add ?coin=KAIA to filter)' },
         { path: '/api/route/pairs', description: 'All trading pairs with live Binance prices' },
         { path: '/api/route/status', description: 'Exchange API health check' },
@@ -496,9 +498,9 @@ app.get('/api/docs/guide', (c) => {
         { name: 'list_transactions', description: 'List recent transactions' },
         { name: 'set_budget', description: 'Set daily spend limit' },
         { name: 'call_paid_service', description: 'Call a paid API with automatic x402 USDC payment (returns data + txHash + basescan link)' },
-        { name: 'find_optimal_route', description: 'Find optimal crypto transfer route across 5 exchanges using 11 bridge coins (routing engine)' },
+        { name: 'find_optimal_route', description: 'Find optimal crypto transfer route across 7 exchanges using 11 bridge coins (routing engine)' },
         { name: 'list_exchange_fees', description: 'List supported exchange fees — trading and withdrawal fees for all exchanges (routing engine)' },
-        { name: 'compare_exchange_prices', description: 'Compare live exchange prices for routing across 5 exchanges (routing engine)' },
+        { name: 'compare_exchange_prices', description: 'Compare live exchange prices for routing across 7 exchanges (routing engine)' },
       ],
       claudeDesktopConfig: {
         mcpServers: {
@@ -2116,7 +2118,7 @@ app.use(
         },
         'GET /api/premium/route/find': {
           accepts: { scheme: 'exact', price: '$0.10', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Optimal Route Finder — finds the cheapest/fastest crypto transfer route across 5 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance). Compares bridge coins, fees, and transfer times.',
+          description: 'Optimal Route Finder — finds the cheapest/fastest crypto transfer route across 7 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit). Compares bridge coins, fees, and transfer times.',
           mimeType: 'application/json',
           extensions: {
             ...declareDiscoveryExtension({
@@ -4718,7 +4720,7 @@ const BINANCE_FEES_PCT = 0.10 // Binance spot fee
 // --- Routing Engine: Exchange trading fees (%) ---
 const EXCHANGE_FEES: Record<string, number> = {
   bithumb: 0.25, upbit: 0.25, coinone: 0.20,
-  gopax: 0.20, binance: 0.10,
+  gopax: 0.20, binance: 0.10, okx: 0.08, bybit: 0.10,
 }
 
 // --- Routing Engine: Withdrawal fees per exchange per coin (fixed amount in coin units) ---
@@ -4728,6 +4730,8 @@ const WITHDRAWAL_FEES: Record<string, Record<string, number>> = {
   coinone: { BTC: 0.0005, ETH: 0.01, XRP: 1.0, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.5, AVAX: 0.01, TRX: 1.0, KAIA: 0.86 },
   gopax: { BTC: 0.0005, ETH: 0.01, XRP: 1.0, SOL: 0.01, DOGE: 5.0, ADA: 1.0, TRX: 1.0, LINK: 0.5, AVAX: 0.01, KAIA: 1.0 },
   binance: { BTC: 0.0002, ETH: 0.0016, XRP: 0.25, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.3, AVAX: 0.01, TRX: 1.0, USDT: 1.0, USDC: 1.0, KAIA: 0.005 },
+  okx: { BTC: 0.0002, ETH: 0.0008, XRP: 0.2, SOL: 0.008, DOGE: 4.0, ADA: 0.8, DOT: 0.08, LINK: 0.3, AVAX: 0.01, TRX: 1.0, USDT: 1.0, USDC: 1.0, KAIA: 0.005 },
+  bybit: { BTC: 0.0002, ETH: 0.0016, XRP: 0.25, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.3, AVAX: 0.01, TRX: 1.0, USDT: 1.0, USDC: 1.0, KAIA: 0.005 },
 }
 
 function getWithdrawalFee(exchange: string, coin: string): number {
@@ -4735,8 +4739,24 @@ function getWithdrawalFee(exchange: string, coin: string): number {
 }
 
 // --- Routing Engine: Supported exchanges ---
-const ROUTING_EXCHANGES = ['bithumb', 'upbit', 'coinone', 'gopax', 'binance'] as const
+const ROUTING_EXCHANGES = ['bithumb', 'upbit', 'coinone', 'gopax', 'binance', 'okx', 'bybit'] as const
 type RoutingExchange = typeof ROUTING_EXCHANGES[number]
+
+const GLOBAL_ROUTING_EXCHANGE_SET = new Set<string>(['binance', 'okx', 'bybit'])
+
+const EXCHANGE_DISPLAY_NAME: Record<RoutingExchange, string> = {
+  bithumb: 'Bithumb',
+  upbit: 'Upbit',
+  coinone: 'Coinone',
+  gopax: 'GoPax',
+  binance: 'Binance',
+  okx: 'OKX',
+  bybit: 'Bybit',
+}
+
+function isGlobalRoutingExchange(exchange: string): boolean {
+  return GLOBAL_ROUTING_EXCHANGE_SET.has(exchange.toLowerCase())
+}
 
 // --- Routing Engine: Bridge coins for cross-exchange transfers ---
 const BRIDGE_COINS = ['XRP', 'SOL', 'TRX', 'KAIA', 'ETH', 'BTC', 'ADA', 'DOGE', 'AVAX', 'DOT', 'LINK'] as const
@@ -5018,13 +5038,20 @@ async function findOptimalRoute(
   const pricesUsed: Record<string, Record<string, number>> = {}
   const routes: Route[] = []
 
+  const getGlobalPriceUsd = (coin: string): number | null => {
+    const symbol = TRACKED_PAIRS[coin]
+    if (!symbol) return null
+    const price = globalPrices[symbol]
+    return typeof price === 'number' && Number.isFinite(price) && price > 0 ? price : null
+  }
+
   // KRW exchange to KRW exchange (domestic)
-  const isDomestic = fromEx !== 'binance' && toEx !== 'binance'
+  const isDomestic = !isGlobalRoutingExchange(fromEx) && !isGlobalRoutingExchange(toEx)
 
   // For each bridge coin, calculate the full path cost
   for (const bridgeCoin of BRIDGE_COINS) {
-    const isGlobalToKorea = fromEx === 'binance' && toEx !== 'binance'
-    const isKoreaToGlobal = fromEx !== 'binance' && toEx === 'binance'
+    const isGlobalToKorea = isGlobalRoutingExchange(fromEx) && !isGlobalRoutingExchange(toEx)
+    const isKoreaToGlobal = !isGlobalRoutingExchange(fromEx) && isGlobalRoutingExchange(toEx)
 
     // Check if bridge coin is supported on both exchanges
     const fromFee = EXCHANGE_FEES[fromEx]
@@ -5055,20 +5082,19 @@ async function findOptimalRoute(
       let outputValueUsdForCost: number
 
       if (isGlobalToKorea) {
-        const binanceSymbol = TRACKED_PAIRS[bridgeCoin]
-        const binancePrice = binanceSymbol ? (globalPrices[binanceSymbol] ?? null) : null
-        if (!binancePrice) continue
+        const sourceGlobalPrice = getGlobalPriceUsd(bridgeCoin)
+        if (!sourceGlobalPrice) continue
 
         buyFeePct = fromFeePct
         buySlippagePct = 0.10
-        buyPriceUsed = binancePrice
+        buyPriceUsed = sourceGlobalPrice
 
-        const effectiveBuyPriceUsd = binancePrice * (1 + (buySlippagePct / 100))
+        const effectiveBuyPriceUsd = sourceGlobalPrice * (1 + (buySlippagePct / 100))
         const amountAfterBuyFee = amount * (1 - buyFeePct / 100)
         coinsBought = amountAfterBuyFee / effectiveBuyPriceUsd
 
-        const withdrawFeeFromBinance = getWithdrawalFee('binance', bridgeCoin)
-        coinsAfterWithdraw = coinsBought - withdrawFeeFromBinance
+        const withdrawFeeFromSource = getWithdrawalFee(fromEx, bridgeCoin)
+        coinsAfterWithdraw = coinsBought - withdrawFeeFromSource
         if (coinsAfterWithdraw <= 0) continue
         transferTime = getTransferTime(bridgeCoin)
 
@@ -5086,7 +5112,7 @@ async function findOptimalRoute(
         outputValueUsdForCost = isUsdLike(toCur) ? finalOutput : (finalOutputKrw / krwRate)
 
         pricesUsed[bridgeCoin] = {
-          binance_usd: buyPriceUsed,
+          [`${fromEx}_usd`]: buyPriceUsed,
           [`${toEx}_krw`]: sellPriceUsed,
         }
       } else if (isKoreaToGlobal || isDomestic) {
@@ -5108,12 +5134,11 @@ async function findOptimalRoute(
         if (coinsAfterWithdraw <= 0) continue
         transferTime = getTransferTime(bridgeCoin)
 
-        if (toEx === 'binance') {
-          const binanceSymbol = TRACKED_PAIRS[bridgeCoin]
-          const binancePrice = binanceSymbol ? (globalPrices[binanceSymbol] ?? null) : null
-          if (!binancePrice) continue
-          sellPriceUsed = binancePrice
-          finalOutput = coinsAfterWithdraw * binancePrice * (1 - toFeePct / 100)
+        if (isGlobalRoutingExchange(toEx)) {
+          const targetGlobalPrice = getGlobalPriceUsd(bridgeCoin)
+          if (!targetGlobalPrice) continue
+          sellPriceUsed = targetGlobalPrice
+          finalOutput = coinsAfterWithdraw * targetGlobalPrice * (1 - toFeePct / 100)
         } else {
           const destPrice = await fetchKoreanExchangePrice(toEx, bridgeCoin, undefined, true)
           if (!destPrice || destPrice.priceKrw <= 0) continue
@@ -5128,7 +5153,7 @@ async function findOptimalRoute(
 
         pricesUsed[bridgeCoin] = {
           [`${fromEx}_krw`]: buyPriceUsed,
-          ...(toEx === 'binance' ? { binance_usd: sellPriceUsed } : { [`${toEx}_krw`]: sellPriceUsed }),
+          ...(isGlobalRoutingExchange(toEx) ? { [`${toEx}_usd`]: sellPriceUsed } : { [`${toEx}_krw`]: sellPriceUsed }),
         }
       } else {
         continue
@@ -8851,11 +8876,11 @@ app.get('/api/premium/route/find', async (c) => {
 app.get('/api/route/exchanges', (c) => {
   const exchanges = ROUTING_EXCHANGES.map((ex) => ({
     id: ex,
-    name: ex.charAt(0).toUpperCase() + ex.slice(1),
-    country: ex === 'binance' ? 'Global' : 'South Korea',
+    name: EXCHANGE_DISPLAY_NAME[ex],
+    country: isGlobalRoutingExchange(ex) ? 'Global' : 'South Korea',
     tradingFeePct: EXCHANGE_FEES[ex],
     supportedCoins: Object.keys(WITHDRAWAL_FEES[ex] ?? {}),
-    type: ex === 'binance' ? 'global' : 'korean',
+    type: isGlobalRoutingExchange(ex) ? 'global' : 'korean',
   }))
   return c.json({ service: 'crossfin-route-exchanges', exchanges, at: new Date().toISOString() })
 })
@@ -8919,9 +8944,19 @@ app.get('/api/route/status', async (c) => {
       const btc = prices[btcSymbol]
       return typeof btc === 'number' && Number.isFinite(btc) && btc > 1000
     }),
+    fetch('https://www.okx.com/api/v5/public/time').then(async (r) => {
+      if (!r.ok) return false
+      const payload = await r.json() as { code?: string }
+      return payload.code === '0'
+    }),
+    fetch('https://api.bybit.com/v5/market/tickers?category=spot&symbol=BTCUSDT').then(async (r) => {
+      if (!r.ok) return false
+      const payload = await r.json() as { retCode?: number }
+      return payload.retCode === 0
+    }),
   ])
 
-  const names = ['bithumb', 'upbit', 'coinone', 'gopax', 'binance']
+  const names = [...ROUTING_EXCHANGES]
   const statuses = names.map((name, i) => ({
     exchange: name,
     status: checks[i]?.status === 'fulfilled' && (checks[i] as PromiseFulfilledResult<boolean>).value ? 'online' : 'offline',
@@ -9096,7 +9131,7 @@ app.all('/api/mcp', async (c) => {
   const LOCAL_ONLY = { content: [{ type: 'text' as const, text: 'This tool requires local installation. Run: npx crossfin-mcp (set EVM_PRIVATE_KEY for paid tools). See: https://crossfin.dev/api/docs/guide' }] }
 
   server.registerTool('get_kimchi_premium', { description: 'Free preview of Kimchi Premium — real-time price spread between Korean and global crypto exchanges (top 3 pairs)', inputSchema: z.object({}) }, async () => proxy('/api/arbitrage/demo'))
-  server.registerTool('list_exchange_fees', { description: 'Trading fees, withdrawal fees, and transfer times for all supported exchanges (Bithumb, Upbit, Coinone, GoPax, Binance)', inputSchema: z.object({}) }, async () => proxy('/api/route/fees'))
+  server.registerTool('list_exchange_fees', { description: 'Trading fees, withdrawal fees, and transfer times for all supported exchanges (Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit)', inputSchema: z.object({}) }, async () => proxy('/api/route/fees'))
   server.registerTool('compare_exchange_prices', { description: 'Compare Bithumb KRW prices vs Binance USD prices for tracked coins with transfer-time estimates', inputSchema: z.object({ coin: z.string().optional().describe('Coin symbol (e.g. BTC, XRP). Omit for all.') }) }, async ({ coin }) => {
     const qs = coin?.trim() ? `?coin=${encodeURIComponent(coin.trim().toUpperCase())}` : ''
     return proxy(`/api/route/pairs${qs}`)
@@ -9112,7 +9147,7 @@ app.all('/api/mcp', async (c) => {
   server.registerTool('list_categories', { description: 'List all service categories with counts', inputSchema: z.object({}) }, async () => proxy('/api/registry/categories'))
   server.registerTool('get_analytics', { description: 'CrossFin gateway usage analytics — total calls, top services, recent activity', inputSchema: z.object({}) }, async () => proxy('/api/analytics/overview'))
   server.registerTool('get_guide', { description: 'Complete CrossFin API guide — services, pricing, x402 payment flow, code examples', inputSchema: z.object({}) }, async () => proxy('/api/docs/guide'))
-  server.registerTool('find_optimal_route', { description: 'Find cheapest/fastest path across 5 exchanges using 11 bridge coins. Paid: $0.10 via x402. Requires local install with EVM_PRIVATE_KEY.', inputSchema: z.object({ from: z.string().describe('Source (e.g. bithumb:KRW)'), to: z.string().describe('Destination (e.g. binance:USDC)'), amount: z.number(), strategy: z.enum(['cheapest', 'fastest', 'balanced']).optional() }) }, async () => LOCAL_ONLY)
+  server.registerTool('find_optimal_route', { description: 'Find cheapest/fastest path across 7 exchanges using 11 bridge coins. Paid: $0.10 via x402. Requires local install with EVM_PRIVATE_KEY.', inputSchema: z.object({ from: z.string().describe('Source (e.g. bithumb:KRW)'), to: z.string().describe('Destination (e.g. binance:USDC)'), amount: z.number(), strategy: z.enum(['cheapest', 'fastest', 'balanced']).optional() }) }, async () => LOCAL_ONLY)
   server.registerTool('call_paid_service', { description: 'Call any CrossFin paid API with automatic x402 USDC payment. Requires local install with EVM_PRIVATE_KEY.', inputSchema: z.object({ serviceId: z.string().optional(), url: z.string().optional(), params: z.record(z.string(), z.string()).optional() }) }, async () => LOCAL_ONLY)
   server.registerTool('create_wallet', { description: 'Create a wallet in the local CrossFin ledger. Requires local install.', inputSchema: z.object({ label: z.string(), initialDepositKrw: z.number().optional() }) }, async () => LOCAL_ONLY)
   server.registerTool('get_balance', { description: 'Get wallet balance (KRW). Requires local install.', inputSchema: z.object({ walletId: z.string() }) }, async () => LOCAL_ONLY)
