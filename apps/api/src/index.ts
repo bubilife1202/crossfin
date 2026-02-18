@@ -8949,11 +8949,23 @@ app.get('/api/route/status', async (c) => {
       const payload = await r.json() as { code?: string }
       return payload.code === '0'
     }),
-    fetch('https://api.bybit.com/v5/market/tickers?category=spot&symbol=BTCUSDT').then(async (r) => {
-      if (!r.ok) return false
-      const payload = await r.json() as { retCode?: number }
-      return payload.retCode === 0
-    }),
+    (async () => {
+      const bybitBaseUrls = ['https://api.bybit.com', 'https://api.bytick.com']
+      for (const baseUrl of bybitBaseUrls) {
+        try {
+          const r = await fetch(`${baseUrl}/v5/market/tickers?category=spot&symbol=BTCUSDT`)
+          if (!r.ok) {
+            await r.body?.cancel()
+            continue
+          }
+          const payload = await r.json() as { retCode?: number }
+          if (payload.retCode === 0) return true
+        } catch {
+          continue
+        }
+      }
+      return false
+    })(),
   ])
 
   const names = [...ROUTING_EXCHANGES]
