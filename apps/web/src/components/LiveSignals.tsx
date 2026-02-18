@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { fetchArbitrageDemo, type ArbitrageDemoResponse } from '../lib/api'
 
 type LoadState =
@@ -15,30 +15,38 @@ function formatTime(iso: string): string {
   }
 }
 
+async function doLoad(signal: AbortSignal): Promise<LoadState> {
+  try {
+    const data = await fetchArbitrageDemo(signal)
+    return { status: 'success', data }
+  } catch (e) {
+    if (signal.aborted) return { status: 'loading' }
+    return { status: 'error', message: e instanceof Error ? e.message : 'Failed to fetch data' }
+  }
+}
+
 export default function LiveSignals() {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
   const [lastRefresh, setLastRefresh] = useState<number>(0)
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const data = await fetchArbitrageDemo(signal)
-      setState({ status: 'success', data })
-      setLastRefresh(Date.now())
-    } catch (e) {
-      if (signal?.aborted) return
-      setState({ status: 'error', message: e instanceof Error ? e.message : 'Failed to fetch data' })
-    }
-  }, [])
-
   useEffect(() => {
     const ctrl = new AbortController()
-    void load(ctrl.signal)
-    const interval = window.setInterval(() => void load(ctrl.signal), 30_000)
+    let mounted = true
+    const run = async () => {
+      const result = await doLoad(ctrl.signal)
+      if (mounted && !ctrl.signal.aborted) {
+        setState(result)
+        if (result.status === 'success') setLastRefresh(Date.now())
+      }
+    }
+    void run()
+    const interval = window.setInterval(() => void run(), 30_000)
     return () => {
+      mounted = false
       ctrl.abort()
       window.clearInterval(interval)
     }
-  }, [load])
+  }, [])
 
   if (state.status === 'loading') {
     return (
@@ -64,7 +72,7 @@ export default function LiveSignals() {
           <div className="livePanelTitle">Live Kimchi Premium</div>
         </div>
         <div className="liveError">{state.message}</div>
-        <button type="button" className="liveRetry" onClick={() => { setState({ status: 'loading' }); void load() }}>
+        <button type="button" className="liveRetry" onClick={() => window.location.reload()}>
           Retry
         </button>
       </div>
