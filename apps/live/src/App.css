@@ -1265,6 +1265,143 @@
   opacity: 0.7;
 }
 
+/* ─── Route Flow Visualization ─── */
+
+.routeFlow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 28px 16px;
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.06), rgba(0, 255, 136, 0.03));
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  border-radius: 14px;
+}
+
+.flowNode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 120px;
+}
+
+.flowNodeIcon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.flowNodeName {
+  font-family: var(--mono);
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.flowNodeAmount {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.flowNodeOutput {
+  color: var(--green);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.flowArrow {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 1;
+  max-width: 280px;
+  min-width: 140px;
+}
+
+.flowArrowLine {
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(90deg, var(--cyan), var(--green));
+  position: relative;
+  animation: flowPulse 2s ease-in-out infinite;
+}
+
+.flowArrowLine:last-child::after {
+  content: "▸";
+  position: absolute;
+  right: -8px;
+  top: -9px;
+  font-size: 1rem;
+  color: var(--green);
+}
+
+@keyframes flowPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.flowBridge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 14px;
+  background: var(--card);
+  border: 1px solid rgba(0, 212, 255, 0.25);
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.flowBridgeCoin {
+  font-family: var(--mono);
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--cyan);
+}
+
+.flowBridgeTime {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted2);
+}
+
+.routeStatsRow {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  padding: 14px 0;
+}
+
+.routeStat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.routeStatVal {
+  font-family: var(--mono);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.routeStatLabel {
+  font-size: 0.68rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted2);
+}
+
+.routeSavings {
+  color: var(--green);
+}
+
 /* ─── Price Comparison ─── */
 
 .priceComparisonPanel {
@@ -1284,11 +1421,62 @@
   border-left: 3px solid var(--cyan);
 }
 
+.agentDemoLayout {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 28px;
+  align-items: start;
+}
+
+.agentDemoLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.agentDemoHeading {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.agentDemoDesc {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.agentDemoFeatures {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agentDemoFeature {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.agentFeatureIcon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.agentDemoRight {
+  min-width: 0;
+}
+
 .agentChatDemo {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  max-width: 640px;
+  gap: 10px;
 }
 
 .chatBubble {
@@ -1588,6 +1776,35 @@
   }
   .agentChatDemo {
     max-width: 100%;
+  }
+  .agentDemoLayout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .routeFlow {
+    flex-direction: column;
+    gap: 8px;
+    padding: 20px 14px;
+  }
+  .flowArrow {
+    flex-direction: column;
+    min-width: auto;
+    max-width: none;
+    gap: 0;
+  }
+  .flowArrowLine {
+    width: 2px;
+    height: 20px;
+    background: linear-gradient(180deg, var(--cyan), var(--green));
+  }
+  .flowArrowLine:last-child::after {
+    content: "▾";
+    right: -6px;
+    top: auto;
+    bottom: -10px;
+  }
+  .routeStatsRow {
+    gap: 20px;
   }
   .installPanel {
     padding: 24px 16px;

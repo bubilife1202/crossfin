@@ -633,36 +633,46 @@ export default function App() {
 
           {routeOptimal && !routeLoading && (
             <div className="routeResultArea fadeIn">
-              <div className="routeSummaryCard">
-                <div className="routeSummaryAmount">
-                  {formatRouteOutput(routeOptimal.estimatedOutput)}
-                  <span className="routeSummaryCurrency">{routeToCur}</span>
+              {/* Visual Flow */}
+              <div className="routeFlow">
+                <div className="flowNode flowFrom">
+                  <span className="flowNodeIcon">🏦</span>
+                  <span className="flowNodeName">{ROUTE_EXCHANGES.find(e => e.value === routeFrom)?.label}</span>
+                  <span className="flowNodeAmount">{routeFromSymbol}{parseRouteAmount(routeAmount).toLocaleString()}</span>
                 </div>
-                <div className="routeSummarySub">
-                  {routeFromSymbol}{parseRouteAmount(routeAmount).toLocaleString()} → {routeOptimal.bridgeCoin} bridge → {routeToCur}
+                <div className="flowArrow">
+                  <div className="flowArrowLine" />
+                  <div className="flowBridge">
+                    <span className="flowBridgeCoin">{routeOptimal.bridgeCoin}</span>
+                    <span className="flowBridgeTime">~{routeTimeStr(routeOptimal.totalTimeMinutes)}</span>
+                  </div>
+                  <div className="flowArrowLine" />
                 </div>
-                <div className="routeSummaryDetail">
-                  <div className="routeSummaryItem">
-                    <span className="routeSummaryItemVal">{routeOptimal.bridgeCoin}</span>
-                    <span className="routeSummaryItemLabel">Bridge Coin</span>
-                  </div>
-                  <div className="routeSummaryItem">
-                    <span className="routeSummaryItemVal">{routeOptimal.totalCostPct}%</span>
-                    <span className="routeSummaryItemLabel">Total Cost</span>
-                  </div>
-                  <div className="routeSummaryItem">
-                    <span className="routeSummaryItemVal">{routeTimeStr(routeOptimal.totalTimeMinutes)}</span>
-                    <span className="routeSummaryItemLabel">Est. Time</span>
-                  </div>
-                  {savingsVsWorst > 0 && (
-                    <div className="routeSummaryItem savings">
-                      <span className="routeSummaryItemVal">
-                        {routeToCur === "KRW" ? `₩${savingsVsWorst.toLocaleString()}` : `$${savingsVsWorst.toLocaleString()}`}
-                      </span>
-                      <span className="routeSummaryItemLabel">Saved vs worst</span>
-                    </div>
-                  )}
+                <div className="flowNode flowTo">
+                  <span className="flowNodeIcon">🏦</span>
+                  <span className="flowNodeName">{ROUTE_EXCHANGES.find(e => e.value === routeTo)?.label}</span>
+                  <span className="flowNodeAmount flowNodeOutput">{formatRouteOutput(routeOptimal.estimatedOutput)}</span>
                 </div>
+              </div>
+
+              {/* Stats row */}
+              <div className="routeStatsRow">
+                <div className="routeStat">
+                  <span className="routeStatVal routeCostGood">{routeOptimal.totalCostPct}%</span>
+                  <span className="routeStatLabel">Total Cost</span>
+                </div>
+                <div className="routeStat">
+                  <span className="routeStatVal">{routeTimeStr(routeOptimal.totalTimeMinutes)}</span>
+                  <span className="routeStatLabel">Est. Time</span>
+                </div>
+                {savingsVsWorst > 0 && (
+                  <div className="routeStat">
+                    <span className="routeStatVal routeSavings">
+                      +{routeToCur === "KRW" ? `₩${savingsVsWorst.toLocaleString()}` : `$${savingsVsWorst.toLocaleString()}`}
+                    </span>
+                    <span className="routeStatLabel">vs worst route</span>
+                  </div>
+                )}
               </div>
 
               {routeAllRoutes.length > 1 && (
@@ -790,35 +800,59 @@ export default function App() {
             <h2 className="panelTitle">Works with AI agents</h2>
             <span className="panelBadge">MCP Protocol</span>
           </div>
-          <p className="panelSubtext">
-            Install the MCP server and your AI agent can query Korean exchanges, find optimal routes, and access 35 paid APIs — all through natural language.
-          </p>
-          <div className="agentChatDemo">
-            <div className="chatBubble user">
-              빗썸에서 바이낸스로 500만원 USDC 만들려면 가장 싼 방법이 뭐야?
-            </div>
-            <div className="chatBubble agent">
-              <div className="chatToolCall">
-                <span className="toolIcon">⚡</span>
-                <span>Using <code>find_optimal_route</code></span>
+          <div className="agentDemoLayout">
+            <div className="agentDemoLeft">
+              <h3 className="agentDemoHeading">Your agent speaks Korean crypto</h3>
+              <p className="agentDemoDesc">
+                Install the MCP server and your AI agent can query Korean exchanges, find optimal routes, and access 35 paid APIs — all through natural language.
+              </p>
+              <div className="agentDemoFeatures">
+                <div className="agentDemoFeature">
+                  <span className="agentFeatureIcon">🔍</span>
+                  <span>Real-time routing across 5 exchanges</span>
+                </div>
+                <div className="agentDemoFeature">
+                  <span className="agentFeatureIcon">💱</span>
+                  <span>Live kimchi premium tracking</span>
+                </div>
+                <div className="agentDemoFeature">
+                  <span className="agentFeatureIcon">🇰🇷</span>
+                  <span>Korean language native</span>
+                </div>
+                <div className="agentDemoFeature">
+                  <span className="agentFeatureIcon">⚡</span>
+                  <span>35 paid APIs via x402 micropayments</span>
+                </div>
               </div>
-              <strong>최적 경로: AVAX 브릿지</strong><br/>
-              빗썸에서 AVAX 매수 → 바이낸스로 전송(~3분) → USDC로 매도<br/>
-              <span className="chatHighlight">비용: 0.07% (₩3,500) | 수령: $3,452 USDC</span><br/><br/>
-              다른 옵션: BTC(0.33%, 21분), DOT(0.38%, 6분). AVAX가 수수료와 속도 모두 최적입니다.
             </div>
-            <div className="chatBubble user">
-              지금 김치 프리미엄은?
-            </div>
-            <div className="chatBubble agent">
-              <div className="chatToolCall">
-                <span className="toolIcon">⚡</span>
-                <span>Using <code>get_kimchi_premium</code></span>
+            <div className="agentDemoRight">
+              <div className="agentChatDemo">
+                <div className="chatBubble user">
+                  빗썸에서 바이낸스로 500만원 USDC 만들려면 가장 싼 방법이 뭐야?
+                </div>
+                <div className="chatBubble agent">
+                  <div className="chatToolCall">
+                    <span className="toolIcon">⚡</span>
+                    <code>find_optimal_route</code>
+                  </div>
+                  <strong>최적 경로: AVAX 브릿지</strong><br/>
+                  빗썸 AVAX 매수 → 바이낸스 전송(~3분) → USDC 매도<br/>
+                  <span className="chatHighlight">비용 0.07% | 수령 $3,452</span>
+                </div>
+                <div className="chatBubble user">
+                  지금 김치 프리미엄은?
+                </div>
+                <div className="chatBubble agent">
+                  <div className="chatToolCall">
+                    <span className="toolIcon">⚡</span>
+                    <code>get_kimchi_premium</code>
+                  </div>
+                  평균 김프 <strong>{avgPremium >= 0 ? "+" : ""}{avgPremium.toFixed(2)}%</strong>
+                  {pairs.length > 0 && pairs[0] && (
+                    <> · 최고 {pairs.reduce((a, b) => a.premiumPct > b.premiumPct ? a : b).coin} {pairs.reduce((a, b) => a.premiumPct > b.premiumPct ? a : b).premiumPct.toFixed(2)}%</>
+                  )}
+                </div>
               </div>
-              현재 평균 김치 프리미엄은 <strong>{avgPremium >= 0 ? "+" : ""}{avgPremium.toFixed(2)}%</strong>입니다.
-              {pairs.length > 0 && pairs[0] && (
-                <>{" "}가장 높은 코인은 {pairs.reduce((a, b) => a.premiumPct > b.premiumPct ? a : b).coin} ({pairs.reduce((a, b) => a.premiumPct > b.premiumPct ? a : b).premiumPct.toFixed(2)}%)입니다.</>
-              )}
             </div>
           </div>
         </section>
