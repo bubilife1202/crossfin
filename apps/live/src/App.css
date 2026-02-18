@@ -1063,6 +1063,340 @@
   border: 1px solid var(--border);
 }
 
+/* ─── Route Finder ─── */
+
+.routeFinderPanel {
+  border-left: 3px solid var(--cyan);
+}
+
+.routeFinderSubtext {
+  margin: 0 0 16px;
+  font-size: 0.84rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.routeInputCard {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.routeInputRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.routeInputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.routeInputGroup label {
+  font-size: 0.7rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.routeInputGroup select,
+.routeInputGroup input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--ink);
+  padding: 10px 12px;
+  font-size: 0.88rem;
+  font-family: var(--sans);
+  outline: none;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.routeInputGroup select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b8fa3' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+.routeInputGroup input {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.routeInputGroup select:focus,
+.routeInputGroup input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.1);
+}
+
+.routeStrategyRow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.routeStrategyBtn {
+  flex: 1;
+  padding: 9px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: var(--sans);
+  text-align: center;
+  transition: all 200ms ease;
+}
+
+.routeStrategyBtn:hover {
+  border-color: var(--cyan);
+  color: var(--ink);
+}
+
+.routeStrategyBtn.active {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: var(--cyan-dim);
+}
+
+.routeFindBtn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, var(--cyan), var(--green));
+  color: var(--bg);
+  font-size: 0.88rem;
+  font-weight: 700;
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: opacity 200ms ease, transform 100ms ease;
+  letter-spacing: -0.01em;
+}
+
+.routeFindBtn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.routeFindBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.routeLoading {
+  text-align: center;
+  padding: 28px 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.routeSpinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--cyan);
+  border-radius: 50%;
+  animation: routeSpin 0.7s linear infinite;
+  margin: 0 auto 10px;
+}
+
+@keyframes routeSpin {
+  to { transform: rotate(360deg); }
+}
+
+.routeError {
+  background: var(--red-dim);
+  border: 1px solid rgba(255, 68, 102, 0.3);
+  border-radius: 10px;
+  padding: 14px 18px;
+  color: var(--red);
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-align: center;
+  margin-top: 14px;
+}
+
+.routeResultArea {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.routeSummaryCard {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.06), rgba(0, 255, 136, 0.03));
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+}
+
+.routeSummaryAmount {
+  font-family: var(--mono);
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.routeSummaryCurrency {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--cyan);
+  margin-left: 6px;
+}
+
+.routeSummarySub {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin-top: 4px;
+}
+
+.routeSummaryDetail {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(0, 212, 255, 0.12);
+}
+
+.routeSummaryItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.routeSummaryItemVal {
+  font-family: var(--mono);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.routeSummaryItemLabel {
+  font-size: 0.68rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted2);
+}
+
+.routeStepsCard {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+
+.routeStepsTitle {
+  font-size: 0.72rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0 0 14px;
+}
+
+.routeStep {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.routeStep:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.routeStepNum {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--cyan-dim);
+  color: var(--cyan);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.76rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  font-family: var(--mono);
+}
+
+.routeStepInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.routeStepAction {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.routeStepDetail {
+  font-size: 0.76rem;
+  color: var(--muted2);
+  font-family: var(--mono);
+}
+
+.routeStepCost {
+  text-align: right;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.routeStepFee {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--amber);
+  font-family: var(--mono);
+}
+
+.routeStepTime {
+  font-size: 0.7rem;
+  color: var(--muted2);
+}
+
+.routeAltSection {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+
+.routeAltSection .coinCell {
+  color: var(--cyan);
+}
+
+.routeCostGood { color: var(--green); }
+.routeCostOk { color: var(--amber); }
+.routeCostBad { color: var(--red); }
+
 @keyframes fadeIn {
   from { opacity: 0.4; }
   to   { opacity: 1; }
@@ -1158,6 +1492,23 @@
   .acpCapabilities {
     margin-left: 0;
     width: 100%;
+  }
+  .routeInputRow {
+    grid-template-columns: 1fr;
+  }
+  .routeStrategyRow {
+    flex-direction: column;
+  }
+  .routeSummaryAmount {
+    font-size: 1.6rem;
+  }
+  .routeSummaryDetail {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .routeStep {
+    flex-wrap: wrap;
+    gap: 8px;
   }
   .footerInner {
     flex-direction: column;

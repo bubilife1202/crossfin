@@ -190,6 +190,44 @@ function usdcAmount(raw: string, decimals: string): string {
   return val.toFixed(2);
 }
 
+/* ─── Route Finder helpers ─── */
+
+const KOREAN_EXCHANGES = ["bithumb", "upbit", "coinone", "gopax"];
+const ROUTE_EXCHANGES = [
+  { value: "bithumb", label: "Bithumb" },
+  { value: "upbit", label: "Upbit" },
+  { value: "coinone", label: "Coinone" },
+  { value: "gopax", label: "GoPax" },
+  { value: "binance", label: "Binance" },
+];
+
+function isKoreanExchange(ex: string): boolean {
+  return KOREAN_EXCHANGES.includes(ex.toLowerCase());
+}
+
+function formatRouteNum(value: string, currency: string): string {
+  const raw = value.replace(/[^0-9.]/g, "");
+  if (!raw) return "";
+  if (currency === "KRW") {
+    const num = parseInt(raw, 10);
+    return isNaN(num) ? "" : num.toLocaleString("en-US");
+  }
+  const parts = raw.split(".");
+  const intPart = parseInt(parts[0], 10);
+  if (isNaN(intPart)) return "";
+  const formatted = intPart.toLocaleString("en-US");
+  return parts.length > 1 ? `${formatted}.${parts[1].slice(0, 2)}` : formatted;
+}
+
+function parseRouteAmount(s: string): number {
+  return parseFloat(s.replace(/[^0-9.]/g, "")) || 0;
+}
+
+function routeTimeStr(mins: number): string {
+  if (mins < 1) return `${Math.round(mins * 60)}s`;
+  return `${mins}m`;
+}
+
 /* ─── Fetch helpers ─── */
 
 async function fetchJson<T>(url: string): Promise<T | null> {
@@ -231,6 +269,16 @@ export default function App() {
   const [routeFees, setRouteFees] = useState<RouteFeeData | null>(null);
   const [routePairs, setRoutePairs] = useState<RoutePairsData | null>(null);
   const [acpStatus, setAcpStatus] = useState<AcpStatusData | null>(null);
+
+  const [routeFrom, setRouteFrom] = useState("bithumb");
+  const [routeTo, setRouteTo] = useState("binance");
+  const [routeFromCur, setRouteFromCur] = useState("KRW");
+  const [routeToCur, setRouteToCur] = useState("USDC");
+  const [routeAmount, setRouteAmount] = useState("1,000,000");
+  const [routeStrategy, setRouteStrategy] = useState<"cheapest" | "fastest" | "balanced">("cheapest");
+  const [routeResult, setRouteResult] = useState<any>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [routeError, setRouteError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const results = await Promise.allSettled([
@@ -356,6 +404,78 @@ export default function App() {
   const maxServiceCalls = topServices.length
     ? Math.max(...topServices.map((s) => s.calls))
     : 1;
+
+  const routeFromSymbol = routeFromCur === "KRW" ? "₩" : "$";
+  const routeOptimal = routeResult?.optimal_route;
+  const routeAlts: any[] = routeResult?.alternatives || [];
+  const routeAllRoutes = routeOptimal ? [routeOptimal, ...routeAlts] : [];
+  const routeSteps: any[] = routeOptimal?.steps || [];
+
+  const handleRouteFromChange = (ex: string) => {
+    setRouteFrom(ex);
+    const cur = isKoreanExchange(ex) ? "KRW" : "USDC";
+    setRouteFromCur(cur);
+    setRouteAmount(cur === "KRW" ? "1,000,000" : "1,000");
+    setRouteResult(null);
+    setRouteError(null);
+  };
+
+  const handleRouteToChange = (ex: string) => {
+    setRouteTo(ex);
+    setRouteToCur(isKoreanExchange(ex) ? "KRW" : "USDC");
+    setRouteResult(null);
+    setRouteError(null);
+  };
+
+  const handleRouteAmountChange = (raw: string) => {
+    setRouteAmount(formatRouteNum(raw, routeFromCur));
+  };
+
+  const findRoute = async () => {
+    const amount = parseRouteAmount(routeAmount);
+    if (routeFromCur === "KRW" && amount < 10000) {
+      setRouteError("Minimum amount: ₩10,000");
+      return;
+    }
+    if (routeFromCur !== "KRW" && amount < 10) {
+      setRouteError("Minimum amount: $10");
+      return;
+    }
+    setRouteLoading(true);
+    setRouteError(null);
+    setRouteResult(null);
+    try {
+      const res = await fetch(`${API}/api/acp/quote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from_exchange: routeFrom,
+          from_currency: routeFromCur,
+          to_exchange: routeTo,
+          to_currency: routeToCur,
+          amount,
+          strategy: routeStrategy,
+        }),
+      });
+      const data = await res.json();
+      if (!data.optimal_route) {
+        setRouteError("No route found. Check inputs and try again.");
+        return;
+      }
+      setRouteResult(data);
+    } catch (e: any) {
+      setRouteError(`API error: ${e.message}`);
+    } finally {
+      setRouteLoading(false);
+    }
+  };
+
+  const formatRouteOutput = (val: number): string => {
+    if (routeToCur === "BTC") return val.toFixed(6);
+    if (routeToCur === "ETH") return val.toFixed(4);
+    if (routeToCur === "KRW") return `₩${Math.round(val).toLocaleString()}`;
+    return `$${Math.round(val).toLocaleString()}`;
+  };
 
   return (
     <div className="dashboard">
@@ -515,6 +635,210 @@ export default function App() {
             </div>
           </section>
         )}
+
+        {/* Route Finder */}
+        <section className="panel routeFinderPanel">
+          <div className="panelHeader">
+            <h2 className="panelTitle">Route Finder</h2>
+            <span className="panelBadge">
+              <span className="liveDot" />
+              ACP Quote
+            </span>
+          </div>
+          <p className="routeFinderSubtext">
+            Find the optimal path to move assets between exchanges — real-time analysis across 5 exchanges &times; 10 bridge coins.
+          </p>
+          <div className="routeInputCard">
+            <div className="routeInputRow">
+              <div className="routeInputGroup">
+                <label htmlFor="routeFromEx">From Exchange</label>
+                <select id="routeFromEx" value={routeFrom} onChange={e => handleRouteFromChange(e.target.value)}>
+                  {ROUTE_EXCHANGES.map(ex => (
+                    <option key={ex.value} value={ex.value}>{ex.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="routeInputGroup">
+                <label htmlFor="routeToEx">To Exchange</label>
+                <select id="routeToEx" value={routeTo} onChange={e => handleRouteToChange(e.target.value)}>
+                  {ROUTE_EXCHANGES.map(ex => (
+                    <option key={ex.value} value={ex.value}>{ex.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="routeInputRow">
+              <div className="routeInputGroup">
+                <label htmlFor="routeAmountInput">Amount ({routeFromCur})</label>
+                <input
+                  id="routeAmountInput"
+                  type="text"
+                  value={routeAmount}
+                  onChange={e => handleRouteAmountChange(e.target.value)}
+                  placeholder={routeFromCur === "KRW" ? "1,000,000" : "1,000"}
+                />
+              </div>
+              <div className="routeInputGroup">
+                <label htmlFor="routeToCurSelect">To Currency</label>
+                <select id="routeToCurSelect" value={routeToCur} onChange={e => setRouteToCur(e.target.value)}>
+                  {isKoreanExchange(routeTo) ? (
+                    <option value="KRW">KRW</option>
+                  ) : (
+                    <>
+                      <option value="USDC">USDC</option>
+                      <option value="USDT">USDT</option>
+                      <option value="BTC">BTC</option>
+                      <option value="ETH">ETH</option>
+                    </>
+                  )}
+                </select>
+              </div>
+            </div>
+            <div className="routeStrategyRow">
+              {(["cheapest", "fastest", "balanced"] as const).map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  className={`routeStrategyBtn ${routeStrategy === s ? "active" : ""}`}
+                  onClick={() => setRouteStrategy(s)}
+                >
+                  {s === "cheapest" ? "💰 Cheapest" : s === "fastest" ? "⚡ Fastest" : "⚖️ Balanced"}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="routeFindBtn"
+              onClick={findRoute}
+              disabled={routeLoading}
+            >
+              {routeLoading ? "Analyzing…" : "Find Optimal Route"}
+            </button>
+          </div>
+
+          {routeLoading && (
+            <div className="routeLoading">
+              <div className="routeSpinner" />
+              <p>Analyzing 5 exchanges &times; 10 bridge coins in real-time…</p>
+            </div>
+          )}
+
+          {routeError && (
+            <div className="routeError">{routeError}</div>
+          )}
+
+          {routeOptimal && !routeLoading && (
+            <div className="routeResultArea fadeIn">
+              <div className="routeSummaryCard">
+                <div className="routeSummaryAmount">
+                  {formatRouteOutput(routeOptimal.estimatedOutput)}
+                  <span className="routeSummaryCurrency">{routeToCur}</span>
+                </div>
+                <div className="routeSummarySub">
+                  {routeFromSymbol}{parseRouteAmount(routeAmount).toLocaleString()} input → {routeOptimal.bridgeCoin} bridge
+                </div>
+                <div className="routeSummaryDetail">
+                  <div className="routeSummaryItem">
+                    <span className="routeSummaryItemVal">{routeOptimal.bridgeCoin}</span>
+                    <span className="routeSummaryItemLabel">Bridge Coin</span>
+                  </div>
+                  <div className="routeSummaryItem">
+                    <span className="routeSummaryItemVal">{routeOptimal.totalCostPct}%</span>
+                    <span className="routeSummaryItemLabel">Total Cost</span>
+                  </div>
+                  <div className="routeSummaryItem">
+                    <span className="routeSummaryItemVal">{routeTimeStr(routeOptimal.totalTimeMinutes)}</span>
+                    <span className="routeSummaryItemLabel">Est. Time</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="routeStepsCard">
+                <h3 className="routeStepsTitle">Route Steps</h3>
+                {routeSteps.map((s: any, i: number) => {
+                  const stepIcons: Record<string, string> = { buy: "🛒", transfer: "📡", sell: "💱" };
+                  const feeTxt = s.estimatedCost?.feePct > 0
+                    ? `Fee ${s.estimatedCost.feePct}%`
+                    : s.estimatedCost?.feeAbsolute > 0
+                      ? `${s.estimatedCost.feeAbsolute} ${s.from?.currency || ""}`
+                      : "Free";
+                  let detail = "";
+                  if (s.type === "transfer") {
+                    detail = `${s.from?.exchange || ""} → ${s.to?.exchange || ""}`;
+                  } else if (s.priceUsed != null) {
+                    const sym = s.type === "buy"
+                      ? (s.from?.currency === "KRW" ? "₩" : "$")
+                      : (s.to?.currency === "KRW" ? "₩" : "$");
+                    const price = typeof s.priceUsed === "number" && s.priceUsed > 100
+                      ? Math.round(s.priceUsed).toLocaleString()
+                      : String(s.priceUsed);
+                    detail = `Price: ${sym}${price}`;
+                  }
+                  return (
+                    <div key={`${s.type}-${s.from?.exchange}-${s.from?.currency}-${s.to?.currency}`} className="routeStep">
+                      <div className="routeStepNum">{i + 1}</div>
+                      <div className="routeStepInfo">
+                        <span className="routeStepAction">
+                          {s.type === "transfer"
+                            ? `${stepIcons.transfer} Transfer ${s.from?.currency || ""}`
+                            : `${stepIcons[s.type] || "•"} ${s.from?.exchange || ""}: ${s.from?.currency || ""} → ${s.to?.currency || ""}`}
+                        </span>
+                        <span className="routeStepDetail">{detail}</span>
+                      </div>
+                      <div className="routeStepCost">
+                        <span className="routeStepFee">{feeTxt}</span>
+                        <span className="routeStepTime">{routeTimeStr(s.estimatedCost?.timeMinutes || 0)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {routeAllRoutes.length > 1 && (
+                <div className="routeAltSection">
+                  <h3 className="routeStepsTitle">Alternative Routes</h3>
+                  <div className="tableWrap">
+                    <table className="dataTable">
+                      <thead>
+                        <tr>
+                          <th>Bridge</th>
+                          <th>Output</th>
+                          <th>Cost</th>
+                          <th>Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {routeAllRoutes.map((r: any) => {
+                          const costClass = r.totalCostPct < 0.5
+                            ? "routeCostGood"
+                            : r.totalCostPct < 1.0
+                              ? "routeCostOk"
+                              : "routeCostBad";
+                          return (
+                            <tr key={r.bridgeCoin} className="fadeIn">
+                              <td className="coinCell">
+                                {r.bridgeCoin}{r === routeOptimal ? " ⭐" : ""}
+                              </td>
+                              <td className="pctCell">
+                                {formatRouteOutput(r.estimatedOutput)}
+                              </td>
+                              <td className={costClass}>
+                                {r.totalCostPct}%
+                              </td>
+                              <td className="dirCell">
+                                {routeTimeStr(r.totalTimeMinutes)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
 
         {/* Routing Engine */}
         <div className="routingSection">
