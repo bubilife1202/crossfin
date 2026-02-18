@@ -4921,6 +4921,7 @@ async function fetchKoreanExchangePrice(
   exchange: string,
   coin: string,
   bithumbAll?: Record<string, Record<string, string>>,
+  skipOrderbook = false,
 ): Promise<{ priceKrw: number; asks: Array<{ price: string; quantity: string }> } | null> {
   try {
     const coinUpper = coin.toUpperCase()
@@ -4928,15 +4929,19 @@ async function fetchKoreanExchangePrice(
       const data = bithumbAll ?? await fetchBithumbAll()
       const entry = data[coinUpper]
       if (!entry?.closing_price) return null
-      // Fetch orderbook for slippage
+      // Fetch orderbook for slippage (skip during batch routing to avoid stalled HTTP responses)
       let asks: Array<{ price: string; quantity: string }> = []
-      try {
-        const obRes = await fetch(`https://api.bithumb.com/public/orderbook/${coinUpper}_KRW?count=30`)
-        if (obRes.ok) {
-          const obData = await obRes.json() as { data?: { asks?: Array<{ price: string; quantity: string }> } }
-          asks = obData?.data?.asks ?? []
-        }
-      } catch { /* ignore */ }
+      if (!skipOrderbook) {
+        try {
+          const obRes = await fetch(`https://api.bithumb.com/public/orderbook/${coinUpper}_KRW?count=30`)
+          if (obRes.ok) {
+            const obData = await obRes.json() as { data?: { asks?: Array<{ price: string; quantity: string }> } }
+            asks = obData?.data?.asks ?? []
+          } else {
+            await obRes.body?.cancel()
+          }
+        } catch { /* ignore */ }
+      }
       return { priceKrw: parseFloat(entry.closing_price), asks }
     }
     if (exchange === 'upbit') {
@@ -4966,10 +4971,11 @@ async function fetchKoreanExchangePrice(
     if (exchange === 'gopax') {
       try {
         const res = await fetch(`https://api.gopax.co.kr/trading-pairs/${coinUpper}-KRW/ticker`)
-        if (!res.ok) return null
-        const data = await res.json() as { close?: number }
-        if (!data.close) return null
-        return { priceKrw: data.close, asks: [] }
+        if (!res.ok) { await res.body?.cancel(); return null }
+        const data = await res.json() as { price?: number; close?: number }
+        const gopaxPrice = data.price ?? data.close
+        if (!gopaxPrice) return null
+        return { priceKrw: gopaxPrice, asks: [] }
       } catch { return null }
     }
     return null
@@ -5074,9 +5080,7 @@ async function findOptimalRoute(
         transferTime = getTransferTime(bridgeCoin)
 
         const destPrice = await fetchKoreanExchangePrice(
-          toEx,
-          bridgeCoin,
-          toEx === 'bithumb' ? bithumbAll : undefined,
+          toEx, bridgeCoin, toEx === 'bithumb' ? bithumbAll : undefined, true,
         )
         if (!destPrice || destPrice.priceKrw <= 0) continue
 
@@ -5094,9 +5098,7 @@ async function findOptimalRoute(
         }
       } else if (isKoreaToGlobal || isDomestic) {
         const sourcePrice = await fetchKoreanExchangePrice(
-          fromEx,
-          bridgeCoin,
-          fromEx === 'bithumb' ? bithumbAll : undefined,
+          fromEx, bridgeCoin, fromEx === 'bithumb' ? bithumbAll : undefined, true,
         )
         if (!sourcePrice || sourcePrice.priceKrw <= 0) continue
 
@@ -5120,7 +5122,7 @@ async function findOptimalRoute(
           sellPriceUsed = binancePrice
           finalOutput = coinsAfterWithdraw * binancePrice * (1 - toFeePct / 100)
         } else {
-          const destPrice = await fetchKoreanExchangePrice(toEx, bridgeCoin)
+          const destPrice = await fetchKoreanExchangePrice(toEx, bridgeCoin, undefined, true)
           if (!destPrice || destPrice.priceKrw <= 0) continue
           sellPriceUsed = destPrice.priceKrw
           finalOutput = coinsAfterWithdraw * destPrice.priceKrw * (1 - toFeePct / 100)
@@ -5239,7 +5241,8 @@ async function findOptimalRoute(
       }
 
       routes.push(route)
-    } catch {
+    } catch (routeErr) {
+      console.warn(`[routing] skip ${bridgeCoin}: ${routeErr instanceof Error ? routeErr.message : String(routeErr)}`)
       continue
     }
   }
@@ -5261,6 +5264,8 @@ async function findOptimalRoute(
 
   const optimal = sorted[0] ?? null
   const alternatives = sorted.slice(1, 5) // top 4 alternatives
+  const evaluatedCoins = routes.map(r => r.bridgeCoin)
+  const skippedCoins = BRIDGE_COINS.filter(c => !evaluatedCoins.includes(c))
 
   return {
     optimal,
@@ -5269,6 +5274,9 @@ async function findOptimalRoute(
       exchangeRates: { KRW_USD: krwRate },
       pricesUsed,
       routesEvaluated: routes.length,
+      bridgeCoinsTotal: BRIDGE_COINS.length,
+      evaluatedCoins,
+      skippedCoins: skippedCoins.length > 0 ? skippedCoins : undefined,
       analysisTimestamp: new Date().toISOString(),
       disclaimer: 'Estimates based on current orderbook depth and market prices. Actual costs may vary due to price movements during execution.',
     },
@@ -5479,6 +5487,7 @@ async function fetchGlobalPrices(db?: D1Database): Promise<Record<string, number
         BTC: 'bitcoin',
         ETH: 'ethereum',
         XRP: 'ripple',
+        KAIA: 'kaia',
         SOL: 'solana',
         DOGE: 'dogecoin',
         ADA: 'cardano',
@@ -8940,6 +8949,8 @@ app.post('/api/acp/quote', async (c) => {
   const metaPreview = {
     exchangeRates: meta.exchangeRates,
     routesEvaluated: meta.routesEvaluated,
+    bridgeCoinsTotal: meta.bridgeCoinsTotal,
+    skippedCoins: meta.skippedCoins,
     analysisTimestamp: meta.analysisTimestamp,
     disclaimer: meta.disclaimer,
   }
