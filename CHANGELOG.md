@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.8.6] - 2026-02-19
+
+### Changed
+- Synchronized versioning across API catalog, generated web catalog metadata, and MCP server manifests.
+- Refreshed `crossfin-mcp` package metadata for the 7-exchange routing descriptions.
+
+### Fixed
+- Registry warm-seed sync now upserts CrossFin seed metadata even when service counts already match.
+
+## [1.8.5] - 2026-02-18
+
+### Added
+- Published `crossfin-mcp@1.8.5` and registered MCP manifest metadata for Anthropic MCP Registry.
+
+### Changed
+- Bumped API/discovery version from 1.8.3 to 1.8.5 and synchronized generated catalog artifacts.
+
+### Fixed
+- Updated web `.well-known/crossfin.json` version metadata to match the API release.
+
+## [1.8.4] - 2026-02-18
+
+### Fixed
+- Bumped `crossfin-mcp` to `1.8.4` to correct bridge-coin count metadata in package release artifacts.
+
 ## [1.8.3] - 2026-02-17
 
 ### Changed
