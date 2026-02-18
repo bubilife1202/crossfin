@@ -586,7 +586,7 @@ export default function App() {
           <div className="heroHeadline">
             <h1 className="heroTitle">Find the cheapest path across Asian exchanges</h1>
             <p className="heroSub">
-              Real-time analysis across {onlineExchanges} exchanges × {bridgeCoins.length} bridge coins.
+              Real-time analysis across {totalExchangeCount} exchanges × {bridgeCoins.length} bridge coins.
               Free preview — no account needed.
             </p>
           </div>
@@ -1452,11 +1452,8 @@ function DecisionCard({ pair }: { pair: ArbitragePair }) {
         </span>
       </div>
       <div className="decisionPremium">
-        <span
-          className={pair.premiumPct >= 0 ? "positive" : "negative"}
-        >
-          {pair.premiumPct >= 0 ? "+" : ""}
-          {pair.premiumPct.toFixed(3)}%
+        <span className={actionClass === "skip" ? "negative" : "positive"}>
+          {Math.abs(pair.premiumPct).toFixed(3)}%
         </span>
         <span className="decisionDir">{pair.direction}</span>
       </div>

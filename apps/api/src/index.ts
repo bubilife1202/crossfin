@@ -24,6 +24,8 @@ type Bindings = {
   PAYMENT_RECEIVER_ADDRESS: string
   CROSSFIN_ADMIN_TOKEN?: string
   CROSSFIN_GUARDIAN_ENABLED?: string
+  TELEGRAM_BOT_TOKEN?: string
+  TELEGRAM_WEBHOOK_SECRET?: string
 }
 
 type Variables = {
@@ -65,6 +67,63 @@ function requireGuardianEnabled(c: Context<Env>): void {
   if (!isEnabledFlag(c.env.CROSSFIN_GUARDIAN_ENABLED)) {
     throw new HTTPException(404, { message: 'Not found' })
   }
+}
+
+function parseTelegramRouteCommand(text: string): {
+  fromExchange: string
+  fromCurrency: string
+  toExchange: string
+  toCurrency: string
+  amount: number
+  strategy: RoutingStrategy
+} | null {
+  const trimmed = text.trim()
+  if (!trimmed.startsWith('/route')) return null
+
+  const args = trimmed.split(/\s+/)
+  if (args.length < 4) {
+    throw new HTTPException(400, { message: 'Usage: /route fromExchange:FROM_CUR toExchange:TO_CUR amount [cheapest|fastest|balanced]' })
+  }
+
+  const [fromExchangeRaw, fromCurrencyRaw] = String(args[1] ?? '').split(':')
+  const [toExchangeRaw, toCurrencyRaw] = String(args[2] ?? '').split(':')
+  const amount = Number(String(args[3] ?? '').replace(/,/g, ''))
+  const strategyRaw = String(args[4] ?? 'cheapest').trim().toLowerCase()
+
+  const fromExchange = String(fromExchangeRaw ?? '').trim().toLowerCase()
+  const fromCurrency = String(fromCurrencyRaw ?? '').trim().toUpperCase()
+  const toExchange = String(toExchangeRaw ?? '').trim().toLowerCase()
+  const toCurrency = String(toCurrencyRaw ?? '').trim().toUpperCase()
+
+  if (!ROUTING_EXCHANGES.includes(fromExchange as RoutingExchange)) {
+    throw new HTTPException(400, { message: `Invalid from exchange: ${fromExchange}` })
+  }
+  if (!ROUTING_EXCHANGES.includes(toExchange as RoutingExchange)) {
+    throw new HTTPException(400, { message: `Invalid to exchange: ${toExchange}` })
+  }
+  if (!fromCurrency || !toCurrency) {
+    throw new HTTPException(400, { message: 'Use exchange:currency format (e.g. bithumb:KRW binance:USDC)' })
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new HTTPException(400, { message: 'amount must be a positive number' })
+  }
+
+  const strategy: RoutingStrategy =
+    strategyRaw === 'fastest' ? 'fastest' : strategyRaw === 'balanced' ? 'balanced' : 'cheapest'
+
+  return { fromExchange, fromCurrency, toExchange, toCurrency, amount, strategy }
+}
+
+async function telegramSendMessage(botToken: string, chatId: string | number, text: string): Promise<void> {
+  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      disable_web_page_preview: true,
+    }),
+  })
 }
 
 function toHex(bytes: Uint8Array): string {
@@ -140,7 +199,8 @@ function getPublicRateLimitRouteKey(path: string): string | null {
     normalized === '/api/route/fees' ||
     normalized === '/api/route/pairs' ||
     normalized === '/api/route/status' ||
-    normalized === '/api/acp/status'
+    normalized === '/api/acp/status' ||
+    normalized === '/api/telegram/webhook'
   ) {
     return normalized
   }
@@ -391,6 +451,7 @@ app.get('/api/docs/guide', (c) => {
       { path: '/api/acp/status', description: 'ACP protocol capabilities and supported exchanges' },
       { path: 'POST /api/acp/quote', description: 'Request a free routing quote (ACP-compatible, preview-only)' },
       { path: 'POST /api/acp/execute', description: 'Execute a route (simulation mode)' },
+      { path: 'POST /api/telegram/webhook', description: 'Telegram bot webhook endpoint for /route command integration' },
     ],
     notes: [
       'Proxy endpoints (/api/proxy/:serviceId) require X-Agent-Key to prevent abuse.',
@@ -6008,8 +6069,10 @@ app.get('/api/premium/arbitrage/opportunities', async (c) => {
 
   const opportunities = premiums
     .map((p, i) => {
-      const netProfitPct = Math.abs(p.premiumPct) - totalFeesPct
+      const absPremiumPct = Math.abs(p.premiumPct)
+      const netProfitPct = absPremiumPct - totalFeesPct
       const direction = p.premiumPct > 0 ? 'buy-global-sell-korea' : 'buy-korea-sell-global'
+      const marketSideLabel = p.premiumPct >= 0 ? 'Korea premium setup (buy global -> sell Korea)' : 'Korea discount setup (buy Korea -> sell global)'
       const riskScore = p.volume24hUsd < 100000 ? 'high' : p.volume24hUsd < 1000000 ? 'medium' : 'low'
       const profitPer10kUsd = Math.round(netProfitPct * 100) // cents per $10,000 traded
 
@@ -6020,9 +6083,10 @@ app.get('/api/premium/arbitrage/opportunities', async (c) => {
       const transferTimeMin = getTransferTime(p.coin)
       const trendData = trends[i] ?? { trend: 'stable' as const, volatilityPct: 0 }
       const { trend: premiumTrend, volatilityPct } = trendData
-      const { action, confidence, reason } = computeAction(
+      const { action, confidence, reason: baseReason } = computeAction(
         netProfitPct, slippageEstimatePct, transferTimeMin, volatilityPct,
       )
+      const reason = `${baseReason}. ${marketSideLabel}; gross edge ${round2(absPremiumPct)}% before fees.`
 
       return {
         coin: p.coin,
@@ -7412,18 +7476,20 @@ app.get('/api/premium/kimchi/stats', async (c) => {
       const asks = (ob.asks as Array<{ price: string; quantity: string }>).slice(0, 10)
 
       const totalFeesPct = BITHUMB_FEES_PCT + BINANCE_FEES_PCT
-      const netProfitPct = Math.abs(premiumPct) - totalFeesPct
+      const absPremiumPct = Math.abs(premiumPct)
+      const netProfitPct = absPremiumPct - totalFeesPct
       const TRADE_SIZE_KRW = 15_000_000
       const slippageEstimatePct = estimateSlippage(asks, TRADE_SIZE_KRW)
       const transferTimeMin = getTransferTime(coin)
       const volatilityPct = trendSet.status === 'fulfilled' ? trendSet.value.volatilityPct : 0
 
-      const { action, confidence, reason } = computeAction(
+      const { action, confidence, reason: baseReason } = computeAction(
         netProfitPct,
         slippageEstimatePct,
         transferTimeMin,
         volatilityPct,
       )
+      const reason = `${baseReason}. ${premiumPct >= 0 ? 'Korea premium setup (buy global -> sell Korea)' : 'Korea discount setup (buy Korea -> sell global)'}; gross edge ${round2(absPremiumPct)}% before fees.`
 
       return { coin, premiumPct, action, confidence, reason }
     } catch {
@@ -7899,16 +7965,21 @@ app.get('/api/premium/market/cross-exchange', async (c) => {
 app.get('/api/arbitrage/demo', async (c) => {
   const buildPreview = (rows: Array<{ coin: string; premiumPct: number }>) =>
     rows.slice(0, 3).map((p) => {
-      const netProfitPct = Math.abs(p.premiumPct) - BITHUMB_FEES_PCT - 0.1
+      const absPremiumPct = Math.abs(p.premiumPct)
+      const netProfitPct = absPremiumPct - BITHUMB_FEES_PCT - 0.1
       const transferTime = getTransferTime(p.coin)
       const slippage = 0.15
       const volatility = Math.abs(p.premiumPct) * 0.3
       const decision = computeAction(netProfitPct, slippage, transferTime, volatility)
       return {
         coin: p.coin,
-        premiumPct: p.premiumPct,
+        premiumPct: absPremiumPct,
         direction: p.premiumPct >= 0 ? 'Korea premium' : 'Korea discount',
-        decision: { action: decision.action, confidence: decision.confidence, reason: decision.reason },
+        decision: {
+          action: decision.action,
+          confidence: decision.confidence,
+          reason: `${decision.reason}. ${p.premiumPct >= 0 ? 'Korea premium setup (buy global -> sell Korea)' : 'Korea discount setup (buy Korea -> sell global)'}; gross edge ${round2(absPremiumPct)}% before fees.`,
+        },
       }
     })
 
@@ -9207,6 +9278,94 @@ app.get('/api/acp/status', (c) => {
     compatible_with: ['locus', 'x402', 'openai-acp'],
     at: new Date().toISOString(),
   })
+})
+
+app.post('/api/telegram/webhook', async (c) => {
+  const secret = (c.env.TELEGRAM_WEBHOOK_SECRET ?? '').trim()
+  const providedSecret = (c.req.header('X-Telegram-Bot-Api-Secret-Token') ?? '').trim()
+  if (secret && !timingSafeEqual(providedSecret, secret)) {
+    throw new HTTPException(401, { message: 'Unauthorized webhook token' })
+  }
+
+  const botToken = (c.env.TELEGRAM_BOT_TOKEN ?? '').trim()
+  if (!botToken) {
+    return c.json({ ok: true, ignored: true, reason: 'TELEGRAM_BOT_TOKEN missing' })
+  }
+
+  let body: {
+    message?: {
+      chat?: { id?: number | string }
+      text?: string
+    }
+  }
+
+  try {
+    body = await c.req.json()
+  } catch {
+    throw new HTTPException(400, { message: 'Invalid JSON body' })
+  }
+
+  const chatId = body?.message?.chat?.id
+  const text = String(body?.message?.text ?? '').trim()
+
+  if (!chatId || !text.startsWith('/')) {
+    return c.json({ ok: true, ignored: true })
+  }
+
+  if (!text.startsWith('/route')) {
+    await telegramSendMessage(
+      botToken,
+      chatId,
+      'Supported command:\n/route fromExchange:FROM_CUR toExchange:TO_CUR amount [cheapest|fastest|balanced]\nExample: /route bithumb:KRW binance:USDC 5000000 cheapest',
+    )
+    return c.json({ ok: true, handled: true })
+  }
+
+  try {
+    const parsed = parseTelegramRouteCommand(text)
+    if (!parsed) return c.json({ ok: true, ignored: true })
+
+    const { optimal, alternatives } = await findOptimalRoute(
+      parsed.fromExchange,
+      parsed.fromCurrency,
+      parsed.toExchange,
+      parsed.toCurrency,
+      parsed.amount,
+      parsed.strategy,
+      c.env.DB,
+    )
+
+    if (!optimal) {
+      await telegramSendMessage(
+        botToken,
+        chatId,
+        'No valid route found. Try another exchange pair or lower amount.',
+      )
+      return c.json({ ok: true, handled: true, routeFound: false })
+    }
+
+    const altCount = alternatives.length
+    const summary = optimal.summary
+    const outputText = summary?.output ?? `${optimal.estimatedOutput.toLocaleString()} ${parsed.toCurrency}`
+    const reply = [
+      `Best route: ${optimal.bridgeCoin} (${parsed.strategy})`,
+      `${parsed.fromExchange.toUpperCase()}:${parsed.fromCurrency} -> ${parsed.toExchange.toUpperCase()}:${parsed.toCurrency}`,
+      `Input: ${parsed.amount.toLocaleString()} ${parsed.fromCurrency}`,
+      `Output: ${outputText}`,
+      `Total cost: ${optimal.totalCostPct.toFixed(3)}%`,
+      `ETA: ${optimal.totalTimeMinutes.toFixed(1)} min`,
+      `Decision: ${optimal.action} (${Math.round(optimal.confidence * 100)}% confidence)`,
+      `${optimal.reason}`,
+      `Alternatives evaluated: ${altCount}`,
+    ].join('\n')
+
+    await telegramSendMessage(botToken, chatId, reply)
+    return c.json({ ok: true, handled: true, routeFound: true })
+  } catch (err) {
+    const message = err instanceof HTTPException ? err.message : (err instanceof Error ? err.message : 'Failed to process command')
+    await telegramSendMessage(botToken, chatId, `Route error: ${message}`)
+    return c.json({ ok: true, handled: true, error: message })
+  }
 })
 
 // ============================================================

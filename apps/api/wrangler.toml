@@ -20,6 +20,8 @@ zone_name = "crossfin.dev"
 FACILITATOR_URL = "https://facilitator.payai.network"
 X402_NETWORK = "eip155:8453"
 PAYMENT_RECEIVER_ADDRESS = "0xe4E79Ce6a1377C58f0Bb99D023908858A4DB5779"
+TELEGRAM_BOT_TOKEN = ""
+TELEGRAM_WEBHOOK_SECRET = ""
 
 [triggers]
 crons = ["0 * * * *"]  # every hour at :00
