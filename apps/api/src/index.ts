@@ -8026,11 +8026,11 @@ async function fetchRecentUsdcTransfers(walletAddress: string, limit: number): P
   const sorted = logs
     .filter((l) => Boolean(l && typeof l.transactionHash === 'string' && typeof l.blockNumber === 'string'))
     .sort((a, b) => {
-      const aBlock = parseInt(a.blockNumber ?? '0x0', 16)
-      const bBlock = parseInt(b.blockNumber ?? '0x0', 16)
+      const aBlock = Number.parseInt(a.blockNumber ?? '0x0', 16) || 0
+      const bBlock = Number.parseInt(b.blockNumber ?? '0x0', 16) || 0
       if (aBlock !== bBlock) return bBlock - aBlock
-      const aIdx = parseInt(a.logIndex ?? '0x0', 16)
-      const bIdx = parseInt(b.logIndex ?? '0x0', 16)
+      const aIdx = Number.parseInt(a.logIndex ?? '0x0', 16) || 0
+      const bIdx = Number.parseInt(b.logIndex ?? '0x0', 16) || 0
       return bIdx - aIdx
     })
     .slice(0, limit)
@@ -8335,10 +8335,12 @@ app.post('/api/deposits', async (c) => {
     if (
       log.address?.toLowerCase() === USDC_BASE_ADDRESS.toLowerCase() &&
       log.topics?.[0] === transferTopic &&
-      log.topics?.[2]?.toLowerCase().includes(CROSSFIN_WALLET.toLowerCase().slice(2))
+      topicToAddress(log.topics?.[2] ?? '') === CROSSFIN_WALLET.toLowerCase()
     ) {
-      amountUsd = parseInt(log.data, 16) / 1e6 // USDC has 6 decimals
-      fromAddress = '0x' + (log.topics[1]?.slice(26) ?? '')
+      const parsed = Number.parseInt(log.data, 16)
+      if (!Number.isFinite(parsed) || parsed <= 0) continue
+      amountUsd = parsed / 1e6 // USDC has 6 decimals
+      fromAddress = topicToAddress(log.topics[1] ?? '')
       break
     }
   }
