@@ -645,7 +645,7 @@ export default function App() {
             </span>
           </div>
           <p className="routeFinderSubtext">
-            Find the optimal path to move assets between exchanges — real-time analysis across 5 exchanges &times; 10 bridge coins.
+            Find the optimal path to move assets between exchanges — real-time analysis across 5 exchanges &times; 11 bridge coins (incl. KAIA).
           </p>
           <div className="routeInputCard">
             <div className="routeInputRow">
@@ -718,7 +718,7 @@ export default function App() {
           {routeLoading && (
             <div className="routeLoading">
               <div className="routeSpinner" />
-              <p>Analyzing 5 exchanges &times; 10 bridge coins in real-time…</p>
+              <p>Analyzing 5 exchanges &times; 11 bridge coins in real-time…</p>
             </div>
           )}
 

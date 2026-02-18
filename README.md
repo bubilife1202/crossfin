@@ -12,7 +12,8 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 - **Agent Guide API:** Structured JSON guide at `/api/docs/guide` — service catalog, payment flow, code examples, MCP setup
 - **Agent Discovery:** `/.well-known/crossfin.json` for automatic service detection
 - **MCP Server:** 16 tools for Claude Desktop and other MCP clients — search, browse, call, and pay for services
-- **Korea-First APIs:** 34 proprietary endpoints including 4 bundle APIs (Kimchi Premium, Bithumb, Upbit, Coinone, FX, stock analysis, ETF, themes, global indices, Morning Brief, Crypto Snapshot, Kimchi Stats, Stock Brief)
+- **Korea-First APIs:** 35 proprietary endpoints including 4 bundle APIs (Kimchi Premium, Bithumb, Upbit, Coinone, FX, stock analysis, ETF, themes, global indices, Morning Brief, Crypto Snapshot, Kimchi Stats, Stock Brief)
+- **Routing Engine:** Find optimal crypto transfer routes across 5 exchanges using 11 bridge coins (BTC, ETH, XRP, SOL, DOGE, ADA, DOT, LINK, AVAX, TRX, KAIA). Bidirectional: Korea↔Global.
 - **Proxy Layer:** Call any registered service through CrossFin (`/api/proxy/:serviceId`) — requires `X-Agent-Key`, 5% fee header, automatic call logging
 - **Analytics:** Real-time service usage stats (`/api/analytics/overview`)
 - **Live Demo:** Real-time gateway dashboard at [live.crossfin.dev](https://live.crossfin.dev)
@@ -25,7 +26,7 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 |---------|-------------------|
 | x402 services are scattered across the internet | Unified registry with 179 verified services |
 | Agents can't discover available APIs | Search API + `.well-known/crossfin.json` + MCP server |
-| No Korean market data for agents | 31 proprietary paid APIs (Korean market + routing + ETF + themes + indices) |
+| No Korean market data for agents | 35 proprietary paid APIs (Korean market + routing + ETF + themes + indices) |
 | No structured docs for agents | `/api/docs/guide` — JSON guide with schemas, examples, payment flow |
 | No revenue model for gateway operators | 5% proxy fee on every call through CrossFin |
 | Crypto is hard for end users | Roadmap: fiat on-ramp (KRW → USDC auto-conversion) |
@@ -69,7 +70,7 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 | Endpoint | Price | Description |
 |----------|-------|-------------|
 | `GET /api/arbitrage/demo` | Free | Kimchi Premium preview (top 3 pairs) |
-| `GET /api/premium/arbitrage/kimchi` | $0.05 | Full Kimchi Premium index (10+ pairs) |
+| `GET /api/premium/arbitrage/kimchi` | $0.05 | Full Kimchi Premium index (11 pairs incl. KAIA) |
 | `GET /api/premium/arbitrage/opportunities` | $0.10 | Arbitrage decision service (EXECUTE/WAIT/SKIP with slippage, trends, confidence) |
 | `GET /api/premium/bithumb/orderbook?pair=BTC` | $0.02 | Bithumb orderbook (30 levels) |
 | `GET /api/premium/market/korea` | $0.03 | Korean market sentiment & movers |
@@ -120,7 +121,7 @@ CrossFin is a **gateway and registry for AI agent services**, built on the x402 
 
 | Endpoint | Price | Description |
 |----------|-------|-------------|
-| `GET /api/premium/route/find` | $0.10 | Find optimal crypto transfer route across 5 exchanges |
+| `GET /api/premium/route/find` | $0.10 | Find optimal crypto transfer route across 5 exchanges using 11 bridge coins (incl. KAIA). Bidirectional Korea↔Global. |
 
 ### ACP (Agentic Commerce Protocol)
 
