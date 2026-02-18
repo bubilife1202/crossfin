@@ -1,0 +1,100 @@
+:root {
+  color-scheme: dark;
+  --bg: #05070f;
+  --card: #0a0f1f;
+  --text: #e6ebff;
+  --muted: #9aa6c7;
+  --line: #1f2a4a;
+  --cyan: #00d4ff;
+  --green: #00f59a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: radial-gradient(circle at 20% -20%, #142654, var(--bg) 45%);
+  color: var(--text);
+}
+
+.wrap {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 28px 18px 70px;
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.nav a {
+  color: var(--muted);
+  text-decoration: none;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+}
+
+.nav a.active { color: var(--cyan); border-color: rgba(0, 212, 255, 0.35); }
+
+h1, h2, h3 { margin: 0 0 10px; }
+h1 { font-size: 2rem; letter-spacing: -0.02em; }
+h2 { margin-top: 26px; font-size: 1.25rem; }
+p, li { color: var(--muted); line-height: 1.6; }
+
+.hero {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.08), rgba(0, 245, 154, 0.05));
+  padding: 20px;
+  margin-bottom: 18px;
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--card);
+  margin-top: 12px;
+}
+
+code, pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+pre {
+  margin: 8px 0 0;
+  background: #030712;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  overflow: auto;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.badge {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid rgba(0, 245, 154, 0.35);
+  color: var(--green);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+}
+
+@media (max-width: 720px) {
+  .grid { grid-template-columns: 1fr; }
+  h1 { font-size: 1.5rem; }
+}

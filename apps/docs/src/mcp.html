@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CrossFin MCP</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="wrap">
+    <nav class="nav">
+      <a href="/">Overview</a>
+      <a href="/quickstart.html">Quickstart</a>
+      <a href="/api.html">API</a>
+      <a class="active" href="/mcp.html">MCP</a>
+    </nav>
+
+    <h1>MCP Integration</h1>
+    <p>Use CrossFin tools in Claude Desktop or any MCP client.</p>
+
+    <section class="card">
+      <h2>Install</h2>
+      <pre><code>npx -y crossfin-mcp</code></pre>
+    </section>
+
+    <section class="card">
+      <h2>Claude Desktop config</h2>
+      <pre><code>{
+  "mcpServers": {
+    "crossfin": {
+      "command": "npx",
+      "args": ["-y", "crossfin-mcp"],
+      "env": {
+        "EVM_PRIVATE_KEY": "0x..."
+      }
+    }
+  }
+}</code></pre>
+    </section>
+
+    <section class="card">
+      <h2>Useful tools</h2>
+      <ul>
+        <li><code>get_kimchi_premium</code></li>
+        <li><code>list_exchange_fees</code></li>
+        <li><code>compare_exchange_prices</code></li>
+        <li><code>find_optimal_route</code> (paid)</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

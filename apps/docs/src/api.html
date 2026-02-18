@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CrossFin API Docs</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="wrap">
+    <nav class="nav">
+      <a href="/">Overview</a>
+      <a href="/quickstart.html">Quickstart</a>
+      <a class="active" href="/api.html">API</a>
+      <a href="/mcp.html">MCP</a>
+    </nav>
+
+    <h1>API Reference (Core)</h1>
+
+    <section class="card">
+      <h2>Routing</h2>
+      <ul>
+        <li><code>GET /api/route/status</code> - exchange network health</li>
+        <li><code>GET /api/route/pairs</code> - bridge pair availability</li>
+        <li><code>GET /api/route/fees</code> - fee and transfer table</li>
+        <li><code>GET /api/premium/route/find</code> - full paid route planner</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Arbitrage</h2>
+      <ul>
+        <li><code>GET /api/arbitrage/demo</code> - free top-3 decisions</li>
+        <li><code>GET /api/premium/arbitrage/opportunities</code> - paid full scan</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>ACP</h2>
+      <ul>
+        <li><code>GET /api/acp/status</code></li>
+        <li><code>POST /api/acp/quote</code></li>
+        <li><code>POST /api/acp/execute</code> (simulation)</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>OpenAPI</h2>
+      <pre><code>curl https://crossfin.dev/api/openapi.json</code></pre>
+    </section>
+  </main>
+</body>
+</html>
