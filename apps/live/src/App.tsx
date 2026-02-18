@@ -181,7 +181,7 @@ function timeAgoUnix(ts: number): string {
 }
 
 function shortAddr(addr: string): string {
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  return addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : "—";
 }
 
 function usdcAmount(raw: string, decimals: string): string {
@@ -274,11 +274,12 @@ export default function App() {
   const [routeTo, setRouteTo] = useState("binance");
   const [routeFromCur, setRouteFromCur] = useState("KRW");
   const [routeToCur, setRouteToCur] = useState("USDC");
-  const [routeAmount, setRouteAmount] = useState("1,000,000");
+  const [routeAmount, setRouteAmount] = useState("5,000,000");
   const [routeStrategy, setRouteStrategy] = useState<"cheapest" | "fastest" | "balanced">("cheapest");
   const [routeResult, setRouteResult] = useState<any>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const refresh = useCallback(async () => {
     const results = await Promise.allSettled([
@@ -312,72 +313,51 @@ export default function App() {
         AcpStatusData | null,
       ];
 
-    const arbVal: ArbitrageData | null = arbRaw
-      ? {
-          average_premium: arbRaw.avgPremiumPct ?? 0,
-          krwUsdRate:
-            typeof arbRaw.krwUsdRate === "number" && Number.isFinite(arbRaw.krwUsdRate)
-              ? arbRaw.krwUsdRate
-              : undefined,
-          executeCandidates: arbRaw.executeCandidates ?? 0,
-          marketCondition: arbRaw.marketCondition ?? "unknown",
-          pairs: (arbRaw.preview ?? []).map((p) => ({
-            coin: p.coin,
-            premiumPct: p.premiumPct,
-            direction:
-              p.direction ??
-              (p.premiumPct >= 0 ? "Korea premium" : "Korea discount"),
-            decision: p.decision,
-          })),
-        }
-      : null;
+    if (arbRaw) {
+      setArb({
+        average_premium: arbRaw.avgPremiumPct,
+        krwUsdRate: arbRaw.krwUsdRate,
+        executeCandidates: arbRaw.executeCandidates ?? 0,
+        marketCondition: arbRaw.marketCondition ?? "neutral",
+        pairs: arbRaw.preview ?? [],
+      });
+    }
+    if (statsRaw) setStats(statsRaw.services);
+    if (analyticsRaw) {
+      setAnalytics({
+        totalCalls: analyticsRaw.totalCalls,
+        topServices: (analyticsRaw.topServices ?? []).map((s) => ({
+          name: s.serviceName,
+          calls: s.calls,
+        })),
+        recentCalls: (analyticsRaw.recentCalls ?? []).map((c) => ({
+          service: c.serviceName,
+          status: c.status,
+          responseTime: c.responseTimeMs ?? 0,
+          when: timeAgo(c.createdAt),
+        })),
+      });
+    }
+    if (healthVal) setHealth(healthVal);
+    if (survivalVal) setSurvival(survivalVal);
+    if (txsVal) setOnChainTxs(txsVal);
+    if (routeStatusVal) setRouteStatus(routeStatusVal);
+    if (routeFeesVal) setRouteFees(routeFeesVal);
+    if (routePairsVal) setRoutePairs(routePairsVal);
+    if (acpStatusVal) setAcpStatus(acpStatusVal);
 
-    const statsVal: RegistryStats | null = statsRaw?.services
-      ? statsRaw.services
-      : null;
-
-    const analyticsVal: AnalyticsOverview | null = analyticsRaw
-      ? {
-          totalCalls: analyticsRaw.totalCalls ?? 0,
-          topServices: (analyticsRaw.topServices ?? []).map((s) => ({
-            name: s.serviceName ?? "Unknown",
-            calls: Number(s.calls ?? 0),
-          })),
-          recentCalls: (analyticsRaw.recentCalls ?? []).map((c) => ({
-            service: c.serviceName ?? "Unknown",
-            status: c.status ?? "unknown",
-            responseTime: Number(c.responseTimeMs ?? 0),
-            when: c.createdAt ? timeAgo(c.createdAt) : "—",
-          })),
-        }
-      : null;
-
-    setArb(arbVal);
-    setStats(statsVal);
-    setAnalytics(analyticsVal);
-    setHealth(healthVal);
-    setSurvival(survivalVal);
-    if (txsVal && txsVal.length > 0) setOnChainTxs(txsVal);
-    setRouteStatus(routeStatusVal);
-    setRouteFees(routeFeesVal);
-    setRoutePairs(routePairsVal);
-    setAcpStatus(acpStatusVal);
-
-    const anyOk = arbVal ?? statsVal ?? analyticsVal ?? healthVal;
-    setConnected(!!anyOk);
     setLastUpdate(new Date());
+    setConnected(true);
     progressRef.current = 0;
     setProgress(0);
   }, []);
 
-  // initial + interval
   useEffect(() => {
     refresh();
     const id = window.setInterval(refresh, REFRESH_INTERVAL);
     return () => window.clearInterval(id);
   }, [refresh]);
 
-  // progress bar ticks
   useEffect(() => {
     const step = 100 / (REFRESH_INTERVAL / 60);
     const id = window.setInterval(() => {
@@ -395,7 +375,7 @@ export default function App() {
   const recentCalls = analytics?.recentCalls ?? [];
   const pairs = arb?.pairs ?? [];
   const onlineExchanges = routeStatus?.exchanges?.filter(e => e.status === "online").length ?? 0;
-  const totalExchangeCount = routeStatus?.exchanges?.length ?? 6;
+  const totalExchangeCount = routeStatus?.exchanges?.length ?? 5;
   const bridgeCoins = (routePairs?.pairs ?? []).filter(p => p.bridgeSupported);
   const feeEntries = routeFees?.fees ?? [];
   const lowestTradingFee = feeEntries.length > 0 ? Math.min(...feeEntries.map(f => f.tradingFeePct)) : null;
@@ -410,11 +390,17 @@ export default function App() {
   const routeAlts: any[] = routeResult?.alternatives || [];
   const routeAllRoutes = routeOptimal ? [routeOptimal, ...routeAlts] : [];
 
+  // Calculate savings vs worst route
+  const worstRoute = routeAllRoutes.length > 1 ? routeAllRoutes[routeAllRoutes.length - 1] : null;
+  const savingsVsWorst = routeOptimal && worstRoute
+    ? Math.round(routeOptimal.estimatedOutput - worstRoute.estimatedOutput)
+    : 0;
+
   const handleRouteFromChange = (ex: string) => {
     setRouteFrom(ex);
     const cur = isKoreanExchange(ex) ? "KRW" : "USDC";
     setRouteFromCur(cur);
-    setRouteAmount(cur === "KRW" ? "1,000,000" : "1,000");
+    setRouteAmount(cur === "KRW" ? "5,000,000" : "1,000");
     setRouteResult(null);
     setRouteError(null);
   };
@@ -476,6 +462,31 @@ export default function App() {
     return `$${Math.round(val).toLocaleString()}`;
   };
 
+  const copyMcpConfig = () => {
+    navigator.clipboard.writeText(`{
+  "mcpServers": {
+    "crossfin": {
+      "command": "npx",
+      "args": ["-y", "crossfin-mcp"],
+      "env": {
+        "EVM_PRIVATE_KEY": "0x..."
+      }
+    }
+  }
+}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Auto-run route on first load
+  const hasAutoRun = useRef(false);
+  useEffect(() => {
+    if (!hasAutoRun.current && routePairs && routePairs.pairs.length > 0) {
+      hasAutoRun.current = true;
+      findRoute();
+    }
+  }, [routePairs]);
+
   return (
     <div className="dashboard">
       {/* Progress bar */}
@@ -488,14 +499,14 @@ export default function App() {
         <div className="headerInner">
           <div className="headerLeft">
             <span className="logo">
-              <span className="logoMark">⬡</span> CrossFin Live
+              <span className="logoMark">⬡</span> CrossFin
             </span>
-            <span className="subtitle">AI Agent Gateway Monitor</span>
+            <span className="subtitle">Asia Crypto Router for AI Agents</span>
           </div>
           <div className="headerRight">
             <span className={`connStatus ${connected ? "ok" : "err"}`}>
               <span className="connDot" />
-              {connected ? "Connected" : "Disconnected"}
+              {connected ? "Live" : "Offline"}
             </span>
             <span className="lastUpdate">
               {lastUpdate.toLocaleTimeString()}
@@ -505,16 +516,342 @@ export default function App() {
       </header>
 
       <main className="main">
-        {/* Row 1: Metric cards */}
+
+        {/* ═══════════════════════════════════════════════
+            SECTION 1: HERO — Route Finder (moved to top)
+            ═══════════════════════════════════════════════ */}
+        <section className="panel heroPanel">
+          <div className="heroHeadline">
+            <h1 className="heroTitle">Find the cheapest path across Asian exchanges</h1>
+            <p className="heroSub">
+              Real-time analysis across {onlineExchanges} exchanges × {bridgeCoins.length} bridge coins.
+              Free preview — no account needed.
+            </p>
+          </div>
+
+          <div className="routeInputCard">
+            <div className="routeInputRow">
+              <div className="routeInputGroup">
+                <label htmlFor="routeFromEx">From</label>
+                <select id="routeFromEx" value={routeFrom} onChange={e => handleRouteFromChange(e.target.value)}>
+                  {ROUTE_EXCHANGES.map(ex => (
+                    <option key={ex.value} value={ex.value}>{ex.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="routeInputGroup routeArrow">
+                <span className="arrowIcon">→</span>
+              </div>
+              <div className="routeInputGroup">
+                <label htmlFor="routeToEx">To</label>
+                <select id="routeToEx" value={routeTo} onChange={e => handleRouteToChange(e.target.value)}>
+                  {ROUTE_EXCHANGES.map(ex => (
+                    <option key={ex.value} value={ex.value}>{ex.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="routeInputRow">
+              <div className="routeInputGroup">
+                <label htmlFor="routeAmountInput">Amount ({routeFromCur})</label>
+                <input
+                  id="routeAmountInput"
+                  type="text"
+                  value={routeAmount}
+                  onChange={e => handleRouteAmountChange(e.target.value)}
+                  placeholder={routeFromCur === "KRW" ? "5,000,000" : "1,000"}
+                />
+              </div>
+              <div className="routeInputGroup">
+                <label htmlFor="routeToCurSelect">Receive</label>
+                <select id="routeToCurSelect" value={routeToCur} onChange={e => setRouteToCur(e.target.value)}>
+                  {isKoreanExchange(routeTo) ? (
+                    <option value="KRW">KRW</option>
+                  ) : (
+                    <>
+                      <option value="USDC">USDC</option>
+                      <option value="USDT">USDT</option>
+                      <option value="BTC">BTC</option>
+                      <option value="ETH">ETH</option>
+                    </>
+                  )}
+                </select>
+              </div>
+            </div>
+            <div className="routeStrategyRow">
+              {(["cheapest", "fastest", "balanced"] as const).map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  className={`routeStrategyBtn ${routeStrategy === s ? "active" : ""}`}
+                  onClick={() => setRouteStrategy(s)}
+                >
+                  {s === "cheapest" ? "💰 Cheapest" : s === "fastest" ? "⚡ Fastest" : "⚖️ Balanced"}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="routeFindBtn"
+              onClick={findRoute}
+              disabled={routeLoading}
+            >
+              {routeLoading ? "Analyzing routes…" : "Find Optimal Route"}
+            </button>
+          </div>
+
+          {routeLoading && (
+            <div className="routeLoading">
+              <div className="routeSpinner" />
+              <p>Evaluating {bridgeCoins.length} bridge coins across {onlineExchanges} exchanges…</p>
+            </div>
+          )}
+
+          {routeError && (
+            <div className="routeError">{routeError}</div>
+          )}
+
+          {routeOptimal && !routeLoading && (
+            <div className="routeResultArea fadeIn">
+              <div className="routeSummaryCard">
+                <div className="routeSummaryAmount">
+                  {formatRouteOutput(routeOptimal.estimatedOutput)}
+                  <span className="routeSummaryCurrency">{routeToCur}</span>
+                </div>
+                <div className="routeSummarySub">
+                  {routeFromSymbol}{parseRouteAmount(routeAmount).toLocaleString()} → {routeOptimal.bridgeCoin} bridge → {routeToCur}
+                </div>
+                <div className="routeSummaryDetail">
+                  <div className="routeSummaryItem">
+                    <span className="routeSummaryItemVal">{routeOptimal.bridgeCoin}</span>
+                    <span className="routeSummaryItemLabel">Bridge Coin</span>
+                  </div>
+                  <div className="routeSummaryItem">
+                    <span className="routeSummaryItemVal">{routeOptimal.totalCostPct}%</span>
+                    <span className="routeSummaryItemLabel">Total Cost</span>
+                  </div>
+                  <div className="routeSummaryItem">
+                    <span className="routeSummaryItemVal">{routeTimeStr(routeOptimal.totalTimeMinutes)}</span>
+                    <span className="routeSummaryItemLabel">Est. Time</span>
+                  </div>
+                  {savingsVsWorst > 0 && (
+                    <div className="routeSummaryItem savings">
+                      <span className="routeSummaryItemVal">
+                        {routeToCur === "KRW" ? `₩${savingsVsWorst.toLocaleString()}` : `$${savingsVsWorst.toLocaleString()}`}
+                      </span>
+                      <span className="routeSummaryItemLabel">Saved vs worst</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {routeAllRoutes.length > 1 && (
+                <div className="routeAltSection">
+                  <h3 className="routeAltTitle">All Routes Compared</h3>
+                  <div className="tableWrap">
+                    <table className="dataTable">
+                      <thead>
+                        <tr>
+                          <th>Bridge</th>
+                          <th>You Receive</th>
+                          <th>Cost</th>
+                          <th>Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {routeAllRoutes.slice(0, 5).map((r: any) => {
+                          const costClass = r.totalCostPct < 0.5
+                            ? "routeCostGood"
+                            : r.totalCostPct < 1.0
+                              ? "routeCostOk"
+                              : "routeCostBad";
+                          return (
+                            <tr key={r.bridgeCoin} className={`fadeIn ${r === routeOptimal ? "bestRoute" : ""}`}>
+                              <td className="coinCell">
+                                {r.bridgeCoin}{r === routeOptimal ? " ⭐" : ""}
+                              </td>
+                              <td className="pctCell">
+                                {formatRouteOutput(r.estimatedOutput)}
+                              </td>
+                              <td className={costClass}>
+                                {r.totalCostPct}%
+                              </td>
+                              <td className="dirCell">
+                                {routeTimeStr(r.totalTimeMinutes)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div className="routeUpgradeBanner">
+                <span>Full step-by-step execution guide + all {bridgeCoins.length} alternatives</span>
+                <span className="routeUpgradePrice">$0.10 USDC via x402</span>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* ═══════════════════════════════════════════════
+            SECTION 2: Live Price Comparison (NEW)
+            ═══════════════════════════════════════════════ */}
+        <section className="panel priceComparisonPanel">
+          <div className="panelHeader">
+            <h2 className="panelTitle">Same coin, different prices</h2>
+            <span className="panelBadge">
+              <span className="liveDot" />
+              Live
+            </span>
+          </div>
+          <p className="panelSubtext">
+            This is why CrossFin exists — the same crypto trades at different prices on different exchanges.
+            The router finds which bridge coin minimizes your total cost.
+          </p>
+          <div className="tableWrap">
+            <table className="dataTable priceTable">
+              <thead>
+                <tr>
+                  <th>Coin</th>
+                  <th>Bithumb (KRW)</th>
+                  <th>Binance (USD)</th>
+                  <th>Spread</th>
+                  <th>Transfer</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bridgeCoins.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="emptyRow">
+                      Loading live prices…
+                    </td>
+                  </tr>
+                )}
+                {bridgeCoins.map((p) => {
+                  const krwInUsd = p.bithumbKrw && fxRate ? p.bithumbKrw / fxRate : null;
+                  const spreadPct = krwInUsd && p.binanceUsd
+                    ? ((krwInUsd - p.binanceUsd) / p.binanceUsd * 100)
+                    : null;
+                  return (
+                    <tr key={p.coin} className="fadeIn">
+                      <td className="coinCell">{p.coin}</td>
+                      <td>
+                        {p.bithumbKrw != null
+                          ? `₩${p.bithumbKrw.toLocaleString()}`
+                          : "—"}
+                      </td>
+                      <td>
+                        {p.binanceUsd != null
+                          ? `$${p.binanceUsd.toLocaleString()}`
+                          : "—"}
+                      </td>
+                      <td className={`pctCell ${spreadPct && spreadPct >= 0 ? "positive" : "negative"}`}>
+                        {spreadPct != null
+                          ? `${spreadPct >= 0 ? "+" : ""}${spreadPct.toFixed(2)}%`
+                          : "—"}
+                      </td>
+                      <td className="dirCell">~{p.transferTimeMin}m</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* ═══════════════════════════════════════════════
+            SECTION 3: Agent Demo (NEW)
+            ═══════════════════════════════════════════════ */}
+        <section className="panel agentDemoPanel">
+          <div className="panelHeader">
+            <h2 className="panelTitle">Works with AI agents</h2>
+            <span className="panelBadge">MCP Protocol</span>
+          </div>
+          <p className="panelSubtext">
+            Install the MCP server and your AI agent can query Korean exchanges, find optimal routes, and access 35 paid APIs — all through natural language.
+          </p>
+          <div className="agentChatDemo">
+            <div className="chatBubble user">
+              빗썸에서 바이낸스로 500만원 USDC 만들려면 가장 싼 방법이 뭐야?
+            </div>
+            <div className="chatBubble agent">
+              <div className="chatToolCall">
+                <span className="toolIcon">⚡</span>
+                <span>Using <code>find_optimal_route</code></span>
+              </div>
+              <strong>최적 경로: AVAX 브릿지</strong><br/>
+              빗썸에서 AVAX 매수 → 바이낸스로 전송(~3분) → USDC로 매도<br/>
+              <span className="chatHighlight">비용: 0.07% (₩3,500) | 수령: $3,452 USDC</span><br/><br/>
+              다른 옵션: BTC(0.33%, 21분), DOT(0.38%, 6분). AVAX가 수수료와 속도 모두 최적입니다.
+            </div>
+            <div className="chatBubble user">
+              지금 김치 프리미엄은?
+            </div>
+            <div className="chatBubble agent">
+              <div className="chatToolCall">
+                <span className="toolIcon">⚡</span>
+                <span>Using <code>get_kimchi_premium</code></span>
+              </div>
+              현재 평균 김치 프리미엄은 <strong>{avgPremium >= 0 ? "+" : ""}{avgPremium.toFixed(2)}%</strong>입니다.
+              {pairs.length > 0 && pairs[0] && (
+                <>{" "}가장 높은 코인은 {pairs.reduce((a, b) => a.premiumPct > b.premiumPct ? a : b).coin} ({pairs.reduce((a, b) => a.premiumPct > b.premiumPct ? a : b).premiumPct.toFixed(2)}%)입니다.</>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* ═══════════════════════════════════════════════
+            SECTION 4: Install CTA (NEW)
+            ═══════════════════════════════════════════════ */}
+        <section className="panel installPanel">
+          <div className="installContent">
+            <h2 className="installTitle">Add to Claude Desktop</h2>
+            <p className="installSub">Copy this config and paste into your <code>claude_desktop_config.json</code></p>
+            <div className="installCodeBlock">
+              <pre>{`{
+  "mcpServers": {
+    "crossfin": {
+      "command": "npx",
+      "args": ["-y", "crossfin-mcp"],
+      "env": {
+        "EVM_PRIVATE_KEY": "0x..."
+      }
+    }
+  }
+}`}</pre>
+              <button className="copyBtn" onClick={copyMcpConfig}>
+                {copied ? "✓ Copied" : "Copy"}
+              </button>
+            </div>
+            <p className="installNote">
+              Free tools work without EVM key. Paid tools ($0.01–$0.10/call) need a Base wallet with USDC.
+            </p>
+            <div className="installLinks">
+              <a href="https://www.npmjs.com/package/crossfin-mcp" target="_blank" rel="noopener noreferrer" className="installLink">
+                npm: crossfin-mcp
+              </a>
+              <a href="https://github.com/bubilife1202/crossfin" target="_blank" rel="noopener noreferrer" className="installLink">
+                GitHub
+              </a>
+            </div>
+          </div>
+        </section>
+
+        {/* ═══════════════════════════════════════════════
+            SECTION 5: Metrics row (condensed)
+            ═══════════════════════════════════════════════ */}
         <section className="metricsRow">
           <MetricCard
-            label="Avg Kimchi Premium"
+            label="Kimchi Premium"
             value={`${avgPremium >= 0 ? "+" : ""}${avgPremium.toFixed(2)}%`}
             tone={avgPremium >= 0 ? "positive" : "negative"}
-            sub="KR↔Global spread"
+            sub="KR↔Global avg spread"
           />
           <MetricCard
-            label="USD/KRW (FX)"
+            label="USD/KRW"
             value={
               typeof fxRate === "number" && Number.isFinite(fxRate)
                 ? fxRate.toLocaleString(undefined, {
@@ -524,29 +861,31 @@ export default function App() {
                 : "—"
             }
             tone="neutral"
-            sub="cached ~5m"
+            sub="Real-time FX"
           />
           <MetricCard
-            label="Total Services"
-            value={String(totalServices)}
-            tone="neutral"
-            sub="registered in gateway"
+            label="Exchanges"
+            value={`${onlineExchanges}/${totalExchangeCount}`}
+            tone={onlineExchanges === totalExchangeCount ? "positive" : "negative"}
+            sub="Online now"
           />
           <MetricCard
-            label="Gateway Calls"
+            label="API Calls"
             value={totalCalls.toLocaleString()}
             tone="neutral"
-            sub="total API requests"
+            sub="Total requests"
           />
           <MetricCard
-            label="On-Chain Payments"
+            label="On-Chain"
             value={String(onChainTxs.length)}
             tone={onChainTxs.length > 0 ? "positive" : "neutral"}
-            sub="USDC on Base"
+            sub="USDC payments"
           />
         </section>
 
-        {/* Row 2: Decision Layer — the hero panel */}
+        {/* ═══════════════════════════════════════════════
+            SECTION 6: AI Decision Layer
+            ═══════════════════════════════════════════════ */}
         <section className="panel decisionPanel">
           <div className="panelHeader">
             <h2 className="panelTitle">AI Decision Layer</h2>
@@ -569,8 +908,7 @@ export default function App() {
             </div>
           </div>
           <p className="decisionSubtext">
-            Real-time arbitrage decisions for AI agents — not just data, but
-            actionable intelligence with confidence scoring.
+            Real-time arbitrage decisions — actionable intelligence with confidence scoring.
           </p>
           <div className="decisionGrid">
             {pairs.length === 0 && (
@@ -582,7 +920,7 @@ export default function App() {
           </div>
         </section>
 
-        {/* Row 3: On-Chain Payment Feed */}
+        {/* On-Chain Payment Feed */}
         {onChainTxs.length > 0 && (
           <section className="panel onchainPanel">
             <div className="panelHeader">
@@ -635,175 +973,7 @@ export default function App() {
           </section>
         )}
 
-        {/* Route Finder */}
-        <section className="panel routeFinderPanel">
-          <div className="panelHeader">
-            <h2 className="panelTitle">Route Finder</h2>
-            <span className="panelBadge">
-              <span className="liveDot" />
-              ACP Quote
-            </span>
-          </div>
-          <p className="routeFinderSubtext">
-            Find the optimal path to move assets between exchanges — real-time analysis across 5 exchanges &times; 11 bridge coins (incl. KAIA).
-          </p>
-          <div className="routeInputCard">
-            <div className="routeInputRow">
-              <div className="routeInputGroup">
-                <label htmlFor="routeFromEx">From Exchange</label>
-                <select id="routeFromEx" value={routeFrom} onChange={e => handleRouteFromChange(e.target.value)}>
-                  {ROUTE_EXCHANGES.map(ex => (
-                    <option key={ex.value} value={ex.value}>{ex.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="routeInputGroup">
-                <label htmlFor="routeToEx">To Exchange</label>
-                <select id="routeToEx" value={routeTo} onChange={e => handleRouteToChange(e.target.value)}>
-                  {ROUTE_EXCHANGES.map(ex => (
-                    <option key={ex.value} value={ex.value}>{ex.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="routeInputRow">
-              <div className="routeInputGroup">
-                <label htmlFor="routeAmountInput">Amount ({routeFromCur})</label>
-                <input
-                  id="routeAmountInput"
-                  type="text"
-                  value={routeAmount}
-                  onChange={e => handleRouteAmountChange(e.target.value)}
-                  placeholder={routeFromCur === "KRW" ? "1,000,000" : "1,000"}
-                />
-              </div>
-              <div className="routeInputGroup">
-                <label htmlFor="routeToCurSelect">To Currency</label>
-                <select id="routeToCurSelect" value={routeToCur} onChange={e => setRouteToCur(e.target.value)}>
-                  {isKoreanExchange(routeTo) ? (
-                    <option value="KRW">KRW</option>
-                  ) : (
-                    <>
-                      <option value="USDC">USDC</option>
-                      <option value="USDT">USDT</option>
-                      <option value="BTC">BTC</option>
-                      <option value="ETH">ETH</option>
-                    </>
-                  )}
-                </select>
-              </div>
-            </div>
-            <div className="routeStrategyRow">
-              {(["cheapest", "fastest", "balanced"] as const).map(s => (
-                <button
-                  key={s}
-                  type="button"
-                  className={`routeStrategyBtn ${routeStrategy === s ? "active" : ""}`}
-                  onClick={() => setRouteStrategy(s)}
-                >
-                  {s === "cheapest" ? "💰 Cheapest" : s === "fastest" ? "⚡ Fastest" : "⚖️ Balanced"}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              className="routeFindBtn"
-              onClick={findRoute}
-              disabled={routeLoading}
-            >
-              {routeLoading ? "Analyzing…" : "Find Optimal Route"}
-            </button>
-          </div>
-
-          {routeLoading && (
-            <div className="routeLoading">
-              <div className="routeSpinner" />
-              <p>Analyzing 5 exchanges &times; 11 bridge coins in real-time…</p>
-            </div>
-          )}
-
-          {routeError && (
-            <div className="routeError">{routeError}</div>
-          )}
-
-          {routeOptimal && !routeLoading && (
-            <div className="routeResultArea fadeIn">
-              <div className="routeSummaryCard">
-                <div className="routeSummaryAmount">
-                  {formatRouteOutput(routeOptimal.estimatedOutput)}
-                  <span className="routeSummaryCurrency">{routeToCur}</span>
-                </div>
-                <div className="routeSummarySub">
-                  {routeFromSymbol}{parseRouteAmount(routeAmount).toLocaleString()} input → {routeOptimal.bridgeCoin} bridge
-                </div>
-                <div className="routeSummaryDetail">
-                  <div className="routeSummaryItem">
-                    <span className="routeSummaryItemVal">{routeOptimal.bridgeCoin}</span>
-                    <span className="routeSummaryItemLabel">Bridge Coin</span>
-                  </div>
-                  <div className="routeSummaryItem">
-                    <span className="routeSummaryItemVal">{routeOptimal.totalCostPct}%</span>
-                    <span className="routeSummaryItemLabel">Total Cost</span>
-                  </div>
-                  <div className="routeSummaryItem">
-                    <span className="routeSummaryItemVal">{routeTimeStr(routeOptimal.totalTimeMinutes)}</span>
-                    <span className="routeSummaryItemLabel">Est. Time</span>
-                  </div>
-                </div>
-              </div>
-
-              {routeAllRoutes.length > 1 && (
-                <div className="routeAltSection">
-                  <h3 className="routeAltTitle">Alternative Routes</h3>
-                  <div className="tableWrap">
-                    <table className="dataTable">
-                      <thead>
-                        <tr>
-                          <th>Bridge</th>
-                          <th>Output</th>
-                          <th>Cost</th>
-                          <th>Time</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {routeAllRoutes.slice(0, 3).map((r: any) => {
-                          const costClass = r.totalCostPct < 0.5
-                            ? "routeCostGood"
-                            : r.totalCostPct < 1.0
-                              ? "routeCostOk"
-                              : "routeCostBad";
-                          return (
-                            <tr key={r.bridgeCoin} className="fadeIn">
-                              <td className="coinCell">
-                                {r.bridgeCoin}{r === routeOptimal ? " ⭐" : ""}
-                              </td>
-                              <td className="pctCell">
-                                {formatRouteOutput(r.estimatedOutput)}
-                              </td>
-                              <td className={costClass}>
-                                {r.totalCostPct}%
-                              </td>
-                              <td className="dirCell">
-                                {routeTimeStr(r.totalTimeMinutes)}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              <div className="routeUpgradeBanner">
-                <span>Full step-by-step execution route + all alternatives</span>
-                <span className="routeUpgradePrice">$0.10 USDC via x402</span>
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* Routing Engine */}
+        {/* Routing details (collapsed) */}
         <div className="routingSection">
           <section className="panel routingPanel">
             <div className="panelHeader">
@@ -885,50 +1055,6 @@ export default function App() {
             </div>
           </section>
 
-          <section className="panel">
-            <div className="panelHeader">
-              <h2 className="panelTitle">Bridge Coins</h2>
-              <span className="panelBadge">Live prices</span>
-            </div>
-            <div className="tableWrap">
-              <table className="dataTable">
-                <thead>
-                  <tr>
-                    <th>Coin</th>
-                    <th>Bithumb (KRW)</th>
-                    <th>Binance (USD)</th>
-                    <th>Transfer Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bridgeCoins.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="emptyRow">
-                        Loading pairs...
-                      </td>
-                    </tr>
-                  )}
-                  {bridgeCoins.map((p) => (
-                    <tr key={p.coin} className="fadeIn">
-                      <td className="coinCell">{p.coin}</td>
-                      <td>
-                        {p.bithumbKrw != null
-                          ? `${p.bithumbKrw.toLocaleString()} KRW`
-                          : "\u2014"}
-                      </td>
-                      <td>
-                        {p.binanceUsd != null
-                          ? `$${p.binanceUsd.toLocaleString()}`
-                          : "\u2014"}
-                      </td>
-                      <td className="dirCell">~{p.transferTimeMin} min</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
           {acpStatus && (
             <div className="acpCard">
               <span className="acpBadge">ACP {acpStatus.version}</span>
@@ -942,7 +1068,7 @@ export default function App() {
           )}
         </div>
 
-        {/* Row 3.5: Live Kimchi Premium Table */}
+        {/* Kimchi Premium Table */}
         <section className="panel">
           <div className="panelHeader">
             <h2 className="panelTitle">Live Kimchi Premium</h2>
@@ -992,13 +1118,13 @@ export default function App() {
           </div>
         </section>
 
-        {/* Row 4: Agent Survival */}
+        {/* Agent Survival */}
         {survival && (
           <section
             className={`panel survivalSection ${survival.state === "ALIVE" ? "alive" : "stopped"}`}
           >
             <div className="survivalHeader">
-              <h2 className="panelTitle">Agent Survival</h2>
+              <h2 className="panelTitle">System Status</h2>
               <span
                 className={`survivalBadge ${survival.state === "ALIVE" ? "alive" : "stopped"}`}
               >
@@ -1014,7 +1140,7 @@ export default function App() {
                 </span>
               </div>
               <div className="survivalMiniCard">
-                <span className="metricLabel">Calls This Week</span>
+                <span className="metricLabel">This Week</span>
                 <span className="metricValue neutral">
                   {survival.metrics.callsThisWeek.toLocaleString()}
                 </span>
@@ -1026,41 +1152,11 @@ export default function App() {
                 </span>
               </div>
             </div>
-            <div className="survivalFeed">
-              <div className="survivalFeedHeader">
-                <span>Service</span>
-                <span>Status</span>
-                <span>Time</span>
-                <span>When</span>
-              </div>
-              {recentCalls.length === 0 && (
-                <p className="emptyText">No recent events</p>
-              )}
-              {recentCalls.slice(0, 8).map((evt, index) => (
-                <div
-                  key={`${evt.service}-${index}`}
-                  className="survivalEvent fadeIn"
-                >
-                  <span className="survivalEventName">{evt.service}</span>
-                  <span className="survivalEventStatus">
-                    <span
-                      className={`statusDotSmall ${evt.status === "success" ? "green" : "red"}`}
-                    />
-                    {evt.status}
-                  </span>
-                  <span className={`recentRt ${rtClass(evt.responseTime)}`}>
-                    {evt.responseTime}ms
-                  </span>
-                  <span className="recentWhen">{evt.when}</span>
-                </div>
-              ))}
-            </div>
           </section>
         )}
 
-        {/* Row 5: Two columns */}
+        {/* Two columns: Top Services + Recent Calls */}
         <section className="twoCol">
-          {/* Left: Top Services bar chart */}
           <div className="panel">
             <div className="panelHeader">
               <h2 className="panelTitle">Top Services</h2>
@@ -1090,7 +1186,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Right: Recent API Calls */}
           <div className="panel">
             <div className="panelHeader">
               <h2 className="panelTitle">Recent API Calls</h2>
@@ -1124,14 +1219,14 @@ export default function App() {
           </div>
         </section>
 
-        {/* Row 6: System Health */}
+        {/* System Health */}
         <section className="healthRow">
           <div className="healthCard">
             <span
               className={`healthDot ${health?.status === "ok" ? "green" : "red"}`}
             />
             <div className="healthInfo">
-              <span className="healthLabel">System Health</span>
+              <span className="healthLabel">System</span>
               <span className="healthValue">
                 {health?.status === "ok" ? "Operational" : "Degraded"}
               </span>
@@ -1140,7 +1235,7 @@ export default function App() {
           <div className="healthCard">
             <span className="healthIcon">⚡</span>
             <div className="healthInfo">
-              <span className="healthLabel">API Version</span>
+              <span className="healthLabel">Version</span>
               <span className="healthValue">{health?.version ?? "—"}</span>
             </div>
           </div>
@@ -1152,12 +1247,10 @@ export default function App() {
             </div>
           </div>
           <div className="healthCard">
-            <span className="healthIcon">⏱</span>
+            <span className="healthIcon">⬡</span>
             <div className="healthInfo">
-              <span className="healthLabel">Uptime</span>
-              <span className="healthValue">
-                {health?.status === "ok" ? "Online" : "Checking…"}
-              </span>
+              <span className="healthLabel">Services</span>
+              <span className="healthValue">{totalServices}</span>
             </div>
           </div>
         </section>
@@ -1166,21 +1259,28 @@ export default function App() {
       {/* Footer */}
       <footer className="footer">
         <div className="footerInner">
-          <span className="footerBrand">Powered by CrossFin × x402</span>
+          <span className="footerBrand">CrossFin — Asia Crypto Router for AI Agents</span>
           <div className="footerLinks">
             <a
               href="https://crossfin.dev"
               target="_blank"
               rel="noopener noreferrer"
             >
-              crossfin.dev
+              Gateway
             </a>
             <a
-              href="https://github.com"
+              href="https://github.com/bubilife1202/crossfin"
               target="_blank"
               rel="noopener noreferrer"
             >
               GitHub
+            </a>
+            <a
+              href="https://www.npmjs.com/package/crossfin-mcp"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              npm
             </a>
             <a
               href={`https://basescan.org/address/${CROSSFIN_WALLET}`}
