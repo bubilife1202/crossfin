@@ -3235,19 +3235,6 @@ async function ensureRegistrySeeded(
       tags: entry.tags,
     }))
 
-    const expectedCrossfinSeedCount = crossfinSeedSpecs.length
-    const count = row ? Number(row.count) : 0
-    if (!force && Number.isFinite(count) && count > 0) {
-      const crossfinRow = await db
-        .prepare('SELECT COUNT(*) as count FROM services WHERE is_crossfin = 1')
-        .first<{ count: number | string }>()
-      const crossfinCount = crossfinRow ? Number(crossfinRow.count) : 0
-      if (Number.isFinite(crossfinCount) && crossfinCount >= expectedCrossfinSeedCount) {
-        registrySeedCheckedUntil = Date.now() + REGISTRY_SEED_CHECK_TTL_MS
-        return
-      }
-    }
-
     const crossfinSeeds: ServiceSeed[] = crossfinSeedSpecs.map((seed) => ({
       ...seed,
       provider: 'crossfin',
@@ -3258,6 +3245,68 @@ async function ensureRegistrySeeded(
       status: 'active',
       isCrossfin: true,
     }))
+
+    const expectedCrossfinSeedCount = crossfinSeedSpecs.length
+    const count = row ? Number(row.count) : 0
+    if (!force && Number.isFinite(count) && count > 0) {
+      const crossfinRow = await db
+        .prepare('SELECT COUNT(*) as count FROM services WHERE is_crossfin = 1')
+        .first<{ count: number | string }>()
+      const crossfinCount = crossfinRow ? Number(crossfinRow.count) : 0
+      if (Number.isFinite(crossfinCount) && crossfinCount >= expectedCrossfinSeedCount) {
+        const crossfinStatements = crossfinSeeds.map((seed) => {
+          const tags = seed.tags ? JSON.stringify(seed.tags) : null
+          const inputSchema = seed.inputSchema ? JSON.stringify(seed.inputSchema) : null
+          const outputExample = seed.outputExample ? JSON.stringify(seed.outputExample) : null
+          const isCrossfin = seed.isCrossfin ? 1 : 0
+
+          return db.prepare(
+            `INSERT INTO services
+              (id, name, description, provider, category, endpoint, method, price, currency, network, pay_to, tags, input_schema, output_example, status, is_crossfin)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               name = excluded.name,
+               description = excluded.description,
+               provider = excluded.provider,
+               category = excluded.category,
+               endpoint = excluded.endpoint,
+               method = excluded.method,
+               price = excluded.price,
+               currency = excluded.currency,
+               network = excluded.network,
+               pay_to = excluded.pay_to,
+               tags = excluded.tags,
+               input_schema = excluded.input_schema,
+               output_example = excluded.output_example,
+               status = excluded.status,
+               is_crossfin = excluded.is_crossfin`
+          ).bind(
+            seed.id,
+            seed.name,
+            seed.description,
+            seed.provider,
+            seed.category,
+            seed.endpoint,
+            normalizeMethod(seed.method),
+            seed.price,
+            seed.currency,
+            seed.network,
+            seed.payTo,
+            tags,
+            inputSchema,
+            outputExample,
+            seed.status,
+            isCrossfin,
+          )
+        })
+
+        if (crossfinStatements.length > 0) {
+          await db.batch(crossfinStatements)
+        }
+        registrySeedCheckedUntil = Date.now() + REGISTRY_SEED_CHECK_TTL_MS
+        return
+      }
+    }
 
     const externalSeeds: ServiceSeed[] = [
     {
