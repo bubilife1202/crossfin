@@ -724,6 +724,86 @@
   line-height: 1.4;
 }
 
+/* ─── System Status (Survival) ─── */
+
+.survivalSection.alive {
+  border-left: 3px solid var(--green);
+}
+
+.survivalSection.stopped {
+  border-left: 3px solid var(--red);
+}
+
+.survivalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.survivalBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 4px 14px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.survivalBadge.alive {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.survivalBadge.stopped {
+  background: var(--red-dim);
+  color: var(--red);
+}
+
+.survivalDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.survivalMetrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.survivalMiniCard {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: center;
+  transition: border-color 200ms ease;
+}
+
+.survivalMiniCard:hover {
+  border-color: var(--border-hover);
+}
+
+.survivalMiniCard .metricLabel {
+  font-size: 0.7rem;
+}
+
+.survivalMiniCard .metricValue {
+  font-size: 1.4rem;
+}
+
 /* ─── On-Chain Payments ─── */
 
 .onchainPanel {
@@ -1805,6 +1885,9 @@
   }
   .routeStatsRow {
     gap: 20px;
+  }
+  .survivalMetrics {
+    grid-template-columns: 1fr;
   }
   .installPanel {
     padding: 24px 16px;
