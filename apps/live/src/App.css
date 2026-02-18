@@ -1298,95 +1298,20 @@
   color: var(--muted2);
 }
 
-.routeStepsCard {
+.routeAltSection {
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 18px 20px;
 }
 
-.routeStepsTitle {
+.routeAltTitle {
   font-size: 0.72rem;
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
   margin: 0 0 14px;
-}
-
-.routeStep {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.routeStep:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.routeStepNum {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--cyan-dim);
-  color: var(--cyan);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.76rem;
-  font-weight: 700;
-  flex-shrink: 0;
-  font-family: var(--mono);
-}
-
-.routeStepInfo {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.routeStepAction {
-  font-size: 0.84rem;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.routeStepDetail {
-  font-size: 0.76rem;
-  color: var(--muted2);
-  font-family: var(--mono);
-}
-
-.routeStepCost {
-  text-align: right;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.routeStepFee {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--amber);
-  font-family: var(--mono);
-}
-
-.routeStepTime {
-  font-size: 0.7rem;
-  color: var(--muted2);
-}
-
-.routeAltSection {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 18px 20px;
 }
 
 .routeAltSection .coinCell {
@@ -1396,6 +1321,32 @@
 .routeCostGood { color: var(--green); }
 .routeCostOk { color: var(--amber); }
 .routeCostBad { color: var(--red); }
+
+.routeUpgradeBanner {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.routeUpgradeBanner span:first-child {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.routeUpgradePrice {
+  font-family: var(--mono);
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--cyan);
+  white-space: nowrap;
+}
 
 @keyframes fadeIn {
   from { opacity: 0.4; }
@@ -1505,10 +1456,6 @@
   .routeSummaryDetail {
     grid-template-columns: 1fr;
     gap: 10px;
-  }
-  .routeStep {
-    flex-wrap: wrap;
-    gap: 8px;
   }
   .footerInner {
     flex-direction: column;

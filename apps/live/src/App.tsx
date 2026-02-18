@@ -409,7 +409,6 @@ export default function App() {
   const routeOptimal = routeResult?.optimal_route;
   const routeAlts: any[] = routeResult?.alternatives || [];
   const routeAllRoutes = routeOptimal ? [routeOptimal, ...routeAlts] : [];
-  const routeSteps: any[] = routeOptimal?.steps || [];
 
   const handleRouteFromChange = (ex: string) => {
     setRouteFrom(ex);
@@ -753,50 +752,9 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="routeStepsCard">
-                <h3 className="routeStepsTitle">Route Steps</h3>
-                {routeSteps.map((s: any, i: number) => {
-                  const stepIcons: Record<string, string> = { buy: "🛒", transfer: "📡", sell: "💱" };
-                  const feeTxt = s.estimatedCost?.feePct > 0
-                    ? `Fee ${s.estimatedCost.feePct}%`
-                    : s.estimatedCost?.feeAbsolute > 0
-                      ? `${s.estimatedCost.feeAbsolute} ${s.from?.currency || ""}`
-                      : "Free";
-                  let detail = "";
-                  if (s.type === "transfer") {
-                    detail = `${s.from?.exchange || ""} → ${s.to?.exchange || ""}`;
-                  } else if (s.priceUsed != null) {
-                    const sym = s.type === "buy"
-                      ? (s.from?.currency === "KRW" ? "₩" : "$")
-                      : (s.to?.currency === "KRW" ? "₩" : "$");
-                    const price = typeof s.priceUsed === "number" && s.priceUsed > 100
-                      ? Math.round(s.priceUsed).toLocaleString()
-                      : String(s.priceUsed);
-                    detail = `Price: ${sym}${price}`;
-                  }
-                  return (
-                    <div key={`${s.type}-${s.from?.exchange}-${s.from?.currency}-${s.to?.currency}`} className="routeStep">
-                      <div className="routeStepNum">{i + 1}</div>
-                      <div className="routeStepInfo">
-                        <span className="routeStepAction">
-                          {s.type === "transfer"
-                            ? `${stepIcons.transfer} Transfer ${s.from?.currency || ""}`
-                            : `${stepIcons[s.type] || "•"} ${s.from?.exchange || ""}: ${s.from?.currency || ""} → ${s.to?.currency || ""}`}
-                        </span>
-                        <span className="routeStepDetail">{detail}</span>
-                      </div>
-                      <div className="routeStepCost">
-                        <span className="routeStepFee">{feeTxt}</span>
-                        <span className="routeStepTime">{routeTimeStr(s.estimatedCost?.timeMinutes || 0)}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
               {routeAllRoutes.length > 1 && (
                 <div className="routeAltSection">
-                  <h3 className="routeStepsTitle">Alternative Routes</h3>
+                  <h3 className="routeAltTitle">Alternative Routes</h3>
                   <div className="tableWrap">
                     <table className="dataTable">
                       <thead>
@@ -808,7 +766,7 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {routeAllRoutes.map((r: any) => {
+                        {routeAllRoutes.slice(0, 3).map((r: any) => {
                           const costClass = r.totalCostPct < 0.5
                             ? "routeCostGood"
                             : r.totalCostPct < 1.0
@@ -836,6 +794,11 @@ export default function App() {
                   </div>
                 </div>
               )}
+
+              <div className="routeUpgradeBanner">
+                <span>Full step-by-step execution route + all alternatives</span>
+                <span className="routeUpgradePrice">$0.10 USDC via x402</span>
+              </div>
             </div>
           )}
         </section>

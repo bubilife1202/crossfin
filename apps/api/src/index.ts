@@ -8849,6 +8849,35 @@ app.post('/api/acp/quote', async (c) => {
     fromExchange, fromCurrency, toExchange, toCurrency, amount, strategy, c.env.DB,
   )
 
+  // Strip optimal route to preview (no steps, limited fields)
+  const optimalPreview = optimal ? {
+    bridgeCoin: optimal.bridgeCoin,
+    totalCostPct: optimal.totalCostPct,
+    totalTimeMinutes: optimal.totalTimeMinutes,
+    estimatedInput: optimal.estimatedInput,
+    estimatedOutput: optimal.estimatedOutput,
+    action: optimal.action,
+    confidence: optimal.confidence,
+    reason: optimal.reason,
+    summary: optimal.summary ?? null,
+  } : null
+
+  // Strip alternatives to preview (max 2, no steps)
+  const altPreviews = alternatives.slice(0, 2).map(r => ({
+    bridgeCoin: r.bridgeCoin,
+    totalCostPct: r.totalCostPct,
+    totalTimeMinutes: r.totalTimeMinutes,
+    estimatedOutput: r.estimatedOutput,
+  }))
+
+  // Strip meta (remove pricesUsed)
+  const metaPreview = {
+    exchangeRates: meta.exchangeRates,
+    routesEvaluated: meta.routesEvaluated,
+    analysisTimestamp: meta.analysisTimestamp,
+    disclaimer: meta.disclaimer,
+  }
+
   return c.json({
     protocol: 'acp',
     version: '1.0',
@@ -8858,9 +8887,15 @@ app.post('/api/acp/quote', async (c) => {
     status: 'quoted',
     summary: optimal?.summary ?? null,
     request: { from_exchange: fromExchange, from_currency: fromCurrency, to_exchange: toExchange, to_currency: toCurrency, amount, strategy },
-    optimal_route: optimal,
-    alternatives: alternatives.slice(0, 3),
-    meta,
+    optimal_route: optimalPreview,
+    alternatives: altPreviews,
+    meta: metaPreview,
+    upgrade: {
+      endpoint: '/api/premium/route/find',
+      price: '$0.10 USDC',
+      includes: 'Full step-by-step execution route, all alternatives, detailed price data',
+      example: `/api/premium/route/find?from=${fromExchange}:${fromCurrency}&to=${toExchange}:${toCurrency}&amount=${amount}&strategy=${strategy}`,
+    },
     expires_at: new Date(Date.now() + 60_000).toISOString(), // 60s quote validity
     actions: {
       execute: { method: 'POST', url: '/api/acp/execute', note: 'Execution simulation — actual execution requires exchange API keys (coming soon)' },
