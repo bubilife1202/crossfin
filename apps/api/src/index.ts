@@ -4990,17 +4990,6 @@ async function fetchKoreanExchangePrice(
   }
 }
 
-// Fetch Binance price for a coin in USDT/USDC
-async function fetchBinancePrice(coin: string): Promise<number | null> {
-  try {
-    const symbol = TRACKED_PAIRS[coin.toUpperCase()]
-    if (!symbol) return null
-    const globalPrices = await fetchGlobalPrices()
-    return globalPrices[symbol] ?? null
-  } catch {
-    return null
-  }
-}
 
 // Core routing: enumerate paths and calculate costs
 async function findOptimalRoute(
@@ -5029,9 +5018,7 @@ async function findOptimalRoute(
   const pricesUsed: Record<string, Record<string, number>> = {}
   const routes: Route[] = []
 
-  // Determine if this is a KRW → foreign currency route (most common)
-  const isKrwToForeign = fromCur === 'KRW' && (toCur === 'USDC' || toCur === 'USDT' || toCur === 'USD')
-  // Or KRW exchange to KRW exchange (domestic)
+  // KRW exchange to KRW exchange (domestic)
   const isDomestic = fromEx !== 'binance' && toEx !== 'binance'
 
   // For each bridge coin, calculate the full path cost
@@ -9269,7 +9256,7 @@ async function audit(
 
 export default {
   fetch: app.fetch,
-  async scheduled(event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
+  async scheduled(_event: ScheduledEvent, env: Bindings, _ctx: ExecutionContext) {
     const [bithumbData, binancePrices, krwRate] = await Promise.all([
       fetchBithumbAll(),
       fetchGlobalPrices(env.DB),
