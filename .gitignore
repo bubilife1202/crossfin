@@ -9,7 +9,9 @@
 .sisyphus/
 .smithery/
 .mcpregistry_*
+.wrangler/
 WALLETS.md
+LAUNCH_POSTS.md
 
 # Screenshots / debug artifacts
 *.png
