@@ -4617,7 +4617,7 @@ app.get('/api/analytics/overview', async (c) => {
     c.env.DB.prepare("SELECT COUNT(*) as count FROM services WHERE status = 'active' AND is_crossfin = 1"),
   ])
 
-  const totalCalls = Number((callsCountRes?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
+  let totalCalls = Number((callsCountRes?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
   const totalServices = Number((servicesCountRes?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
   const crossfinServices = Number((crossfinCountRes?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
 
@@ -4639,22 +4639,74 @@ app.get('/api/analytics/overview', async (c) => {
      LIMIT 20`
   ).all<{ serviceId: string; serviceName: string; status: string; responseTimeMs: number | string | null; createdAt: string }>()
 
+  let topServices = (top.results ?? []).map((r) => ({
+    serviceId: String(r.serviceId ?? ''),
+    serviceName: String(r.serviceName ?? ''),
+    calls: Number(r.calls ?? 0),
+  }))
+
+  let recentCalls = (recent.results ?? []).map((r) => ({
+    serviceId: String(r.serviceId ?? ''),
+    serviceName: String(r.serviceName ?? ''),
+    status: String(r.status ?? 'unknown'),
+    responseTimeMs: r.responseTimeMs === null || r.responseTimeMs === undefined ? null : Number(r.responseTimeMs),
+    createdAt: String(r.createdAt ?? ''),
+  }))
+
+  if (totalCalls === 0 && recentCalls.length === 0) {
+    const [auditCountRes, auditTopRes, auditRecentRes] = await c.env.DB.batch([
+      c.env.DB.prepare("SELECT COUNT(*) as count FROM audit_logs WHERE action NOT LIKE 'scheduled.%'"),
+      c.env.DB.prepare(
+        `SELECT action, COUNT(*) as calls
+         FROM audit_logs
+         WHERE action NOT LIKE 'scheduled.%'
+         GROUP BY action
+         ORDER BY calls DESC
+         LIMIT 10`
+      ),
+      c.env.DB.prepare(
+        `SELECT action, result, created_at as createdAt
+         FROM audit_logs
+         WHERE action NOT LIKE 'scheduled.%'
+         ORDER BY datetime(created_at) DESC
+         LIMIT 20`
+      ),
+    ])
+
+    const nonScheduledAuditCount = Number((auditCountRes?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
+
+    if (nonScheduledAuditCount > 0) {
+      totalCalls = nonScheduledAuditCount
+      topServices = (auditTopRes?.results ?? []).map((row) => {
+        const action = String((row as { action?: string }).action ?? 'audit.event')
+        const label = action.replace(/[._]+/g, ' ').trim()
+        return {
+          serviceId: `audit:${action}`,
+          serviceName: label,
+          calls: Number((row as { calls?: number | string }).calls ?? 0),
+        }
+      })
+      recentCalls = (auditRecentRes?.results ?? []).map((row) => {
+        const action = String((row as { action?: string }).action ?? 'audit.event')
+        const result = String((row as { result?: string }).result ?? 'unknown')
+        const label = action.replace(/[._]+/g, ' ').trim()
+        return {
+          serviceId: `audit:${action}`,
+          serviceName: label,
+          status: result === 'success' ? 'success' : 'error',
+          responseTimeMs: null,
+          createdAt: String((row as { createdAt?: string }).createdAt ?? ''),
+        }
+      })
+    }
+  }
+
   return c.json({
     totalCalls,
     totalServices,
     crossfinServices,
-    topServices: (top.results ?? []).map((r) => ({
-      serviceId: String(r.serviceId ?? ''),
-      serviceName: String(r.serviceName ?? ''),
-      calls: Number(r.calls ?? 0),
-    })),
-    recentCalls: (recent.results ?? []).map((r) => ({
-      serviceId: String(r.serviceId ?? ''),
-      serviceName: String(r.serviceName ?? ''),
-      status: String(r.status ?? 'unknown'),
-      responseTimeMs: r.responseTimeMs === null || r.responseTimeMs === undefined ? null : Number(r.responseTimeMs),
-      createdAt: String(r.createdAt ?? ''),
-    })),
+    topServices,
+    recentCalls,
     at: new Date().toISOString(),
   })
 })
