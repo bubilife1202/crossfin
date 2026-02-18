@@ -6593,27 +6593,32 @@ app.get('/api/premium/market/korea/stock-detail', async (c) => {
 
   const res = await fetch(`https://m.stock.naver.com/api/stock/${stock}/integration`)
   if (!res.ok) throw new HTTPException(502, { message: 'Stock detail data unavailable' })
-  const raw = await res.json() as any
+  const raw: unknown = await res.json()
+  const rd = isRecord(raw) ? raw : {}
 
   const infos: Record<string, string> = {}
-  for (const item of (raw.totalInfos ?? [])) {
-    infos[item.key] = item.value
+  for (const item of (Array.isArray(rd.totalInfos) ? rd.totalInfos : [])) {
+    const it = isRecord(item) ? item : {}
+    if (typeof it.key === 'string') infos[it.key] = String(it.value ?? '')
   }
 
-  const consensus = raw.consensusInfo ?? null
-  const industryPeers = (raw.industryCompareInfo ?? []).map((s: any) => ({
-    code: s.itemCode,
-    name: s.stockName,
-    price: s.closePrice,
-    changePct: s.fluctuationsRatio,
-    direction: s.compareToPreviousPrice?.name ?? 'UNCHANGED',
-  }))
+  const consensus = isRecord(rd.consensusInfo) ? rd.consensusInfo : null
+  const industryPeers = (Array.isArray(rd.industryCompareInfo) ? rd.industryCompareInfo : []).map((s: unknown) => {
+    const sr = isRecord(s) ? s : {}
+    return {
+      code: sr.itemCode,
+      name: sr.stockName,
+      price: sr.closePrice,
+      changePct: sr.fluctuationsRatio,
+      direction: (isRecord(sr.compareToPreviousPrice) ? sr.compareToPreviousPrice.name : null) ?? 'UNCHANGED',
+    }
+  })
 
   return c.json({
     paid: true,
     service: 'crossfin-korea-stock-detail',
     stock,
-    name: raw.stockName,
+    name: rd.stockName,
     metrics: infos,
     consensus: consensus ? {
       targetPrice: consensus.priceTargetMean,
@@ -6634,21 +6639,19 @@ app.get('/api/premium/market/korea/stock-news', async (c) => {
 
   const res = await fetch(`https://m.stock.naver.com/api/news/stock/${stock}?page=${page}&pageSize=${pageSize}`)
   if (!res.ok) throw new HTTPException(502, { message: 'Stock news data unavailable' })
-  const rawArr = await res.json() as any[]
-  const raw = Array.isArray(rawArr) && rawArr.length > 0 ? rawArr[0] : { total: 0, items: [] }
+  const rawArr: unknown = await res.json()
+  const first = Array.isArray(rawArr) && rawArr.length > 0 ? rawArr[0] : null
+  const raw = isRecord(first) ? first : { total: 0, items: [] }
 
   return c.json({
     paid: true,
     service: 'crossfin-korea-stock-news',
     stock,
     total: raw.total ?? 0,
-    items: (raw.items ?? []).map((i: any) => ({
-      id: i.id,
-      title: i.title,
-      body: i.body,
-      publisher: i.officeName,
-      datetime: i.datetime,
-    })),
+    items: (Array.isArray(raw.items) ? raw.items : []).map((i: unknown) => {
+      const it = isRecord(i) ? i : {}
+      return { id: it.id, title: it.title, body: it.body, publisher: it.officeName, datetime: it.datetime }
+    }),
     source: 'naver-finance',
     at: new Date().toISOString(),
   })
@@ -6660,19 +6663,23 @@ app.get('/api/premium/market/korea/themes', async (c) => {
 
   const res = await fetch(`https://m.stock.naver.com/api/stocks/theme?page=${page}&pageSize=${pageSize}`)
   if (!res.ok) throw new HTTPException(502, { message: 'Theme data unavailable' })
-  const raw = await res.json() as any
+  const rawThemes: unknown = await res.json()
+  const rtd = isRecord(rawThemes) ? rawThemes : {}
 
   return c.json({
     paid: true,
     service: 'crossfin-korea-themes',
-    themes: (raw.groups ?? []).map((g: any) => ({
-      no: g.no,
-      name: g.name,
-      totalCount: g.totalCount,
-      changeRate: g.changeRate,
-      riseCount: g.riseCount,
-      fallCount: g.fallCount,
-    })),
+    themes: (Array.isArray(rtd.groups) ? rtd.groups : []).map((g: unknown) => {
+      const gr = isRecord(g) ? g : {}
+      return {
+        no: gr.no,
+        name: gr.name,
+        totalCount: gr.totalCount,
+        changeRate: gr.changeRate,
+        riseCount: gr.riseCount,
+        fallCount: gr.fallCount,
+      }
+    }),
     source: 'naver-finance',
     at: new Date().toISOString(),
   })
