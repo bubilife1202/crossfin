@@ -8987,47 +8987,64 @@ app.get('/api/route/pairs', async (c) => {
 // GET /api/route/status — Exchange API health check (free)
 app.get('/api/route/status', async (c) => {
   const btcSymbol = TRACKED_PAIRS.BTC ?? 'BTCUSDT'
-  const checks = await Promise.allSettled([
-    fetch('https://api.bithumb.com/public/ticker/BTC_KRW').then((r) => r.ok),
-    fetch('https://api.upbit.com/v1/ticker?markets=KRW-BTC').then((r) => r.ok),
-    fetch('https://api.coinone.co.kr/public/v2/ticker_new/KRW/BTC').then((r) => r.ok),
-    fetch('https://api.gopax.co.kr/trading-pairs/BTC-KRW/ticker').then((r) => r.ok),
-    fetchGlobalPrices(c.env.DB).then((prices) => {
+  const ROUTE_HEALTH_TIMEOUT_MS = 4500
+
+  const checkHttpOk = async (url: string): Promise<boolean> => {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), ROUTE_HEALTH_TIMEOUT_MS)
+    try {
+      const res = await fetch(url, { signal: controller.signal })
+      const ok = res.ok
+      await res.body?.cancel()
+      return ok
+    } catch {
+      return false
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }
+
+  const globalFeedOnlinePromise = fetchGlobalPrices(c.env.DB)
+    .then((prices) => {
       const btc = prices[btcSymbol]
       return typeof btc === 'number' && Number.isFinite(btc) && btc > 1000
-    }),
-    fetch('https://www.okx.com/api/v5/public/time').then(async (r) => {
-      if (!r.ok) return false
-      const payload = await r.json() as { code?: string }
-      return payload.code === '0'
-    }),
-    (async () => {
-      const bybitBaseUrls = ['https://api.bybit.com', 'https://api.bytick.com']
-      for (const baseUrl of bybitBaseUrls) {
-        try {
-          const r = await fetch(`${baseUrl}/v5/market/tickers?category=spot&symbol=BTCUSDT`)
-          if (!r.ok) {
-            await r.body?.cancel()
-            continue
-          }
-          const payload = await r.json() as { retCode?: number }
-          if (payload.retCode === 0) return true
-        } catch {
-          continue
-        }
-      }
-      return false
-    })(),
+    })
+    .catch(() => false)
+
+  const [bithumbOnline, upbitOnline, coinoneOnline, gopaxOnline, globalFeedOnline] = await Promise.all([
+    checkHttpOk('https://api.bithumb.com/public/ticker/BTC_KRW'),
+    checkHttpOk('https://api.upbit.com/v1/ticker?markets=KRW-BTC'),
+    checkHttpOk('https://api.coinone.co.kr/public/v2/ticker_new/KRW/BTC'),
+    checkHttpOk('https://api.gopax.co.kr/trading-pairs/BTC-KRW/ticker'),
+    globalFeedOnlinePromise,
   ])
 
-  const names = [...ROUTING_EXCHANGES]
-  const statuses = names.map((name, i) => ({
-    exchange: name,
-    status: checks[i]?.status === 'fulfilled' && (checks[i] as PromiseFulfilledResult<boolean>).value ? 'online' : 'offline',
+  const statusByExchange: Record<RoutingExchange, 'online' | 'offline'> = {
+    bithumb: bithumbOnline ? 'online' : 'offline',
+    upbit: upbitOnline ? 'online' : 'offline',
+    coinone: coinoneOnline ? 'online' : 'offline',
+    gopax: gopaxOnline ? 'online' : 'offline',
+    binance: globalFeedOnline ? 'online' : 'offline',
+    okx: globalFeedOnline ? 'online' : 'offline',
+    bybit: globalFeedOnline ? 'online' : 'offline',
+  }
+
+  const statuses = ROUTING_EXCHANGES.map((exchange) => ({
+    exchange,
+    status: statusByExchange[exchange],
   }))
 
   const allOnline = statuses.every((s) => s.status === 'online')
-  return c.json({ service: 'crossfin-route-status', healthy: allOnline, exchanges: statuses, at: new Date().toISOString() })
+  return c.json({
+    service: 'crossfin-route-status',
+    healthy: allOnline,
+    exchanges: statuses,
+    globalFeed: {
+      status: globalFeedOnline ? 'online' : 'offline',
+      symbol: btcSymbol,
+    },
+    at: new Date().toISOString(),
+  })
 })
 
 // ============================================================
