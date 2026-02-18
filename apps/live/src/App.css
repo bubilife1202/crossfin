@@ -1512,6 +1512,8 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  padding-right: 28px;
+  border-right: 1px solid var(--border);
 }
 
 .agentDemoHeading {
@@ -1551,6 +1553,10 @@
 
 .agentDemoRight {
   min-width: 0;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
 }
 
 .agentChatDemo {
@@ -1860,6 +1866,12 @@
   .agentDemoLayout {
     grid-template-columns: 1fr;
     gap: 16px;
+  }
+  .agentDemoLeft {
+    padding-right: 0;
+    border-right: none;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
   }
   .routeFlow {
     flex-direction: column;
