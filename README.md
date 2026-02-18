@@ -1,185 +1,16 @@
 # CrossFin
 
-**The x402 Agent Services Gateway** — Discover, call, and pay for AI agent services in one place. 184 services (35 CrossFin + 149 external), Korean market APIs, MCP server, and structured agent guides. All payments via [x402](https://x402.org) protocol with USDC on Base mainnet.
+**The only way AI agents access Asian crypto markets.**
 
-**Live:** https://crossfin.dev | **Demo:** https://live.crossfin.dev
+CrossFin is a financial router for AI agents. It finds the cheapest path to move money across 5 Korean exchanges and Binance, pays for APIs with crypto (x402 protocol), and gives agents real-time access to market data that's normally locked behind Korean-language interfaces and IP restrictions.
 
-## What is CrossFin?
+**Live:** [crossfin.dev](https://crossfin.dev) | **Demo:** [live.crossfin.dev](https://live.crossfin.dev)
 
-CrossFin is a **gateway and registry for AI agent services**, built on the x402 payment protocol.
+---
 
-- **Service Registry:** 184 verified services from multiple x402 providers (CrossFin, Einstein AI, x402engine)
-- **Agent Guide API:** Structured JSON guide at `/api/docs/guide` — service catalog, payment flow, code examples, MCP setup
-- **Agent Discovery:** `/.well-known/crossfin.json` for automatic service detection
-- **MCP Server:** 16 tools for Claude Desktop and other MCP clients — search, browse, call, and pay for services
-- **Korea-First APIs:** 35 proprietary endpoints including 4 bundle APIs (Kimchi Premium, Bithumb, Upbit, Coinone, FX, stock analysis, ETF, themes, global indices, Morning Brief, Crypto Snapshot, Kimchi Stats, Stock Brief)
-- **Routing Engine:** Find optimal crypto transfer routes across 5 exchanges using 11 bridge coins (BTC, ETH, XRP, SOL, DOGE, ADA, DOT, LINK, AVAX, TRX, KAIA). Bidirectional: Korea↔Global.
-- **Proxy Layer:** Call any registered service through CrossFin (`/api/proxy/:serviceId`) — requires `X-Agent-Key`, 5% fee header, automatic call logging
-- **Analytics:** Real-time service usage stats (`/api/analytics/overview`)
-- **Live Demo:** Real-time gateway dashboard at [live.crossfin.dev](https://live.crossfin.dev)
+## Install in 30 seconds
 
-**Think RapidAPI, but for AI agents paying with crypto.**
-
-## Why CrossFin?
-
-| Problem | CrossFin Solution |
-|---------|-------------------|
-| x402 services are scattered across the internet | Unified registry with 179 verified services |
-| Agents can't discover available APIs | Search API + `.well-known/crossfin.json` + MCP server |
-| No Korean market data for agents | 35 proprietary paid APIs (Korean market + routing + ETF + themes + indices) |
-| No structured docs for agents | `/api/docs/guide` — JSON guide with schemas, examples, payment flow |
-| No revenue model for gateway operators | 5% proxy fee on every call through CrossFin |
-| Crypto is hard for end users | Roadmap: fiat on-ramp (KRW → USDC auto-conversion) |
-
-## Endpoints
-
-### Registry (Free)
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/registry` | List all services (filterable by category, provider) |
-| `GET /api/registry/search?q=...` | Full-text search across services |
-| `GET /api/registry/categories` | Category breakdown with counts |
-| `GET /api/registry/stats` | Total services: 179 (30 CrossFin + 149 external) |
-| `GET /api/registry/:id` | Service detail with guide, inputSchema, outputExample |
-| `POST /api/registry` | Register a new service (requires `X-Agent-Key`) |
-
-### Agent Discovery & Docs (Free)
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/docs/guide` | Structured JSON guide for agents (services, payment, MCP setup) |
-| `GET /.well-known/crossfin.json` | Agent auto-discovery metadata |
-
-### Proxy (Free — 5% fee built into forwarded price)
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/proxy/:serviceId` | Forward GET request to service (requires `X-Agent-Key`), log call |
-| `POST /api/proxy/:serviceId` | Forward POST request to service (requires `X-Agent-Key`), log call |
-
-### Analytics (Free)
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/analytics/overview` | Total calls, top services, recent activity |
-| `GET /api/analytics/services/:serviceId` | Per-service stats (calls, success rate, avg response time) |
-
-### Korean Market APIs (Paid via x402)
-
-| Endpoint | Price | Description |
-|----------|-------|-------------|
-| `GET /api/arbitrage/demo` | Free | Kimchi Premium preview (top 3 pairs) |
-| `GET /api/premium/arbitrage/kimchi` | $0.05 | Full Kimchi Premium index (11 pairs incl. KAIA) |
-| `GET /api/premium/arbitrage/opportunities` | $0.10 | Arbitrage decision service (EXECUTE/WAIT/SKIP with slippage, trends, confidence) |
-| `GET /api/premium/bithumb/orderbook?pair=BTC` | $0.02 | Bithumb orderbook (30 levels) |
-| `GET /api/premium/market/korea` | $0.03 | Korean market sentiment & movers |
-| `GET /api/premium/market/fx/usdkrw` | $0.01 | USD/KRW exchange rate |
-| `GET /api/premium/market/upbit/ticker?market=KRW-BTC` | $0.02 | Upbit ticker |
-| `GET /api/premium/market/upbit/orderbook?market=KRW-BTC` | $0.02 | Upbit orderbook |
-| `GET /api/premium/market/coinone/ticker?currency=BTC` | $0.02 | Coinone ticker |
-| `GET /api/premium/market/cross-exchange` | $0.08 | Cross-exchange decision service (ARBITRAGE/HOLD/MONITOR with best buy/sell routing) |
-| `GET /api/premium/news/korea/headlines` | $0.03 | Korean headlines (Google News RSS) |
-| `GET /api/premium/arbitrage/kimchi/history` | $0.05 | Historical kimchi premium (hourly snapshots, up to 7 days) |
-| `GET /api/premium/bithumb/volume-analysis` | $0.03 | Bithumb 24h volume distribution & unusual activity detection |
-| `GET /api/premium/market/upbit/signals` | $0.05 | Upbit trading signals (momentum, volatility, confidence) |
-| `GET /api/premium/market/korea/indices` | $0.03 | KOSPI & KOSDAQ real-time index (price, change, direction, market status) |
-| `GET /api/premium/market/korea/indices/history` | $0.05 | KOSPI/KOSDAQ daily OHLC history (up to 60 trading days) |
-| `GET /api/premium/market/korea/stocks/momentum` | $0.05 | Korean stock momentum (top market cap, gainers, losers) |
-| `GET /api/premium/market/korea/investor-flow?stock=005930` | $0.05 | Stock investor flow — 10-day foreign/institutional/individual net buying |
-| `GET /api/premium/market/korea/index-flow?index=KOSPI` | $0.03 | KOSPI/KOSDAQ investor flow — foreign/institutional/individual net buying (billion KRW) |
-| `GET /api/premium/crypto/korea/5exchange?coin=BTC` | $0.08 | Compare crypto prices across 4 Korean exchanges (Upbit, Bithumb, Coinone, GoPax) |
-| `GET /api/premium/crypto/korea/exchange-status` | $0.03 | Bithumb deposit/withdrawal status for all coins |
-| `GET /api/premium/market/korea/stock-detail?stock=005930` | $0.05 | Comprehensive stock analysis — PER, PBR, consensus, industry peers |
-| `GET /api/premium/market/korea/stock-news?stock=005930` | $0.03 | Stock-specific news from Naver Finance |
-| `GET /api/premium/market/korea/themes` | $0.05 | Korean stock market themes/sectors with performance |
-| `GET /api/premium/market/korea/disclosure?stock=005930` | $0.03 | Corporate disclosure filings |
-| `GET /api/premium/crypto/korea/fx-rate` | $0.01 | Real-time KRW/USD exchange rate (Upbit CRIX, 52-week high/low) |
-| `GET /api/premium/market/korea/etf` | $0.03 | Korean ETF list with NAV, price, 3-month returns (1,070+ ETFs) |
-| `GET /api/premium/crypto/korea/upbit-candles?coin=BTC&type=days` | $0.02 | Upbit OHLCV candles (1m to monthly, up to 200 candles) |
-| `GET /api/premium/market/global/indices-chart?index=.DJI` | $0.02 | Global index chart — Dow, NASDAQ, Hang Seng, Nikkei |
-
-### Bundle APIs (One-call composites, Paid via x402)
-
-| Endpoint | Price | Description |
-|----------|-------|-------------|
-| `GET /api/premium/morning/brief` | $0.20 | Morning Brief — kimchi premium + FX + KOSPI/KOSDAQ + stock momentum + headlines in one call |
-| `GET /api/premium/crypto/snapshot` | $0.15 | Crypto Snapshot — 5-exchange BTC prices + kimchi premium + Bithumb volume + FX rate |
-| `GET /api/premium/kimchi/stats` | $0.15 | Kimchi Stats — current spreads + 24h trend + arbitrage signal + cross-exchange spread |
-| `GET /api/premium/market/korea/stock-brief?stock=005930` | $0.10 | Stock Brief — fundamentals + news + investor flow + disclosures for any Korean stock |
-
-### Routing Engine (Free)
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/route/exchanges` | List supported exchanges (5 exchanges, fees, supported coins) |
-| `GET /api/route/fees` | Fee comparison table (trading + withdrawal fees) |
-| `GET /api/route/pairs` | Supported trading pairs with live prices |
-| `GET /api/route/status` | Exchange API health check (online/offline) |
-
-### Routing Engine (Paid)
-
-| Endpoint | Price | Description |
-|----------|-------|-------------|
-| `GET /api/premium/route/find` | $0.10 | Find optimal crypto transfer route across 5 exchanges using 11 bridge coins (incl. KAIA). Bidirectional Korea↔Global. |
-
-### ACP (Agentic Commerce Protocol)
-
-| Endpoint | Description |
-|----------|-------------|
-| `POST /api/acp/quote` | Request routing quote (ACP-compatible) |
-| `POST /api/acp/execute` | Execute route (simulation mode) |
-| `GET /api/acp/status` | ACP protocol status and capabilities |
-
-### Other (Free)
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/health` | Health check (includes version) |
-| `GET /api/stats` | Public-safe rounded counters |
-| `GET /api/openapi.json` | OpenAPI 3.1 spec (agent-readable) |
-
-## MCP Server
-
-CrossFin includes an MCP (Model Context Protocol) server for Claude Desktop and other MCP clients. 16 tools available:
-
-### Install
-
-```bash
-# Claude Desktop (and most MCP clients) will run this command for you once configured.
-npx -y crossfin-mcp
-
-# Or global install
-npm i -g crossfin-mcp
-crossfin-mcp
-```
-
-### 60-second Setup
-
-1. Add the Claude Desktop config (below)
-2. Restart Claude Desktop
-3. Use tools like `get_guide`, `search_services`, or `call_paid_service`
-
-| Tool | Description |
-|------|-------------|
-| `search_services` | Search the service registry by keyword |
-| `list_services` | List services with optional category filter |
-| `get_service` | Get details for a specific service |
-| `list_categories` | List all categories with counts |
-| `get_kimchi_premium` | Free kimchi premium preview |
-| `get_analytics` | Gateway usage analytics |
-| `get_guide` | Get the full CrossFin agent guide |
-| `create_wallet` | Create a wallet in local ledger |
-| `get_balance` | Check wallet balance |
-| `transfer` | Transfer funds between wallets |
-| `list_transactions` | List recent transactions |
-| `set_budget` | Set daily spend limit |
-| `call_paid_service` | Call a paid API with automatic x402 USDC payment (returns data + txHash + basescan link) |
-| `find_optimal_route` | Find optimal crypto transfer route across exchanges (routing engine) |
-| `list_exchange_fees` | List supported exchange fees (routing engine) |
-| `compare_exchange_prices` | Compare live exchange prices for routing (routing engine) |
-
-### Claude Desktop Config
+Add this to your Claude Desktop config (`claude_desktop_config.json`):
 
 ```json
 {
@@ -188,7 +19,6 @@ crossfin-mcp
       "command": "npx",
       "args": ["-y", "crossfin-mcp"],
       "env": {
-        "CROSSFIN_API_URL": "https://crossfin.dev",
         "EVM_PRIVATE_KEY": "0x..."
       }
     }
@@ -196,56 +26,196 @@ crossfin-mcp
 }
 ```
 
-### Claude Desktop Config (Local Build)
+Restart Claude Desktop. Done. 16 tools available immediately.
 
-```json
-{
-  "mcpServers": {
-    "crossfin": {
-      "command": "node",
-      "args": ["/path/to/crossfin/apps/mcp-server/dist/index.js"],
-      "env": {
-        "CROSSFIN_API_URL": "https://crossfin.dev",
-        "EVM_PRIVATE_KEY": "0x..."
-      }
-    }
-  }
-}
+> **No EVM key?** Free tools (price lookup, fee comparison, kimchi premium) work without one. Paid tools ($0.01–$0.10 per call) require a Base wallet with USDC.
+
+---
+
+## What can it do?
+
+**Ask your agent:**
+
+- "빗썸에서 바이낸스로 500만원 USDC 만들려면 가장 싼 방법이 뭐야?" → Routing engine evaluates 11 bridge coins across 5 exchanges, returns optimal path with fees
+- "지금 김치 프리미엄 얼마야?" → Real-time price spread between Korean and global exchanges for 11 crypto pairs
+- "삼성전자 외국인 매수 동향 알려줘" → Korean stock investor flow data (foreign/institutional/individual)
+- "오늘 한국 시장 브리핑해줘" → Morning Brief bundle: kimchi premium + FX + KOSPI/KOSDAQ + stock momentum + headlines
+
+**For developers/agents:**
+
+- `find_optimal_route` — cheapest/fastest/balanced path across Bithumb, Upbit, Coinone, GoPax, Binance using 11 bridge coins (BTC, ETH, XRP, SOL, DOGE, ADA, DOT, LINK, AVAX, TRX, KAIA)
+- `get_kimchi_premium` — real-time Korean vs. global price spread
+- `compare_exchange_prices` — live price comparison across Korean exchanges
+- `call_paid_service` — call any of 35 paid APIs with automatic x402 USDC payment
+
+---
+
+## Why CrossFin?
+
+**Korean exchanges are a walled garden.** Korean-language APIs, IP restrictions, real-name bank account requirements (실명확인 계좌제), and no English documentation. AI agents can't access them — unless they go through CrossFin.
+
+**Prices differ across exchanges.** The same BTC can be 2-3% more expensive on Korean exchanges (kimchi premium). CrossFin's routing engine finds the cheapest bridge coin and path, factoring in trading fees, withdrawal fees, slippage, and transfer time.
+
+**x402 native.** No API keys, no subscriptions, no invoices. Agents pay per call with USDC on Base. $0.01 for an FX rate, $0.10 for a full routing analysis.
+
+---
+
+## Routing Engine
+
+The core product. Given a source (exchange + currency) and destination, CrossFin evaluates all possible paths:
+
+```
+Input:  bithumb:KRW → binance:USDC, ₩5,000,000
+Output: Buy AVAX on Bithumb → Transfer to Binance → Sell for USDC
+        Cost: 0.07% (₩3,500) | Time: ~3 min | Output: $3,452 USDC
+
+        Alternatives:
+        BTC  → 0.33% | ~21 min | $3,443
+        DOT  → 0.38% | ~6 min  | $3,441
 ```
 
-## Quick Start
+Considers: trading fees (0.10–0.25%), withdrawal fees (fixed per coin), orderbook slippage, transfer time, kimchi premium direction.
 
-```bash
-# Free — browse the registry
-curl https://crossfin.dev/api/registry/stats
+Supports bidirectional routing: Korea → Global and Global → Korea.
 
-# Free — search for services
-curl "https://crossfin.dev/api/registry/search?q=crypto"
+**Free preview:** `POST /api/acp/quote` (ACP compatible)
+**Full route:** `GET /api/premium/route/find` ($0.10 via x402)
 
-# Free — kimchi premium preview
-curl https://crossfin.dev/api/arbitrage/demo
+---
 
-# Paid — requires x402 payment (USDC on Base)
-curl https://crossfin.dev/api/premium/market/fx/usdkrw
-```
+## MCP Tools (16 total)
 
-### Pay with x402 (JavaScript)
+| Tool | What it does |
+|------|-------------|
+| `find_optimal_route` | Optimal crypto transfer path across 5 exchanges (paid, $0.10) |
+| `list_exchange_fees` | Trading + withdrawal fee comparison |
+| `compare_exchange_prices` | Live price comparison across Korean exchanges |
+| `get_kimchi_premium` | Korean vs. global price spread (free preview) |
+| `search_services` | Search 184 registered services |
+| `get_guide` | Full agent guide (services, payment flow, examples) |
+| `call_paid_service` | Call any paid API with automatic x402 payment |
+| `create_wallet` | Local ledger wallet |
+| `get_balance` | Check wallet balance |
+| `transfer` | Transfer between wallets |
+| `list_transactions` | Transaction history |
+| `set_budget` | Daily spend limit |
+| `list_services` | Browse service catalog |
+| `get_service` | Service details |
+| `list_categories` | Service categories |
+| `get_analytics` | Gateway usage stats |
+
+---
+
+## 35 Paid APIs
+
+All paid via x402 (USDC on Base). No API key needed.
+
+<details>
+<summary><strong>Korean Market APIs ($0.01–$0.10)</strong></summary>
+
+| Endpoint | Price | Description |
+|----------|-------|-------------|
+| `/api/premium/arbitrage/kimchi` | $0.05 | Full Kimchi Premium (11 pairs incl. KAIA) |
+| `/api/premium/arbitrage/opportunities` | $0.10 | Arbitrage decisions (EXECUTE/WAIT/SKIP) |
+| `/api/premium/bithumb/orderbook?pair=BTC` | $0.02 | Bithumb orderbook (30 levels) |
+| `/api/premium/market/upbit/ticker` | $0.02 | Upbit ticker |
+| `/api/premium/market/upbit/orderbook` | $0.02 | Upbit orderbook |
+| `/api/premium/market/coinone/ticker` | $0.02 | Coinone ticker |
+| `/api/premium/market/fx/usdkrw` | $0.01 | USD/KRW exchange rate |
+| `/api/premium/market/korea` | $0.03 | Korean market sentiment |
+| `/api/premium/market/cross-exchange` | $0.08 | Cross-exchange arbitrage decision |
+| `/api/premium/news/korea/headlines` | $0.03 | Korean headlines |
+| `/api/premium/arbitrage/kimchi/history` | $0.05 | Kimchi premium history (7 days) |
+| `/api/premium/bithumb/volume-analysis` | $0.03 | Bithumb volume analysis |
+| `/api/premium/market/upbit/signals` | $0.05 | Upbit trading signals |
+| `/api/premium/crypto/korea/5exchange` | $0.08 | 4-exchange price comparison |
+| `/api/premium/crypto/korea/exchange-status` | $0.03 | Deposit/withdrawal status |
+| `/api/premium/crypto/korea/fx-rate` | $0.01 | Real-time KRW/USD (Upbit CRIX) |
+| `/api/premium/crypto/korea/upbit-candles` | $0.02 | Upbit OHLCV candles |
+
+</details>
+
+<details>
+<summary><strong>Korean Stock APIs ($0.03–$0.05)</strong></summary>
+
+| Endpoint | Price | Description |
+|----------|-------|-------------|
+| `/api/premium/market/korea/indices` | $0.03 | KOSPI & KOSDAQ real-time |
+| `/api/premium/market/korea/indices/history` | $0.05 | KOSPI/KOSDAQ daily OHLC (60 days) |
+| `/api/premium/market/korea/stocks/momentum` | $0.05 | Top gainers/losers/market cap |
+| `/api/premium/market/korea/investor-flow` | $0.05 | Stock investor flow (foreign/institutional) |
+| `/api/premium/market/korea/index-flow` | $0.03 | Index-level investor flow |
+| `/api/premium/market/korea/stock-detail` | $0.05 | Stock analysis (PER, PBR, consensus) |
+| `/api/premium/market/korea/stock-news` | $0.03 | Stock-specific news |
+| `/api/premium/market/korea/themes` | $0.05 | Market themes/sectors |
+| `/api/premium/market/korea/disclosure` | $0.03 | Corporate disclosures |
+| `/api/premium/market/korea/etf` | $0.03 | 1,070+ Korean ETFs |
+| `/api/premium/market/global/indices-chart` | $0.02 | Global index charts (Dow, NASDAQ, etc.) |
+
+</details>
+
+<details>
+<summary><strong>Bundle APIs ($0.10–$0.20)</strong></summary>
+
+| Endpoint | Price | Description |
+|----------|-------|-------------|
+| `/api/premium/morning/brief` | $0.20 | Morning Brief (kimchi + FX + stocks + headlines) |
+| `/api/premium/crypto/snapshot` | $0.15 | Crypto Snapshot (5-exchange + kimchi + volume + FX) |
+| `/api/premium/kimchi/stats` | $0.15 | Kimchi Stats (spreads + trend + arbitrage signal) |
+| `/api/premium/market/korea/stock-brief` | $0.10 | Stock Brief (fundamentals + news + flow) |
+
+</details>
+
+<details>
+<summary><strong>Routing Engine</strong></summary>
+
+| Endpoint | Price | Description |
+|----------|-------|-------------|
+| `GET /api/route/exchanges` | Free | Supported exchanges and coins |
+| `GET /api/route/fees` | Free | Fee comparison table |
+| `GET /api/route/pairs` | Free | Trading pairs with live prices |
+| `GET /api/route/status` | Free | Exchange health check |
+| `GET /api/premium/route/find` | $0.10 | Full optimal route analysis |
+| `POST /api/acp/quote` | Free | ACP-compatible routing quote (preview) |
+
+</details>
+
+<details>
+<summary><strong>Registry & Discovery (Free)</strong></summary>
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/registry` | List all 184 services |
+| `GET /api/registry/search?q=...` | Full-text search |
+| `GET /api/registry/categories` | Categories with counts |
+| `GET /api/docs/guide` | Structured agent guide |
+| `GET /.well-known/crossfin.json` | Agent auto-discovery |
+| `GET /api/openapi.json` | OpenAPI 3.1 spec |
+
+</details>
+
+---
+
+## Payment (x402)
+
+No API keys. No subscriptions. Pay per call with USDC on Base.
 
 ```javascript
-import { x402Client, wrapFetchWithPayment } from '@x402/fetch';
-import { registerExactEvmScheme } from '@x402/evm/exact/client';
-import { privateKeyToAccount } from 'viem/accounts';
+import { x402Client, wrapFetchWithPayment } from '@x402/fetch'
+import { registerExactEvmScheme } from '@x402/evm/exact/client'
+import { privateKeyToAccount } from 'viem/accounts'
 
-const signer = privateKeyToAccount(process.env.EVM_PRIVATE_KEY);
-const client = new x402Client();
-registerExactEvmScheme(client, { signer });
+const signer = privateKeyToAccount(process.env.EVM_PRIVATE_KEY)
+const client = new x402Client()
+registerExactEvmScheme(client, { signer })
 
-const paidFetch = wrapFetchWithPayment(fetch, client);
-const res = await paidFetch('https://crossfin.dev/api/premium/arbitrage/kimchi', { method: 'GET' });
-console.log(await res.json());
+const paidFetch = wrapFetchWithPayment(fetch, client)
+const res = await paidFetch('https://crossfin.dev/api/premium/arbitrage/kimchi')
+console.log(await res.json())
 ```
 
-### Pay with x402 (Python)
+<details>
+<summary><strong>Python</strong></summary>
 
 ```python
 import os
@@ -264,101 +234,32 @@ with x402_requests(client) as session:
     print(r.json())
 ```
 
-## Revenue Model
+</details>
 
-```
-Phase 1 (Now)      → Own API revenue: $0.01–$0.10 per call (31 paid APIs incl. routing)
-Phase 2 (3 months) → Proxy fee: 5% on every call through /api/proxy/:serviceId
-Phase 3 (6 months) → Agent banking: wallet management, budget controls, fiat on-ramp
-```
+---
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| API | Cloudflare Workers + Hono |
-| Database | Cloudflare D1 (SQLite) |
-| Payments | x402 protocol (@x402/hono, @x402/extensions/bazaar) |
-| Network | Base mainnet, USDC |
-| MCP Server | @modelcontextprotocol/sdk (16 tools) |
-| Frontend | React + Vite → Cloudflare Pages |
-| Live Demo | React + Vite → Cloudflare Pages (live.crossfin.dev) |
-| Domain | crossfin.dev + live.crossfin.dev |
+Cloudflare Workers + Hono, D1 (SQLite), x402 protocol, USDC on Base, MCP SDK, React + Vite (dashboard)
 
 ## Project Structure
 
 ```
 apps/
-    api/          Cloudflare Workers API (v1.7.1)
-    src/
-      index.ts    Routes, x402 paywall, registry, guide, seeds, proxy, analytics
-    migrations/
-      0001_init.sql               Agents, wallets, transactions, budgets
-      0002_services_registry.sql  Services registry + call logging
-      0003_kimchi_history.sql     Kimchi premium hourly snapshots
-    scripts/
-      x402-paid-fetch.mjs    Test x402 paid endpoints
-      x402-funds-check.mjs   Check Base wallet balance
-      x402-usdc-balance.mjs  Check USDC balance
-      x402-gen-wallet.mjs    Generate EVM wallet
-mcp-server/   MCP Server (16 tools)
-    src/
-      index.ts       MCP tool definitions + CrossFin API integration
-      ledgerStore.ts Local ledger for wallet/budget tools
-  web/          Gateway Dashboard (React, tab-based UI)
-    src/
-      App.tsx       3-tab layout: Services, Developers, Activity
-      App.css       Tab bar + component styles
-      lib/api.ts    API client with type-safe fetchers
-    public/
-      .well-known/crossfin.json  Static agent discovery metadata
-  live/         Live Demo Dashboard (React)
-    src/
-      App.tsx       Real-time monitoring: kimchi premium, gateway stats, health
-      App.css       Dark trading-terminal theme
-```
-
-## Development
-
-```bash
-# API
-cd apps/api
-npm install
-npx wrangler d1 migrations apply crossfin-db --local
-npx wrangler dev --port 8787
-
-# Frontend
-cd apps/web
-npm install
-npm run dev
-```
-
-## Deploy
-
-```bash
-# API → crossfin.dev/api/*
-cd apps/api && npx wrangler deploy
-
-# Frontend → crossfin.dev
-cd apps/web && npm run build && npx wrangler pages deploy dist --project-name crossfin
-
-# Live Demo → live.crossfin.dev
-cd apps/live && npm run build && npx wrangler pages deploy dist --project-name crossfin-live
+  api/          Cloudflare Workers API
+  mcp-server/   MCP Server (16 tools, npm: crossfin-mcp)
+  web/          Gateway Dashboard (crossfin.dev)
+  live/         Live Demo (live.crossfin.dev)
 ```
 
 ## Links
 
-- **Dashboard:** https://crossfin.dev
-- **Live Demo:** https://live.crossfin.dev
-- **Agent Guide:** https://crossfin.dev/api/docs/guide
-- **Agent Discovery:** https://crossfin.dev/.well-known/crossfin.json
-- **Registry Stats:** https://crossfin.dev/api/registry/stats
-- **Free Demo:** https://crossfin.dev/api/arbitrage/demo
-- **OpenAPI Spec:** https://crossfin.dev/api/openapi.json
-- **Analytics:** https://crossfin.dev/api/analytics/overview
-- **x402 Ecosystem PR:** https://github.com/coinbase/x402/pull/1187
-- **BlockRun Listing:** https://github.com/BlockRunAI/awesome-blockrun/issues/5
+- [Dashboard](https://crossfin.dev) — Gateway UI
+- [Live Demo](https://live.crossfin.dev) — Real-time routing demo
+- [Agent Guide](https://crossfin.dev/api/docs/guide) — Structured JSON for agents
+- [OpenAPI Spec](https://crossfin.dev/api/openapi.json) — Machine-readable API spec
+- [npm: crossfin-mcp](https://www.npmjs.com/package/crossfin-mcp) — MCP server package
 
-## Built With AI
+## Built with AI
 
-CrossFin was built entirely through AI collaboration (Claude) by a non-developer in 2.5 weeks. Zero prior coding experience. This project itself is proof that AI agents can build production software — and CrossFin is the infrastructure for that future.
+CrossFin was built entirely through AI collaboration by a non-developer in 3 weeks. Zero prior coding experience. This project is proof that AI agents can build production software — and CrossFin is the infrastructure for that future.

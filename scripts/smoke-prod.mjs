@@ -207,6 +207,10 @@ async function runOnce(baseUrl, liveUrl, timeoutMs, runId) {
   assert(isRecord(wellKnown.mcp), 'well-known.mcp must be an object')
   assert(String(wellKnown.mcp.package ?? '') === 'crossfin-mcp', 'well-known.mcp.package must be crossfin-mcp')
   assert(String(wellKnown.mcp.run ?? '').includes('crossfin-mcp'), 'well-known.mcp.run must include crossfin-mcp')
+  assert(Array.isArray(wellKnown.mcp.tools), 'well-known.mcp.tools must be an array')
+  for (const requiredTool of ['find_optimal_route', 'list_exchange_fees', 'compare_exchange_prices']) {
+    assert(wellKnown.mcp.tools.includes(requiredTool), `well-known.mcp.tools must include ${requiredTool}`)
+  }
 
   const guide = await ok200Json(`${baseUrl}/api/docs/guide`, timeoutMs)
   assert(isRecord(guide), 'guide payload must be an object')
@@ -218,9 +222,18 @@ async function runOnce(baseUrl, liveUrl, timeoutMs, runId) {
   const openapi = await ok200Json(`${baseUrl}/api/openapi.json`, timeoutMs)
   assert(isRecord(openapi), 'openapi payload must be an object')
   assert(typeof openapi.openapi === 'string' && openapi.openapi.startsWith('3.'), 'openapi.openapi must be a version string')
+  assert(isRecord(openapi.info) && openapi.info.version === health.version, 'openapi.info.version must match /api/health version')
   assert(isRecord(openapi.paths), 'openapi.paths must be an object')
   assert(isRecord(openapi.paths['/api/analytics/funnel/overview']), 'openapi must include funnel overview endpoint')
   assert(isRecord(openapi.paths['/api/analytics/funnel/events']), 'openapi must include funnel events endpoint')
+  assert(isRecord(openapi.paths['/api/route/exchanges']), 'openapi must include /api/route/exchanges')
+  assert(isRecord(openapi.paths['/api/route/fees']), 'openapi must include /api/route/fees')
+  assert(isRecord(openapi.paths['/api/route/pairs']), 'openapi must include /api/route/pairs')
+  assert(isRecord(openapi.paths['/api/route/status']), 'openapi must include /api/route/status')
+  assert(isRecord(openapi.paths['/api/premium/route/find']), 'openapi must include /api/premium/route/find')
+  assert(isRecord(openapi.paths['/api/acp/status']), 'openapi must include /api/acp/status')
+  assert(isRecord(openapi.paths['/api/acp/quote']), 'openapi must include /api/acp/quote')
+  assert(isRecord(openapi.paths['/api/acp/execute']), 'openapi must include /api/acp/execute')
 
   const registryStats = await ok200Json(`${baseUrl}/api/registry/stats`, timeoutMs)
   assert(isRecord(registryStats) && isRecord(registryStats.services), 'registry stats must include services object')
@@ -254,10 +267,63 @@ async function runOnce(baseUrl, liveUrl, timeoutMs, runId) {
   assert(survival.alive === true, 'survival.alive must be true')
   assert(survival.version === health.version, 'survival.version must match /api/health version')
 
+  // Routing engine (free)
+  const routeExchanges = await ok200Json(`${baseUrl}/api/route/exchanges`, timeoutMs)
+  assert(isRecord(routeExchanges) && Array.isArray(routeExchanges.exchanges), 'route/exchanges must include exchanges array')
+  const routeExchangeIds = (routeExchanges.exchanges ?? []).map((e) => (isRecord(e) ? String(e.id ?? '') : '')).filter(Boolean)
+  const expectedExchanges = ['bithumb', 'upbit', 'coinone', 'gopax', 'binance']
+  assert(routeExchangeIds.length === expectedExchanges.length, `route/exchanges must return ${expectedExchanges.length} exchanges`)
+  for (const ex of expectedExchanges) {
+    assert(routeExchangeIds.includes(ex), `route/exchanges must include ${ex}`)
+  }
+  assert(!routeExchangeIds.includes('korbit'), 'route/exchanges must not include korbit')
+
+  const routeStatus = await ok200Json(`${baseUrl}/api/route/status`, timeoutMs)
+  assert(isRecord(routeStatus) && Array.isArray(routeStatus.exchanges), 'route/status must include exchanges array')
+  const statusIds = routeStatus.exchanges.map((e) => (isRecord(e) ? String(e.exchange ?? '') : '')).filter(Boolean)
+  for (const ex of expectedExchanges) {
+    assert(statusIds.includes(ex), `route/status must include ${ex}`)
+  }
+  assert(!statusIds.includes('korbit'), 'route/status must not include korbit')
+  for (const row of routeStatus.exchanges) {
+    assert(isRecord(row), 'route/status exchange entry must be an object')
+    assert(typeof row.exchange === 'string' && row.exchange.trim(), 'route/status exchange entry must have exchange')
+    assert(row.status === 'online' || row.status === 'offline', 'route/status entry status must be online|offline')
+  }
+
+  const routeFees = await ok200Json(`${baseUrl}/api/route/fees?coin=XRP`, timeoutMs)
+  assert(isRecord(routeFees) && Array.isArray(routeFees.fees), 'route/fees must include fees array')
+  assert(routeFees.fees.length === expectedExchanges.length, `route/fees must return ${expectedExchanges.length} entries`)
+  for (const row of routeFees.fees) {
+    assert(isRecord(row), 'route/fees entry must be an object')
+    assert(expectedExchanges.includes(String(row.exchange ?? '')), 'route/fees entry exchange must be supported')
+    assert(typeof row.tradingFeePct === 'number', 'route/fees entry tradingFeePct must be number')
+    assert(isRecord(row.withdrawalFees), 'route/fees entry withdrawalFees must be object')
+    assert(typeof row.withdrawalFees.XRP === 'number', 'route/fees must include XRP withdrawal fee number')
+  }
+
+  const routePairs = await ok200Json(`${baseUrl}/api/route/pairs`, timeoutMs)
+  assert(isRecord(routePairs) && Array.isArray(routePairs.pairs), 'route/pairs must include pairs array')
+  assert(typeof routePairs.krwUsdRate === 'number' && Number.isFinite(routePairs.krwUsdRate), 'route/pairs.krwUsdRate must be a number')
+  const btcRow = routePairs.pairs.find((p) => isRecord(p) && String(p.coin ?? '') === 'BTC')
+  assert(isRecord(btcRow), 'route/pairs must include BTC row')
+  assert(typeof btcRow.binanceUsd === 'number' && Number.isFinite(btcRow.binanceUsd) && btcRow.binanceUsd > 1000, 'route/pairs BTC binanceUsd must be a sane number')
+
+  // ACP status (free)
+  const acpStatus = await ok200Json(`${baseUrl}/api/acp/status`, timeoutMs)
+  assert(isRecord(acpStatus), 'acp/status must be an object')
+  assert(Array.isArray(acpStatus.supported_exchanges), 'acp/status.supported_exchanges must be an array')
+  for (const ex of expectedExchanges) {
+    assert(acpStatus.supported_exchanges.includes(ex), `acp/status.supported_exchanges must include ${ex}`)
+  }
+  assert(!acpStatus.supported_exchanges.includes('korbit'), 'acp/status.supported_exchanges must not include korbit')
+
   await postFunnelEvent(baseUrl, timeoutMs, runId)
 
   await expect402Paywall(`${baseUrl}/api/premium/report`, timeoutMs)
   await expect402Paywall(`${baseUrl}/api/premium/arbitrage/kimchi`, timeoutMs)
+  await expect402Paywall(`${baseUrl}/api/premium/route/find?from=bithumb:KRW&to=binance:USDC&amount=1000000&strategy=cheapest`, timeoutMs)
+  await expect402Paywall(`${baseUrl}/api/premium/crypto/korea/5exchange?coin=BTC`, timeoutMs)
 
   await checkLiveSite(`${liveUrl}/`, timeoutMs)
 

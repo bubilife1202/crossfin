@@ -1,85 +1,14 @@
 # CrossFin MCP Server
 
-MCP server for CrossFin — 16 tools for service discovery, local ledger, routing engine, and paid API execution.
+**Give your AI agent access to Asian crypto markets.** 16 tools for real-time Korean exchange data, cross-exchange routing, and x402 paid API execution.
 
-## Install (npm)
-
-Use directly with `npx`:
+## Install
 
 ```bash
 npx -y crossfin-mcp
 ```
 
-Or install globally:
-
-```bash
-npm i -g crossfin-mcp
-crossfin-mcp
-```
-
-## Tools
-
-### Local ledger
-
-- `create_wallet`
-- `get_balance`
-- `transfer`
-- `list_transactions`
-- `set_budget`
-
-### CrossFin API (live)
-
-- `search_services`
-- `list_services`
-- `get_service`
-- `list_categories`
-- `get_kimchi_premium`
-- `get_analytics`
-- `get_guide`
-
-### Routing engine
-
-- `find_optimal_route` — find optimal crypto transfer route across 5 exchanges (paid via x402, requires `EVM_PRIVATE_KEY`)
-- `list_exchange_fees` — compare trading and withdrawal fees across exchanges
-- `compare_exchange_prices` — compare live prices for a coin across Korean exchanges
-
-### Paid execution
-
-- `call_paid_service` — call any CrossFin paid endpoint with automatic x402 USDC payment on Base (requires `EVM_PRIVATE_KEY`)
-
-## Run (dev)
-
-```bash
-cd apps/mcp-server
-npm install
-npm run dev
-```
-
-## Ledger storage
-
-By default the server stores data at:
-
-- `~/.crossfin/ledger.json`
-
-Override with:
-
-```bash
-export CROSSFIN_LEDGER_PATH="/path/to/ledger.json"
-```
-
-## API base URL
-
-By default the server calls the live CrossFin API at `https://crossfin.dev`.
-
-Override with:
-
-```bash
-export CROSSFIN_API_URL="https://crossfin.dev"
-```
-
-## Claude Desktop config (example)
-
-Use the published npm package:
+### Claude Desktop config
 
 ```json
 {
@@ -88,7 +17,6 @@ Use the published npm package:
       "command": "npx",
       "args": ["-y", "crossfin-mcp"],
       "env": {
-        "CROSSFIN_API_URL": "https://crossfin.dev",
         "EVM_PRIVATE_KEY": "0x..."
       }
     }
@@ -96,27 +24,55 @@ Use the published npm package:
 }
 ```
 
-Or point Claude Desktop to the local built output:
+> **No EVM key?** Free tools work without one. Paid tools ($0.01–$0.10 per call) require a Base wallet with USDC.
 
-```json
-{
-  "mcpServers": {
-    "crossfin": {
-      "command": "node",
-      "args": ["/ABS/PATH/TO/crossfin/apps/mcp-server/dist/index.js"],
-      "env": {
-        "CROSSFIN_LEDGER_PATH": "/ABS/PATH/TO/ledger.json",
-        "CROSSFIN_API_URL": "https://crossfin.dev",
-        "EVM_PRIVATE_KEY": "0x..."
-      }
-    }
-  }
-}
-```
+## What your agent can do
 
-Build:
+- **"빗썸에서 바이낸스로 500만원 USDC 만들려면?"** → `find_optimal_route` evaluates 11 bridge coins, returns cheapest path
+- **"김치 프리미엄 얼마야?"** → `get_kimchi_premium` returns real-time spread across 11 pairs
+- **"거래소별 XRP 가격 비교해줘"** → `compare_exchange_prices` checks 4 Korean exchanges
+- **"한국 시장 브리핑해줘"** → `call_paid_service` calls Morning Brief bundle
 
-```bash
-cd apps/mcp-server
-npm run build
-```
+## Tools
+
+| Tool | Free/Paid | Description |
+|------|-----------|-------------|
+| `find_optimal_route` | $0.10 | Optimal crypto transfer path across 5 exchanges (11 bridge coins) |
+| `list_exchange_fees` | Free | Trading + withdrawal fee comparison |
+| `compare_exchange_prices` | Free | Live price comparison across Korean exchanges |
+| `get_kimchi_premium` | Free | Korean vs. global price spread preview |
+| `call_paid_service` | Varies | Call any of 35 paid APIs with automatic x402 payment |
+| `search_services` | Free | Search 184 registered services |
+| `list_services` | Free | Browse service catalog |
+| `get_service` | Free | Service details |
+| `list_categories` | Free | Service categories |
+| `get_guide` | Free | Full agent guide |
+| `get_analytics` | Free | Gateway usage stats |
+| `create_wallet` | Free | Local ledger wallet |
+| `get_balance` | Free | Check wallet balance |
+| `transfer` | Free | Transfer between wallets |
+| `list_transactions` | Free | Transaction history |
+| `set_budget` | Free | Daily spend limit |
+
+## Supported exchanges
+
+Bithumb, Upbit, Coinone, GoPax (Korea) + Binance (Global)
+
+## Bridge coins
+
+BTC, ETH, XRP, SOL, DOGE, ADA, DOT, LINK, AVAX, TRX, KAIA
+
+## Environment variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `EVM_PRIVATE_KEY` | For paid tools | Base wallet private key for x402 USDC payments |
+| `CROSSFIN_API_URL` | No | API base URL (default: `https://crossfin.dev`) |
+| `CROSSFIN_LEDGER_PATH` | No | Local ledger path (default: `~/.crossfin/ledger.json`) |
+
+## Links
+
+- [crossfin.dev](https://crossfin.dev) — Dashboard
+- [live.crossfin.dev](https://live.crossfin.dev) — Live routing demo
+- [GitHub](https://github.com/bubilife1202/crossfin) — Source code
+- [npm](https://www.npmjs.com/package/crossfin-mcp) — Package
