@@ -20,14 +20,27 @@ import {
 } from './ledgerStore.js'
 
 
-const LEDGER_PATH = process.env.CROSSFIN_LEDGER_PATH?.trim() || defaultLedgerPath()
-const API_BASE = (process.env.CROSSFIN_API_URL?.trim() || 'https://crossfin.dev').replace(/\/$/, '')
-const EVM_PRIVATE_KEY = process.env.EVM_PRIVATE_KEY?.trim() ?? ''
-const API_ORIGIN = new URL(API_BASE).origin
+/* ── Version ── */
+let MCP_VERSION = '0.0.0'
+try {
+  const _require = createRequire(import.meta.url || 'file:///fallback')
+  const pkg = _require('../package.json') as { version?: string }
+  if (typeof pkg.version === 'string' && pkg.version.trim()) MCP_VERSION = pkg.version.trim()
+} catch { /* CJS / bundler fallback */ }
 
-const require = createRequire(import.meta.url)
-const pkg = require('../package.json') as { version?: string }
-const MCP_VERSION = typeof pkg.version === 'string' && pkg.version.trim() ? pkg.version.trim() : '0.0.0'
+/* ── Smithery session config ── */
+export const configSchema = z.object({
+  evmPrivateKey: z.string().optional().describe('Base wallet private key for x402 USDC payments (optional — free tools work without it)'),
+  apiUrl: z.string().optional().describe('CrossFin API base URL (default: https://crossfin.dev)'),
+  ledgerPath: z.string().optional().describe('Local ledger file path'),
+})
+
+/* ── Server factory (Smithery SDK compatible) ── */
+export default function createServer({ config }: { config: z.infer<typeof configSchema> }) {
+const LEDGER_PATH = config.ledgerPath?.trim() || defaultLedgerPath()
+const API_BASE = (config.apiUrl?.trim() || 'https://crossfin.dev').replace(/\/$/, '')
+const EVM_PRIVATE_KEY = config.evmPrivateKey?.trim() ?? ''
+const API_ORIGIN = new URL(API_BASE).origin
 
 function ensureCrossfinPaidUrl(raw: string): string {
   let url: URL
@@ -607,5 +620,18 @@ server.registerTool(
   }
 )
 
-const transport = new StdioServerTransport()
-await server.connect(transport)
+return server.server
+}
+
+/* ── Standalone (npx crossfin-mcp) ── */
+if (process.argv[1] && import.meta.url && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/'))) {
+  const srv = createServer({
+    config: {
+      evmPrivateKey: process.env.EVM_PRIVATE_KEY,
+      apiUrl: process.env.CROSSFIN_API_URL,
+      ledgerPath: process.env.CROSSFIN_LEDGER_PATH,
+    },
+  })
+  const transport = new StdioServerTransport()
+  srv.connect(transport).catch((e: unknown) => { console.error(e); process.exit(1) })
+}
