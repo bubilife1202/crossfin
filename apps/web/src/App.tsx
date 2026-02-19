@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import './App.css'
+import RouteGraph from './components/RouteGraph'
 import {
   fetchAnalytics,
   fetchFunnelOverview,
@@ -19,10 +20,10 @@ import {
 } from './lib/api'
 import { CROSSFIN_PLAYGROUND_ENDPOINTS } from './lib/catalog.generated'
 
-type TabId = 'services' | 'developers' | 'activity'
+type TabId = 'routing' | 'services' | 'developers' | 'activity'
 
-const TAB_IDS: readonly TabId[] = ['services', 'developers', 'activity'] as const
-const tabLabels: Record<TabId, string> = { services: 'Services', developers: 'Developers', activity: 'Activity' }
+const TAB_IDS: readonly TabId[] = ['routing', 'services', 'developers', 'activity'] as const
+const tabLabels: Record<TabId, string> = { routing: 'Routing', services: 'Services', developers: 'Developers', activity: 'Activity' }
 const MCP_NPX_COMMAND = 'npx -y crossfin-mcp'
 const MCP_ENV_SNIPPET = `CROSSFIN_API_URL=https://crossfin.dev
 EVM_PRIVATE_KEY=0x...`
@@ -41,7 +42,7 @@ const MCP_CLAUDE_CONFIG = `{
 
 function parseHash(): TabId {
   const raw = window.location.hash.replace('#', '') as TabId
-  return TAB_IDS.includes(raw) ? raw : 'services'
+  return TAB_IDS.includes(raw) ? raw : 'routing'
 }
 
 type LoadState<T> =
@@ -356,10 +357,11 @@ function App() {
 
       <main className="content">
         <section className="heroCompact">
-          <div className="heroBadge">Cross-Border Crypto Routing Engine</div>
-          <h1>The only way AI agents <span className="heroAccent">access Asian crypto markets</span></h1>
+          <div className="heroBadge">Cross-Border Crypto Intelligence Layer</div>
+          <h1>The only way to <span className="heroAccent">compare every cross-border crypto route</span></h1>
           <p className="heroSub">
-            Route capital across 7 exchanges with 11 bridge coins. Real-time kimchi premium, arbitrage signals, and 35+ paid APIs. Agents pay per-call with USDC via x402.
+            Hundreds of routes exist across exchanges, coins, and chains — but no one compares them all.
+            CrossFin aggregates 5 cost layers into a single number per route, finding the optimal path in real-time.
           </p>
 
           <div className="heroCtas">
@@ -559,6 +561,42 @@ function App() {
             </button>
           ))}
         </div>
+
+        {activeTab === 'routing' && (
+        <section id="routing" className="section">
+          <div className="sectionHeader">
+            <h2>Routing Engine</h2>
+            <p className="sectionSub">
+              Cross-border crypto routing — find the cheapest path across exchanges in real-time
+            </p>
+          </div>
+
+          <RouteGraph />
+
+          <div style={{
+            marginTop: 24,
+            padding: '16px 20px',
+            background: '#141B2D',
+            border: '1px solid #384152',
+            borderLeft: '3px solid #FFB800',
+            borderRadius: 4,
+            maxWidth: 850,
+            margin: '24px auto 0',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 'bold', color: '#FFB800', letterSpacing: 1 }}>COMING SOON</span>
+            </div>
+            <div style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6 }}>
+              <strong>Graph-based routing algorithm</strong> — Currently scanning 77 routes via brute-force (7 exchanges × 11 coins).
+              Next update: Dijkstra shortest-path with liquidity-weighted edges for 1,000+ routes across 20+ exchanges,
+              DEX aggregators, and cross-chain bridges. Real-time pruning + predictive timing recommendations.
+            </div>
+            <div style={{ fontSize: 11, color: '#7B8794', marginTop: 8 }}>
+              ETA: March 2025 · Phase 2 of CrossFin Intelligence Layer
+            </div>
+          </div>
+        </section>
+        )}
 
         {activeTab === 'activity' && (
         <section id="activity" className="section">
