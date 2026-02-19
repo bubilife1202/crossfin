@@ -11,8 +11,8 @@ CrossFin AI agent on Telegram. Korean/Asia crypto market data, routing, and rout
 | Command | Description |
 |---------|-------------|
 | `/route <from> <to> <amount>` | Find the cheapest transfer path across 9 exchanges |
-| `/price <coin>` | Live price comparison across Korean exchanges |
-| `/spread [coin]` | Route spread index (Korea vs global) |
+| `/price <coin>` | Live Bithumb KRW vs Binance USD prices |
+| `/spread [coin]` | Route spread demo (top 3 pairs, Korea vs global) |
 | `/fees [coin]` | Trading + withdrawal fee comparison |
 | `/status` | Exchange network health (9 exchanges) |
 | `/help` | List all commands |

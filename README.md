@@ -45,7 +45,7 @@ Restart Claude Desktop. Done. 16 tools available immediately.
 
 - `find_optimal_route` — cheapest/fastest/balanced path across Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit using 11 bridge coins (BTC, ETH, XRP, SOL, DOGE, ADA, DOT, LINK, AVAX, TRX, KAIA)
 - `get_kimchi_premium` — real-time Korean vs. global price spread
-- `compare_exchange_prices` — live price comparison across Korean exchanges
+- `compare_exchange_prices` — live Bithumb KRW vs Binance USD price comparison
 - `call_paid_service` — call any of 35 paid APIs with automatic x402 USDC payment
 
 ---
@@ -89,7 +89,7 @@ Supports bidirectional routing: Korea → Global and Global → Korea.
 |------|-------------|
 | `find_optimal_route` | Optimal crypto transfer path across 9 exchanges (paid, $0.10) |
 | `list_exchange_fees` | Trading + withdrawal fee comparison |
-| `compare_exchange_prices` | Live price comparison across Korean exchanges |
+| `compare_exchange_prices` | Live Bithumb KRW vs Binance USD comparison |
 | `get_kimchi_premium` | Korean vs. global price spread (free preview) |
 | `search_services` | Search registered services |
 | `get_guide` | Full agent guide (services, payment flow, examples) |
@@ -160,9 +160,19 @@ All paid via x402 (USDC on Base). No API key needed.
 | Endpoint | Price | Description |
 |----------|-------|-------------|
 | `/api/premium/morning/brief` | $0.20 | Morning Brief (route spread + FX + stocks + headlines) |
-| `/api/premium/crypto/snapshot` | $0.15 | Crypto Snapshot (5-exchange + route spread + volume + FX) |
+| `/api/premium/crypto/snapshot` | $0.15 | Crypto Snapshot (4-exchange + route spread + volume + FX) |
 | `/api/premium/kimchi/stats` | $0.15 | Route Spread Stats (spreads + trend + arbitrage signal) |
 | `/api/premium/market/korea/stock-brief` | $0.10 | Stock Brief (fundamentals + news + flow) |
+
+</details>
+
+<details>
+<summary><strong>Utility Paid APIs</strong></summary>
+
+| Endpoint | Price | Description |
+|----------|-------|-------------|
+| `/api/premium/report` | $0.001 | Premium report (agents/wallets/transactions summary) |
+| `/api/premium/enterprise` | $20.00 | Enterprise receipt/proof endpoint |
 
 </details>
 

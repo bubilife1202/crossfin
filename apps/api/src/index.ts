@@ -988,7 +988,7 @@ app.get('/api/docs/guide', (c) => {
       'Routing engine supports bidirectional transfers: Korea→Global and Global→Korea.',
     ],
     crossfinServices: {
-      _note: '35 paid endpoints organized by category. All paid via x402 with USDC on Base mainnet.',
+      _note: '33 cataloged paid endpoints organized by category (+2 utility paid endpoints: /api/premium/report, /api/premium/enterprise). All paid via x402 with USDC on Base mainnet.',
       crypto_arbitrage: [
         { id: 'crossfin_kimchi_premium', endpoint: '/api/premium/arbitrage/kimchi', price: '$0.05', description: 'Real-time Route Spread Index — price spread between Korean (Bithumb) and global (Binance) exchanges for 11 crypto pairs including KAIA.' },
         { id: 'crossfin_kimchi_premium_history', endpoint: '/api/premium/arbitrage/kimchi/history', price: '$0.05', description: 'Hourly snapshots of route spread data from D1 database, up to 7 days lookback. Query by coin and time range.' },
@@ -1031,7 +1031,7 @@ app.get('/api/docs/guide', (c) => {
       ],
       bundle_apis: [
         { id: 'crossfin_morning_brief', endpoint: '/api/premium/morning/brief', price: '$0.20', description: 'Morning Brief — route spread + FX + KOSPI/KOSDAQ + stock momentum + headlines in one call. Best value for daily market overview.' },
-        { id: 'crossfin_crypto_snapshot', endpoint: '/api/premium/crypto/snapshot', price: '$0.15', description: 'Crypto Snapshot — 5-exchange BTC prices + route spread + Bithumb volume + FX rate in one call.' },
+        { id: 'crossfin_crypto_snapshot', endpoint: '/api/premium/crypto/snapshot', price: '$0.15', description: 'Crypto Snapshot — 4-exchange BTC prices + route spread + Bithumb volume + FX rate in one call.' },
         { id: 'crossfin_kimchi_stats', endpoint: '/api/premium/kimchi/stats', price: '$0.15', description: 'Route Spread Stats — current spreads + 24h trend + arbitrage signal + cross-exchange spread in one call.' },
         { id: 'crossfin_stock_brief', endpoint: '/api/premium/market/korea/stock-brief?stock=005930', price: '$0.10', description: 'Stock Brief — fundamentals + news + investor flow + disclosures for any Korean stock in one call.' },
       ],
@@ -1049,6 +1049,8 @@ app.get('/api/docs/guide', (c) => {
         { id: 'binance', country: 'Global', tradingFee: '0.10%', note: 'Global exchange, trades in USDT/USDC' },
         { id: 'okx', country: 'Global', tradingFee: '0.08%', note: 'Deep global spot liquidity, strong USDT market depth' },
         { id: 'bybit', country: 'Global', tradingFee: '0.10%', note: 'High Asian spot liquidity with stable public API' },
+        { id: 'bitflyer', country: 'Japan', tradingFee: '0.15%', note: 'Largest Japanese exchange, synthetic pricing via global feed × FX' },
+        { id: 'wazirx', country: 'India', tradingFee: '0.20%', note: 'Indian exchange with INR pairs' },
       ],
       bridgeCoins: ['XRP', 'SOL', 'TRX', 'KAIA', 'ETH', 'BTC', 'ADA', 'DOGE', 'AVAX', 'DOT', 'LINK'],
       bridgeCoinNotes: {
@@ -1281,7 +1283,7 @@ app.get('/.well-known/x402.json', (c) => {
       { resource: `${origin}/api/premium/market/korea`, method: 'GET', price: '$0.03', description: 'Korean market sentiment overview' },
       { resource: `${origin}/api/premium/crypto/korea/5exchange`, method: 'GET', price: '$0.08', description: '4-exchange Korean crypto price comparison' },
       { resource: `${origin}/api/premium/morning/brief`, method: 'GET', price: '$0.20', description: 'Morning Brief bundle: route spread + FX + KOSPI/KOSDAQ + headlines' },
-      { resource: `${origin}/api/premium/crypto/snapshot`, method: 'GET', price: '$0.15', description: 'Crypto Snapshot: 5-exchange prices + route spread + volume + FX' },
+      { resource: `${origin}/api/premium/crypto/snapshot`, method: 'GET', price: '$0.15', description: 'Crypto Snapshot: 4-exchange prices + route spread + volume + FX' },
       { resource: `${origin}/api/premium/market/korea/indices`, method: 'GET', price: '$0.03', description: 'KOSPI & KOSDAQ real-time indices' },
       { resource: `${origin}/api/premium/market/korea/investor-flow`, method: 'GET', price: '$0.05', description: 'Stock investor flow: foreign/institutional/individual' },
       { resource: `${origin}/api/premium/market/korea/stocks/momentum`, method: 'GET', price: '$0.05', description: 'Top gainers/losers/market cap' },

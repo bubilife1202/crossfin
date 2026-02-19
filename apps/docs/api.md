@@ -83,3 +83,12 @@ Base URL: `https://crossfin.dev` — 9 exchanges: Bithumb, Upbit, Coinone, GoPax
   { method: 'GET', path: '/api/openapi.json', description: 'OpenAPI 3.1 spec', price: 'Free' },
   { method: 'GET', path: '/api/docs/guide', description: 'Structured agent guide', price: 'Free' },
 ]" />
+
+---
+
+## 8. Utility Paid APIs
+
+<ApiTable :endpoints="[
+  { method: 'GET', path: '/api/premium/report', description: 'Premium report (agents/wallets/transactions summary)', price: '$0.001' },
+  { method: 'GET', path: '/api/premium/enterprise', description: 'Enterprise receipt/proof endpoint', price: '$20.00' },
+]" />
