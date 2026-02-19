@@ -641,15 +641,6 @@ function isSelfDashboardCall(c: Context<Env>): boolean {
 }
 
 const INTERNAL_CALL_USER_AGENT_PATTERNS = [
-  'undici',
-  'node',
-  'curl/',
-  'postmanruntime',
-  'insomnia',
-  'python-requests',
-  'go-http-client',
-  'wrangler',
-  'github-actions',
   'smoke-prod',
   'contract-guard',
 ]
