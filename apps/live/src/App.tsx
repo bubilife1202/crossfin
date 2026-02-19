@@ -367,10 +367,26 @@ export default function App() {
     if (routePairsVal) setRoutePairs(routePairsVal);
     if (acpStatusVal) setAcpStatus(acpStatusVal);
 
-    setLastUpdate(new Date());
-    setConnected(true);
-    progressRef.current = 0;
-    setProgress(0);
+    const successfulReads = [
+      arbRaw,
+      statsRaw,
+      analyticsRaw,
+      healthVal,
+      survivalVal,
+      routeStatusVal,
+      routeFeesVal,
+      routePairsVal,
+      acpStatusVal,
+    ].filter((value) => value !== null).length;
+
+    const nextConnected = successfulReads > 0;
+    setConnected(nextConnected);
+
+    if (nextConnected) {
+      setLastUpdate(new Date());
+      progressRef.current = 0;
+      setProgress(0);
+    }
   }, []);
 
   useEffect(() => {
