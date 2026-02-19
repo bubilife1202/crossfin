@@ -88,6 +88,9 @@ function App() {
   const switchTab = useCallback((tab: TabId) => {
     setActiveTab(tab)
     history.replaceState(null, '', `#${tab}`)
+    requestAnimationFrame(() => {
+      document.querySelector('.tabBar')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
   }, [])
 
   const [pgEndpoint, setPgEndpoint] = useState<string>('/api/health')
@@ -240,7 +243,8 @@ function App() {
 
   function relativeTime(dateStr: string): string {
     const now = Date.now()
-    const then = new Date(dateStr).getTime()
+    const utcStr = dateStr.includes('T') || dateStr.endsWith('Z') ? dateStr : dateStr.replace(' ', 'T') + 'Z'
+    const then = new Date(utcStr).getTime()
     const diff = now - then
     if (Number.isNaN(diff) || diff < 0) return 'just now'
     const seconds = Math.floor(diff / 1000)
