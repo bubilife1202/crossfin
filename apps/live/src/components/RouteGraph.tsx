@@ -80,6 +80,13 @@ type RouteScenario = {
 }
 
 const API_BASE = ((import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || 'https://crossfin.dev').replace(/\/$/, '')
+const ROTATE_INTERVAL_MS = 10_000
+const ROTATE_SECONDS = ROTATE_INTERVAL_MS / 1000
+const GRAPH_WIDTH = 760
+const GRAPH_HEIGHT = 320
+const SOURCE_X = 118
+const COIN_X = 380
+const DEST_X = 642
 
 const EXCHANGE_LABELS: Record<string, string> = {
   bithumb: 'Bithumb',
@@ -104,6 +111,8 @@ const ROTATING_SCENARIOS: readonly RouteScenario[] = [
   { from: 'okx:USDC', to: 'wazirx:INR', amount: 1_000 },
 ] as const
 
+const INITIAL_SCENARIO: RouteScenario = ROTATING_SCENARIOS[0] ?? { from: 'bithumb:KRW', to: 'binance:USDC', amount: 1_000_000 }
+
 function formatExchange(exchange: string): string {
   const key = exchange.trim().toLowerCase()
   return EXCHANGE_LABELS[key] ?? exchange.trim()
@@ -118,14 +127,20 @@ function parseExchange(endpoint: string): string {
   return (exchange ?? '').toLowerCase()
 }
 
-function toUsd(value: number): string {
-  return `$${value.toFixed(2)}`
+function formatTradingFeePercent(fee: number): string {
+  if (!Number.isFinite(fee)) return 'N/A'
+  return `${fee.toFixed(2)}%`
+}
+
+function formatWithdrawalFee(value: number | undefined, coin: string | null): string {
+  if (!coin || !Number.isFinite(value)) return 'N/A'
+  return `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 6 })} ${coin}`
 }
 
 /* ── SVG layout helpers ──────────────────────────── */
 
-const NW: Record<GraphNode['type'], number> = { source: 120, coin: 80, dest: 120 }
-const NH: Record<GraphNode['type'], number> = { source: 44, coin: 30, dest: 44 }
+const NW: Record<GraphNode['type'], number> = { source: 112, coin: 74, dest: 112 }
+const NH: Record<GraphNode['type'], number> = { source: 40, coin: 28, dest: 40 }
 
 function bezierPath(x1: number, y1: number, x2: number, y2: number): string {
   const cp = (x2 - x1) * 0.4
@@ -172,18 +187,17 @@ const CSS = `
 
 .rg-err{margin-bottom:12px;padding:10px 14px;background:var(--red-dim);border:1px solid rgba(255,68,102,.2);color:var(--red);border-radius:8px;font-size:.88rem;font-weight:500}
 
-.rg-gw{margin:0 0 16px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--bg);transition:opacity .3s;width:100%}
+.rg-gw{margin:0 auto 14px;max-width:980px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--bg);transition:opacity .2s;width:100%}
 .rg-svg{display:block;width:100%;height:auto}
 .rg-svg text{font-family:var(--sans)}
 
 .rg-dash{animation:rgDash 1s linear infinite}
-.rg-draw{stroke-dasharray:400;animation:rgDraw .9s ease-out forwards}
-.rg-draw2{stroke-dasharray:400;stroke-dashoffset:400;animation:rgDraw .9s ease-out .7s forwards}
-.rg-glow-in{animation:rgGlowIn .3s ease-out forwards}
-.rg-glow-in2{animation:rgGlowIn .3s ease-out .6s forwards;opacity:0}
-.rg-dash-delayed{animation:rgDash 1s linear 1.4s infinite;opacity:0;animation-fill-mode:forwards}
-.rg-label-in{animation:rgGlowIn .3s ease-out .5s forwards;opacity:0}
-.rg-label-in2{animation:rgGlowIn .3s ease-out 1.1s forwards;opacity:0}
+.rg-draw{stroke-dasharray:400;animation:rgDraw .45s ease-out forwards}
+.rg-draw2{stroke-dasharray:400;stroke-dashoffset:400;animation:rgDraw .45s ease-out .16s forwards}
+.rg-glow-in{animation:rgGlowIn .18s ease-out forwards}
+.rg-glow-in2{animation:rgGlowIn .18s ease-out .14s forwards;opacity:0}
+.rg-label-in{animation:rgGlowIn .2s ease-out .12s forwards;opacity:0}
+.rg-label-in2{animation:rgGlowIn .2s ease-out .26s forwards;opacity:0}
 
 .rg-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px}
 .rg-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;transition:border-color .2s}
@@ -195,6 +209,8 @@ const CSS = `
 .rg-at th{text-align:left;padding:6px 10px;font-size:.74rem;font-weight:650;text-transform:uppercase;letter-spacing:.04em;color:var(--muted2);border-bottom:1px solid var(--border)}
 .rg-at td{padding:8px 10px;font-size:.9rem;border-bottom:1px solid rgba(255,255,255,.03);color:var(--muted)}
 .rg-at tbody tr:hover{background:rgba(255,255,255,.02)}
+.rg-action-guide{margin-top:10px;color:var(--muted);font-size:.82rem;line-height:1.5}
+.rg-action-guide b{color:var(--ink)}
 
 .rg-foot{margin-top:8px;font-size:.78rem;color:var(--muted2);text-align:right;font-family:var(--mono)}
 
@@ -211,8 +227,7 @@ const CSS = `
   .rg-grid{grid-template-columns:1fr}
   .rg-strats{flex:1 1 100%}
   .rg-strats .rg-sb{flex:1}
-  .rg-gw{overflow-x:auto}
-  .rg-svg{min-width:760px}
+  .rg-gw{max-width:100%;margin:0 0 12px}
   .rg-foot{text-align:left}
 }
 `
@@ -221,24 +236,28 @@ const CSS = `
 
 export default function RouteGraph() {
   const strategy: RoutingStrategy = 'cheapest'
-  const [scenarioIndex, setScenarioIndex] = useState<number>(0)
+  const scenarioIndexRef = useRef<number>(0)
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<RoutingResponse | null>(null)
   const [dataVersion, setDataVersion] = useState<number>(0)
-  const [countdown, setCountdown] = useState<number>(15)
+  const [countdown, setCountdown] = useState<number>(ROTATE_SECONDS)
+  const [isRotating, setIsRotating] = useState<boolean>(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const activeScenario = ROTATING_SCENARIOS[scenarioIndex] ?? ROTATING_SCENARIOS[0]
+  const requestSeqRef = useRef<number>(0)
 
   const loadRoute = useCallback(async (scenario: RouteScenario) => {
+    const requestSeq = ++requestSeqRef.current
     setLoading(true)
+    setIsRotating(true)
     setError(null)
 
     const amount = Number(scenario.amount)
     if (!Number.isFinite(amount) || amount <= 0) {
       setError('Amount must be a positive number')
       setLoading(false)
+      setIsRotating(false)
       return
     }
 
@@ -250,32 +269,36 @@ export default function RouteGraph() {
         throw new Error(`routing_fetch_failed:${res.status} ${text.slice(0, 120)}`)
       }
       const json = await res.json() as RoutingResponse
+      if (requestSeq !== requestSeqRef.current) return
       setData(json)
       setDataVersion((v) => v + 1)
     } catch (e) {
+      if (requestSeq !== requestSeqRef.current) return
       setError(e instanceof Error ? e.message : 'Failed to fetch route data')
       setData(null)
     } finally {
-      setLoading(false)
+      if (requestSeq === requestSeqRef.current) {
+        setLoading(false)
+        setIsRotating(false)
+      }
     }
   }, [])
 
-  /* ── auto-refresh every 15s ────────────────────── */
+  /* ── auto-refresh every 10s ────────────────────── */
   useEffect(() => {
-    void loadRoute(ROTATING_SCENARIOS[0])
-    setCountdown(15)
+    void loadRoute(INITIAL_SCENARIO)
+    setCountdown(ROTATE_SECONDS)
 
     if (intervalRef.current) clearInterval(intervalRef.current)
     if (countdownRef.current) clearInterval(countdownRef.current)
+    scenarioIndexRef.current = 0
 
     intervalRef.current = setInterval(() => {
-      setScenarioIndex((prev) => {
-        const next = (prev + 1) % ROTATING_SCENARIOS.length
-        void loadRoute(ROTATING_SCENARIOS[next])
-        return next
-      })
-      setCountdown(15)
-    }, 15_000)
+      const next = (scenarioIndexRef.current + 1) % ROTATING_SCENARIOS.length
+      scenarioIndexRef.current = next
+      void loadRoute(ROTATING_SCENARIOS[next] ?? INITIAL_SCENARIO)
+      setCountdown(ROTATE_SECONDS)
+    }, ROTATE_INTERVAL_MS)
 
     countdownRef.current = setInterval(() => {
       setCountdown((c) => Math.max(0, c - 1))
@@ -290,32 +313,35 @@ export default function RouteGraph() {
   /* ── build graph model ─────────────────────────── */
 
   const graph = useMemo(() => {
-    const fromEx = parseExchange(data?.request.from ?? activeScenario.from)
-    const toEx = parseExchange(data?.request.to ?? activeScenario.to)
+    const requestFrom = data?.request.from ?? INITIAL_SCENARIO.from
+    const requestTo = data?.request.to ?? INITIAL_SCENARIO.to
+    const fromEx = parseExchange(requestFrom)
+    const toEx = parseExchange(requestTo)
 
-    const routePool = [data?.optimal, ...(data?.alternatives ?? [])].filter((r): r is Route => Boolean(r))
-    const routedCoins = new Set(routePool.map((r) => r.bridgeCoin.toUpperCase()))
-    const allCoins = data?.meta.evaluatedCoins?.map((c) => c.toUpperCase()) ?? Array.from(routedCoins)
-    const coins = allCoins.length > 0 ? allCoins : Array.from(routedCoins)
+    // Keep the graph readable: render optimal + top alternatives only.
+    const routePool = [data?.optimal, ...(data?.alternatives ?? [])]
+      .filter((r): r is Route => Boolean(r))
+      .slice(0, 6)
+    const coins = Array.from(new Set(routePool.map((r) => r.bridgeCoin.toUpperCase())))
+    if (coins.length === 0) coins.push('N/A')
 
     const coinCount = Math.max(1, coins.length)
-    const svgH = 460
-    const usableH = svgH - 80
-    const gap = coinCount <= 1 ? 0 : Math.min(42, usableH / (coinCount - 1))
+    const usableH = GRAPH_HEIGHT - 84
+    const gap = coinCount <= 1 ? 0 : Math.min(34, usableH / (coinCount - 1))
     const totalH = (coinCount - 1) * gap
-    const midY = svgH / 2
+    const midY = GRAPH_HEIGHT / 2
     const startY = midY - totalH / 2
 
     const nodes: GraphNode[] = [
-      { id: fromEx, label: formatExchange(fromEx), x: 120, y: midY, type: 'source' },
+      { id: fromEx, label: formatExchange(fromEx), x: SOURCE_X, y: midY, type: 'source' },
       ...coins.map((coin, idx) => ({
         id: coin,
         label: coin,
-        x: 400,
+        x: COIN_X,
         y: startY + idx * gap,
         type: 'coin' as const,
       })),
-      { id: toEx, label: formatExchange(toEx), x: 680, y: midY, type: 'dest' },
+      { id: toEx, label: formatExchange(toEx), x: DEST_X, y: midY, type: 'dest' },
     ]
 
     const byKey = new Map<string, GraphEdge>()
@@ -347,7 +373,7 @@ export default function RouteGraph() {
     })
 
     return { nodes, edges: Array.from(byKey.values()), fromEx, toEx }
-  }, [data, activeScenario.from, activeScenario.to])
+  }, [data])
 
   /* ── derived values ────────────────────────────── */
 
@@ -356,8 +382,8 @@ export default function RouteGraph() {
   const tradingFees = data?.fees.trading ?? {}
   const optimalCoin = optimal?.bridgeCoin?.toUpperCase() ?? null
   const withdrawalByExchange = data?.fees.withdrawal ?? {}
-  const requestFrom = data?.request.from ?? activeScenario.from
-  const requestTo = data?.request.to ?? activeScenario.to
+  const requestFrom = data?.request.from ?? INITIAL_SCENARIO.from
+  const requestTo = data?.request.to ?? INITIAL_SCENARIO.to
   const fromCurrency = requestFrom.split(':')[1] ?? ''
   const toCurrency = requestTo.split(':')[1] ?? ''
 
@@ -381,32 +407,23 @@ export default function RouteGraph() {
     const x2 = n2.x - NW[n2.type] / 2
     const y2 = n2.y
     const d = bezierPath(x1, y1, x2, y2)
-    const mx = (x1 + x2) / 2
-    const my = (y1 + y2) / 2
-
     if (edge.isOptimal) {
       const first = isFirstLeg(edge)
       const drawClass = first ? 'rg-draw' : 'rg-draw2'
       const glowClass = first ? 'rg-glow-in' : 'rg-glow-in2'
-      const labelClass = first ? 'rg-label-in' : 'rg-label-in2'
 
       return (
         <g key={`oe-${idx}-${dataVersion}`}>
           <path d={d} fill="none" stroke="#00ff88" strokeWidth={3} opacity={0.06} className={glowClass} />
-          <path d={d} fill="none" stroke="url(#rgGrad)" strokeWidth={1.5} strokeLinecap="round" className={drawClass} />
+          <path d={d} fill="none" stroke="url(#rgGrad)" strokeWidth={1.7} strokeLinecap="round" className={drawClass} />
           <path d={d} fill="none" stroke="rgba(0,255,136,0.35)" strokeWidth={1} strokeLinecap="round" strokeDasharray="4 10"
-            style={{ animationDelay: first ? '1.0s' : '1.6s', opacity: 0, animationFillMode: 'forwards', animationName: 'rgDash', animationDuration: '1.2s', animationIterationCount: 'infinite' }} />
-          <g className={labelClass}>
-            <rect x={mx - 24} y={my - 18} width={48} height={16} rx={3} fill="rgba(0,255,136,0.08)" stroke="rgba(0,255,136,0.2)" strokeWidth={0.5} />
-            <text x={mx} y={my - 7} textAnchor="middle" style={{ fill: '#00ff88', fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 600 }}>{toUsd(edge.cost)}</text>
-          </g>
+            style={{ animationDelay: first ? '0.25s' : '0.45s', opacity: 0, animationFillMode: 'forwards', animationName: 'rgDash', animationDuration: '1.1s', animationIterationCount: 'infinite' }} />
         </g>
       )
     }
     return (
       <g key={`de-${idx}`}>
-        <path d={d} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={0.75} strokeDasharray="3 5" />
-        <text x={mx} y={my - 5} textAnchor="middle" style={{ fill: 'rgba(255,255,255,0.15)', fontSize: 9, fontFamily: 'var(--mono)' }}>{toUsd(edge.cost)}</text>
+        <path d={d} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth={0.7} strokeDasharray="3 5" />
       </g>
     )
   }
@@ -454,6 +471,12 @@ export default function RouteGraph() {
 
   const actionColor = (action: string) =>
     action === 'EXECUTE' ? 'var(--green)' : action === 'SKIP' ? 'var(--red)' : 'var(--amber)'
+  const actionMeaning = (action: Route['action']) =>
+    action === 'EXECUTE'
+      ? 'Low routing cost now'
+      : action === 'WAIT'
+        ? 'Moderate cost, monitor market'
+        : 'Cost too high for now'
 
   /* ── JSX ───────────────────────────────────────── */
 
@@ -466,10 +489,13 @@ export default function RouteGraph() {
         <div>
           <h2 className="rg-title">Route Graph</h2>
           <p className="rg-sub">Real-time orderbook data + D1 fee table</p>
-          <p className="rg-sub">{activeScenario.from} {'\u2192'} {activeScenario.to}</p>
+          <p className="rg-sub">
+            {requestFrom} {'\u2192'} {requestTo}
+            {isRotating ? ' · updating…' : ''}
+          </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: '0.8rem', color: 'var(--muted2)' }}>{countdown}s</span>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: '0.8rem', color: 'var(--muted2)' }}>next {countdown}s</span>
           <span className="rg-badge"><span className="rg-dot" /> LIVE</span>
         </div>
       </div>
@@ -481,7 +507,7 @@ export default function RouteGraph() {
 
       {/* ── SVG Graph ────────────────────────────── */}
       <div className="rg-gw" style={{ opacity: loading ? 0.55 : 1 }}>
-        <svg viewBox="0 0 800 460" className="rg-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Route graph visualization">
+        <svg viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`} className="rg-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Route graph visualization">
           <defs>
             <filter id="rgGG" x="-50%" y="-50%" width="200%" height="200%">
               <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#00ff88" floodOpacity="0.5" />
@@ -494,21 +520,21 @@ export default function RouteGraph() {
               <stop offset="100%" stopColor="#00ff88" />
             </linearGradient>
             <pattern id="rgDots" width="24" height="24" patternUnits="userSpaceOnUse">
-              <circle cx="12" cy="12" r="0.6" fill="rgba(255,255,255,0.05)" />
+              <circle cx="12" cy="12" r="0.55" fill="rgba(255,255,255,0.03)" />
             </pattern>
           </defs>
 
           {/* background */}
-          <rect width="800" height="460" style={{ fill: 'var(--bg)' }} />
-          <rect width="800" height="460" fill="url(#rgDots)" />
+          <rect width={GRAPH_WIDTH} height={GRAPH_HEIGHT} style={{ fill: 'var(--bg)' }} />
+          <rect width={GRAPH_WIDTH} height={GRAPH_HEIGHT} fill="url(#rgDots)" />
 
           {/* bridge column highlight */}
-          <rect x="352" y="40" width="96" height="400" rx="8" fill="rgba(255,170,0,0.02)" stroke="rgba(255,170,0,0.04)" strokeWidth={0.5} />
+          <rect x={COIN_X - 46} y={34} width={92} height={GRAPH_HEIGHT - 68} rx="8" fill="rgba(255,170,0,0.018)" stroke="rgba(255,170,0,0.04)" strokeWidth={0.5} />
 
           {/* column labels */}
-          <text x="120" y="32" textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em' }}>SOURCE</text>
-          <text x="400" y="32" textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em' }}>BRIDGE</text>
-          <text x="680" y="32" textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em' }}>DESTINATION</text>
+          <text x={SOURCE_X} y={24} textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em' }}>SOURCE</text>
+          <text x={COIN_X} y={24} textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em' }}>BRIDGE</text>
+          <text x={DEST_X} y={24} textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em' }}>DESTINATION</text>
 
           {/* non-optimal edges (behind) */}
           {graph.edges.filter((e) => !e.isOptimal).map(renderEdge)}
@@ -551,6 +577,7 @@ export default function RouteGraph() {
                 <div>
                   <div style={{ color: 'var(--muted2)', fontSize: '0.74rem', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Action</div>
                   <div style={{ color: actionColor(optimal.action), fontWeight: 700, fontSize: '0.94rem' }}>{optimal.action}</div>
+                  <div style={{ color: 'var(--muted)', fontSize: '0.8rem', marginTop: 3 }}>{actionMeaning(optimal.action)}</div>
                 </div>
                 <div>
                   <div style={{ color: 'var(--muted2)', fontSize: '0.74rem', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Confidence</div>
@@ -592,7 +619,7 @@ export default function RouteGraph() {
               {Object.entries(tradingFees).map(([exchange, fee]) => (
                 <div key={`tf-${exchange}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.88rem' }}>
                   <span style={{ color: 'var(--muted)' }}>{formatExchange(exchange)}</span>
-                  <span style={{ color: 'var(--ink)', fontFamily: 'var(--mono)', fontWeight: 600 }}>{(fee * 100).toFixed(2)}%</span>
+                  <span style={{ color: 'var(--ink)', fontFamily: 'var(--mono)', fontWeight: 600 }}>{formatTradingFeePercent(fee)}</span>
                 </div>
               ))}
             </div>
@@ -604,7 +631,7 @@ export default function RouteGraph() {
                 <div key={`wd-${exchange}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.88rem' }}>
                   <span style={{ color: 'var(--muted)' }}>{formatExchange(exchange)}</span>
                   <span style={{ color: 'var(--ink)', fontFamily: 'var(--mono)', fontWeight: 600 }}>
-                    {optimalCoin && byCoin[optimalCoin] !== undefined ? byCoin[optimalCoin] : '-'}
+                    {formatWithdrawalFee(byCoin[optimalCoin ?? ''], optimalCoin)}
                   </span>
                 </div>
               ))}
@@ -618,7 +645,7 @@ export default function RouteGraph() {
             <div className="rg-lbl">Alternatives</div>
             <table className="rg-at">
               <thead>
-                <tr><th>Coin</th><th>Cost</th><th>Time</th><th>Action</th></tr>
+                <tr><th>Coin</th><th>Cost</th><th>Time</th><th>Action</th><th>Why</th></tr>
               </thead>
               <tbody>
                 {alternatives.slice(0, 5).map((alt, idx) => (
@@ -627,10 +654,14 @@ export default function RouteGraph() {
                     <td style={{ fontFamily: 'var(--mono)' }}>{alt.totalCostPct.toFixed(2)}%</td>
                     <td style={{ fontFamily: 'var(--mono)' }}>~{alt.totalTimeMinutes}m</td>
                     <td style={{ color: actionColor(alt.action), fontWeight: 600 }}>{alt.action}</td>
+                    <td style={{ color: 'var(--muted)', fontSize: '0.84rem' }}>{alt.reason}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            <p className="rg-action-guide">
+              <b>Action guide:</b> EXECUTE = route now, WAIT = acceptable but monitor, SKIP = cost/risk too high.
+            </p>
           </div>
         )}
       </div>

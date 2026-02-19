@@ -401,6 +401,8 @@ const PUBLIC_RATE_LIMIT_PER_WINDOW = 120
 const PUBLIC_RATE_LIMIT_MAX_BUCKETS = 20_000
 const AGENT_REGISTER_ATTEMPT_WINDOW_MINUTES = 60
 const AGENT_REGISTER_MAX_ATTEMPTS_PER_WINDOW = 3
+const TELEGRAM_AI_MAX_MESSAGES_PER_CHAT_PER_HOUR = 40
+const TELEGRAM_AI_MAX_MESSAGES_GLOBAL_PER_DAY = 3000
 const HOST_RESOLUTION_CACHE_TTL_MS = 5 * 60_000
 const HOST_RESOLUTION_CACHE_MAX_SIZE = 20_000
 
@@ -3314,6 +3316,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
+function toRecordArray(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is Record<string, unknown> => isRecord(item))
+}
+
+function toStringValue(value: unknown, fallback = ''): string {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return fallback
+}
+
+function toNumberValue(value: unknown, fallback = 0): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : fallback
+  if (typeof value === 'string') {
+    const normalized = value.replace(/,/g, '').trim()
+    if (!normalized) return fallback
+    const parsed = Number(normalized)
+    return Number.isFinite(parsed) ? parsed : fallback
+  }
+  return fallback
+}
+
 function parseJsonArrayOfStrings(value: string | null): string[] {
   if (!value) return []
   try {
@@ -6142,6 +6166,41 @@ function computeAction(
   }
 }
 
+function computeRouteAction(
+  totalCostPct: number,
+  slippageEstimatePct: number,
+  transferTimeMin: number,
+): { action: 'EXECUTE' | 'WAIT' | 'SKIP'; confidence: number; reason: string } {
+  const slippagePenalty = Math.max(0, slippageEstimatePct) * 0.4
+  const timePenalty = Math.max(0, transferTimeMin - 2) * 0.07
+  const score = totalCostPct + slippagePenalty + timePenalty
+
+  if (score < 1.4) {
+    const confidence = Math.max(0.58, Math.min(0.95, 0.91 - score * 0.1))
+    return {
+      action: 'EXECUTE',
+      confidence: Math.round(confidence * 100) / 100,
+      reason: `Low projected routing cost ${round2(totalCostPct)}% with manageable transfer risk`,
+    }
+  }
+
+  if (score < 3.2) {
+    const confidence = Math.max(0.46, Math.min(0.84, 0.78 - (score - 1.4) * 0.08))
+    return {
+      action: 'WAIT',
+      confidence: Math.round(confidence * 100) / 100,
+      reason: `Moderate routing cost ${round2(totalCostPct)}% — monitor liquidity before execution`,
+    }
+  }
+
+  const confidence = Math.max(0.62, Math.min(0.97, 0.64 + (score - 3.2) * 0.08))
+  return {
+    action: 'SKIP',
+    confidence: Math.round(confidence * 100) / 100,
+    reason: `High projected routing cost ${round2(totalCostPct)}% for current market conditions`,
+  }
+}
+
 // ============================================================
 // ROUTING ENGINE — Asia Agent Financial Router
 // Finds the cheapest/fastest path to move money across exchanges
@@ -6640,13 +6699,10 @@ async function findOptimalRoute(
       const totalCostPct = ((inputValueUsd - outputValueUsdForCost) / inputValueUsd) * 100
       const totalTimeMinutes = transferTime + 1 // +1 min for trade execution
 
-      // Get volatility for risk assessment
-      const { volatilityPct } = await getPremiumTrend(db, bridgeCoin, 6)
-      const { action, confidence, reason } = computeAction(
-        -totalCostPct, // negative because it's a cost not profit
+      const { action, confidence, reason } = computeRouteAction(
+        totalCostPct,
         buySlippagePct,
         transferTime,
-        volatilityPct,
       )
 
       const estimatedOutput = Math.round(finalOutput * 100) / 100
@@ -6672,10 +6728,8 @@ async function findOptimalRoute(
         return `${formatAmountByCurrency(feeAmountUsd, 'USD')} (${totalCostPctRounded}%)`
       })()
 
-      const finalAction: Route['action'] = totalCostPct < 2 ? action : 'SKIP'
-      const finalReason = totalCostPct < 2
-        ? reason
-        : `High total cost ${round2(totalCostPct)}% — consider waiting for better rates`
+      const finalAction: Route['action'] = action
+      const finalReason = reason
       const recommendation: Route['summary']['recommendation'] =
         finalAction === 'EXECUTE'
           ? (totalCostPct < 1 ? 'GOOD_DEAL' : 'PROCEED')
@@ -8091,24 +8145,31 @@ app.get('/api/premium/market/korea/indices', async (c) => {
     throw new HTTPException(502, { message: 'Korean stock market data unavailable' })
   }
 
-  const [kospiRaw, kosdaqRaw] = await Promise.all([kospiRes.json(), kosdaqRes.json()]) as [any, any]
+  const [kospiRawValue, kosdaqRawValue] = await Promise.all([
+    kospiRes.json() as Promise<unknown>,
+    kosdaqRes.json() as Promise<unknown>,
+  ])
 
-  const parseIndex = (raw: any) => ({
-    name: raw.stockName ?? raw.itemCode,
-    code: raw.itemCode,
-    price: parseFloat((raw.closePrice ?? '0').replace(/,/g, '')),
-    change: parseFloat((raw.compareToPreviousClosePrice ?? '0').replace(/,/g, '')),
-    changePct: parseFloat(raw.fluctuationsRatio ?? '0'),
-    direction: raw.compareToPreviousPrice?.name ?? 'UNCHANGED',
-    marketStatus: raw.marketStatus ?? 'UNKNOWN',
-    tradedAt: raw.localTradedAt ?? null,
-  })
+  const parseIndex = (raw: unknown) => {
+    const record = isRecord(raw) ? raw : {}
+    const directionValue = isRecord(record.compareToPreviousPrice) ? record.compareToPreviousPrice.name : null
+    return {
+      name: toStringValue(record.stockName, toStringValue(record.itemCode, 'UNKNOWN')),
+      code: toStringValue(record.itemCode),
+      price: toNumberValue(record.closePrice),
+      change: toNumberValue(record.compareToPreviousClosePrice),
+      changePct: toNumberValue(record.fluctuationsRatio),
+      direction: toStringValue(directionValue, 'UNCHANGED'),
+      marketStatus: toStringValue(record.marketStatus, 'UNKNOWN'),
+      tradedAt: toStringValue(record.localTradedAt) || null,
+    }
+  }
 
   return c.json({
     paid: true,
     service: 'crossfin-korea-indices',
-    kospi: parseIndex(kospiRaw),
-    kosdaq: parseIndex(kosdaqRaw),
+    kospi: parseIndex(kospiRawValue),
+    kosdaq: parseIndex(kosdaqRawValue),
     source: 'naver-finance',
     at: new Date().toISOString(),
   })
@@ -8126,18 +8187,21 @@ app.get('/api/premium/market/korea/indices/history', async (c) => {
     throw new HTTPException(502, { message: `${index} historical data unavailable` })
   }
 
-  const rawData = await res.json() as any[]
+  const rawData = toRecordArray(await res.json() as unknown)
 
-  const history = rawData.map((item: any) => ({
-    date: item.localTradedAt,
-    open: parseFloat((item.openPrice ?? '0').replace(/,/g, '')),
-    high: parseFloat((item.highPrice ?? '0').replace(/,/g, '')),
-    low: parseFloat((item.lowPrice ?? '0').replace(/,/g, '')),
-    close: parseFloat((item.closePrice ?? '0').replace(/,/g, '')),
-    change: parseFloat((item.compareToPreviousClosePrice ?? '0').replace(/,/g, '')),
-    changePct: parseFloat(item.fluctuationsRatio ?? '0'),
-    direction: item.compareToPreviousPrice?.name ?? 'UNCHANGED',
-  }))
+  const history = rawData.map((item) => {
+    const directionValue = isRecord(item.compareToPreviousPrice) ? item.compareToPreviousPrice.name : null
+    return {
+      date: toStringValue(item.localTradedAt),
+      open: toNumberValue(item.openPrice),
+      high: toNumberValue(item.highPrice),
+      low: toNumberValue(item.lowPrice),
+      close: toNumberValue(item.closePrice),
+      change: toNumberValue(item.compareToPreviousClosePrice),
+      changePct: toNumberValue(item.fluctuationsRatio),
+      direction: toStringValue(directionValue, 'UNCHANGED'),
+    }
+  })
 
   return c.json({
     paid: true,
@@ -8167,26 +8231,37 @@ app.get('/api/premium/market/korea/stocks/momentum', async (c) => {
     throw new HTTPException(502, { message: 'Korean stock ranking data unavailable' })
   }
 
-  const [capData, upData, downData] = await Promise.all([capRes.json(), upRes.json(), downRes.json()]) as [any, any, any]
+  const [capDataRaw, upDataRaw, downDataRaw] = await Promise.all([
+    capRes.json() as Promise<unknown>,
+    upRes.json() as Promise<unknown>,
+    downRes.json() as Promise<unknown>,
+  ])
 
-  const parseStock = (s: any) => ({
-    code: s.itemCode,
-    name: s.stockName,
-    price: parseFloat((s.closePrice ?? '0').replace(/,/g, '')),
-    change: parseFloat((s.compareToPreviousClosePrice ?? '0').replace(/,/g, '')),
-    changePct: parseFloat(s.fluctuationsRatio ?? '0'),
-    direction: s.compareToPreviousPrice?.name ?? 'UNCHANGED',
-    volume: parseFloat((s.accumulatedTradingVolume ?? '0').replace(/,/g, '')),
-    marketCap: s.marketValueHangeul ?? null,
-  })
+  const capData = isRecord(capDataRaw) ? capDataRaw : {}
+  const upData = isRecord(upDataRaw) ? upDataRaw : {}
+  const downData = isRecord(downDataRaw) ? downDataRaw : {}
+
+  const parseStock = (s: Record<string, unknown>) => {
+    const directionValue = isRecord(s.compareToPreviousPrice) ? s.compareToPreviousPrice.name : null
+    return {
+      code: toStringValue(s.itemCode),
+      name: toStringValue(s.stockName),
+      price: toNumberValue(s.closePrice),
+      change: toNumberValue(s.compareToPreviousClosePrice),
+      changePct: toNumberValue(s.fluctuationsRatio),
+      direction: toStringValue(directionValue, 'UNCHANGED'),
+      volume: toNumberValue(s.accumulatedTradingVolume),
+      marketCap: toStringValue(s.marketValueHangeul) || null,
+    }
+  }
 
   return c.json({
     paid: true,
     service: 'crossfin-korea-stocks-momentum',
     market,
-    topMarketCap: (capData.stocks ?? []).map(parseStock),
-    topGainers: (upData.stocks ?? []).map(parseStock),
-    topLosers: (downData.stocks ?? []).map(parseStock),
+    topMarketCap: toRecordArray(capData.stocks).map(parseStock),
+    topGainers: toRecordArray(upData.stocks).map(parseStock),
+    topLosers: toRecordArray(downData.stocks).map(parseStock),
     source: 'naver-finance',
     at: new Date().toISOString(),
   })
@@ -8198,18 +8273,21 @@ app.get('/api/premium/market/korea/investor-flow', async (c) => {
 
   const res = await fetch(`https://m.stock.naver.com/api/stock/${stock}/trend`)
   if (!res.ok) throw new HTTPException(502, { message: 'Investor flow data unavailable' })
-  const rawData = await res.json() as any[]
+  const rawData = toRecordArray(await res.json() as unknown)
 
-  const flow = rawData.map((d: any) => ({
-    date: d.bizdate,
-    foreignNetBuy: d.foreignerPureBuyQuant,
-    foreignHoldRatio: d.foreignerHoldRatio,
-    institutionNetBuy: d.organPureBuyQuant,
-    individualNetBuy: d.individualPureBuyQuant,
-    closePrice: d.closePrice,
-    direction: d.compareToPreviousPrice?.name ?? 'UNCHANGED',
-    volume: d.accumulatedTradingVolume,
-  }))
+  const flow = rawData.map((d) => {
+    const directionValue = isRecord(d.compareToPreviousPrice) ? d.compareToPreviousPrice.name : null
+    return {
+      date: toStringValue(d.bizdate),
+      foreignNetBuy: d.foreignerPureBuyQuant ?? null,
+      foreignHoldRatio: d.foreignerHoldRatio ?? null,
+      institutionNetBuy: d.organPureBuyQuant ?? null,
+      individualNetBuy: d.individualPureBuyQuant ?? null,
+      closePrice: d.closePrice ?? null,
+      direction: toStringValue(directionValue, 'UNCHANGED'),
+      volume: d.accumulatedTradingVolume ?? null,
+    }
+  })
 
   return c.json({
     paid: true,
@@ -8230,16 +8308,20 @@ app.get('/api/premium/market/korea/index-flow', async (c) => {
 
   const res = await fetch(`https://m.stock.naver.com/api/index/${index}/trend`)
   if (!res.ok) throw new HTTPException(502, { message: 'Index investor flow data unavailable' })
-  const raw = await res.json() as any
+  const rawValue = await res.json() as unknown
+  if (!isRecord(rawValue)) {
+    throw new HTTPException(502, { message: 'Invalid index investor flow payload' })
+  }
+  const raw = rawValue
 
   return c.json({
     paid: true,
     service: 'crossfin-korea-index-flow',
     index,
-    date: raw.bizdate,
-    foreignNetBuyBillionKrw: raw.foreignValue,
-    institutionNetBuyBillionKrw: raw.institutionalValue,
-    individualNetBuyBillionKrw: raw.personalValue,
+    date: toStringValue(raw.bizdate),
+    foreignNetBuyBillionKrw: raw.foreignValue ?? null,
+    institutionNetBuyBillionKrw: raw.institutionalValue ?? null,
+    individualNetBuyBillionKrw: raw.personalValue ?? null,
     source: 'naver-finance',
     at: new Date().toISOString(),
   })
@@ -8255,22 +8337,61 @@ app.get('/api/premium/crypto/korea/5exchange', async (c) => {
     fetch(`https://api.gopax.co.kr/trading-pairs/${coin}-KRW/ticker`).then(r => r.json()),
   ])
 
-  const exchanges: any[] = []
+  const exchanges: Array<{ exchange: string; priceKrw: number; volume24h: number; change24hPct: number | null }> = []
   if (upbitRes.status === 'fulfilled' && Array.isArray(upbitRes.value) && upbitRes.value[0]) {
-    const d = upbitRes.value[0]
-    exchanges.push({ exchange: 'Upbit', priceKrw: d.trade_price, volume24h: d.acc_trade_volume_24h, change24hPct: d.signed_change_rate ? d.signed_change_rate * 100 : null })
+    const d = isRecord(upbitRes.value[0]) ? upbitRes.value[0] : null
+    if (d) {
+      const price = toNumberValue(d.trade_price, Number.NaN)
+      if (Number.isFinite(price) && price > 0) {
+        const signedChangeRate = toNumberValue(d.signed_change_rate, Number.NaN)
+        exchanges.push({
+          exchange: 'Upbit',
+          priceKrw: price,
+          volume24h: toNumberValue(d.acc_trade_volume_24h),
+          change24hPct: Number.isFinite(signedChangeRate) ? signedChangeRate * 100 : null,
+        })
+      }
+    }
   }
-  if (bithumbRes.status === 'fulfilled' && (bithumbRes.value as any)?.data?.closing_price) {
-    const d = (bithumbRes.value as any).data
-    exchanges.push({ exchange: 'Bithumb', priceKrw: Number(d.closing_price), volume24h: Number(d.units_traded_24H || 0), change24hPct: Number(d.fluctate_rate_24H || 0) })
+
+  if (bithumbRes.status === 'fulfilled' && isRecord(bithumbRes.value) && isRecord(bithumbRes.value.data)) {
+    const d = bithumbRes.value.data
+    const price = toNumberValue(d.closing_price, Number.NaN)
+    if (Number.isFinite(price) && price > 0) {
+      const change24hPct = toNumberValue(d.fluctate_rate_24H, Number.NaN)
+      exchanges.push({
+        exchange: 'Bithumb',
+        priceKrw: price,
+        volume24h: toNumberValue(d.units_traded_24H),
+        change24hPct: Number.isFinite(change24hPct) ? change24hPct : null,
+      })
+    }
   }
-  if (coinoneRes.status === 'fulfilled' && (coinoneRes.value as any)?.last) {
-    const d = coinoneRes.value as any
-    exchanges.push({ exchange: 'Coinone', priceKrw: Number(d.last), volume24h: Number(d.volume || 0), change24hPct: null })
+
+  if (coinoneRes.status === 'fulfilled' && isRecord(coinoneRes.value)) {
+    const d = coinoneRes.value
+    const price = toNumberValue(d.last, Number.NaN)
+    if (Number.isFinite(price) && price > 0) {
+      exchanges.push({
+        exchange: 'Coinone',
+        priceKrw: price,
+        volume24h: toNumberValue(d.volume),
+        change24hPct: null,
+      })
+    }
   }
-  if (gopaxRes.status === 'fulfilled' && (gopaxRes.value as any)?.price) {
-    const d = gopaxRes.value as any
-    exchanges.push({ exchange: 'GoPax', priceKrw: d.price, volume24h: d.volume || 0, change24hPct: null })
+
+  if (gopaxRes.status === 'fulfilled' && isRecord(gopaxRes.value)) {
+    const d = gopaxRes.value
+    const price = toNumberValue(d.price, Number.NaN)
+    if (Number.isFinite(price) && price > 0) {
+      exchanges.push({
+        exchange: 'GoPax',
+        priceKrw: price,
+        volume24h: toNumberValue(d.volume),
+        change24hPct: null,
+      })
+    }
   }
 
   const prices = exchanges.map(e => e.priceKrw).filter(p => p > 0)
@@ -8430,15 +8551,15 @@ app.get('/api/premium/market/korea/disclosure', async (c) => {
 
   const res = await fetch(`https://m.stock.naver.com/api/stock/${stock}/disclosure?page=${page}&pageSize=${pageSize}`)
   if (!res.ok) throw new HTTPException(502, { message: 'Disclosure data unavailable' })
-  const raw = await res.json() as any[]
+  const raw = toRecordArray(await res.json() as unknown)
 
   return c.json({
     paid: true,
     service: 'crossfin-korea-disclosure',
     stock,
-    items: raw.map((d: any) => ({
-      title: d.title,
-      datetime: d.datetime,
+    items: raw.map((d) => ({
+      title: toStringValue(d.title),
+      datetime: toStringValue(d.datetime),
     })),
     source: 'naver-finance',
     at: new Date().toISOString(),
@@ -8613,19 +8734,27 @@ app.get('/api/premium/market/korea/stock-brief', async (c) => {
 app.get('/api/premium/crypto/korea/fx-rate', async (c) => {
   const res = await fetch('https://crix-api-cdn.upbit.com/v1/forex/recent?codes=FRX.KRWUSD')
   if (!res.ok) throw new HTTPException(502, { message: 'FX rate data unavailable' })
-  const data = await res.json() as any[]
+  const data = toRecordArray(await res.json() as unknown)
   const quote = data[0]
+  if (!quote) {
+    throw new HTTPException(502, { message: 'FX rate payload unavailable' })
+  }
+
+  const basePrice = toNumberValue(quote.basePrice, Number.NaN)
+  if (!Number.isFinite(basePrice) || basePrice <= 0) {
+    throw new HTTPException(502, { message: 'FX rate payload invalid' })
+  }
 
   return c.json({
     paid: true,
     service: 'crossfin-korea-fx-rate',
     pair: 'KRW/USD',
-    basePrice: quote.basePrice,
-    change: quote.change,
-    changePrice: quote.changePrice,
-    openingPrice: quote.openingPrice,
-    high52w: quote.high52wPrice,
-    low52w: quote.low52wPrice,
+    basePrice,
+    change: toStringValue(quote.change),
+    changePrice: toNumberValue(quote.changePrice),
+    openingPrice: toNumberValue(quote.openingPrice),
+    high52w: toNumberValue(quote.high52wPrice),
+    low52w: toNumberValue(quote.low52wPrice),
     source: 'upbit-crix',
     at: new Date().toISOString(),
   })
@@ -8636,22 +8765,33 @@ app.get('/api/premium/market/korea/etf', async (c) => {
   if (!res.ok) throw new HTTPException(502, { message: 'ETF data unavailable' })
   const buf = await res.arrayBuffer()
   const text = new TextDecoder('euc-kr').decode(buf)
-  const raw = JSON.parse(text) as any
+  let rawParsed: unknown
+  try {
+    rawParsed = JSON.parse(text) as unknown
+  } catch {
+    throw new HTTPException(502, { message: 'ETF payload parse failed' })
+  }
+
+  if (!isRecord(rawParsed) || !isRecord(rawParsed.result)) {
+    throw new HTTPException(502, { message: 'ETF payload invalid' })
+  }
+
+  const etfItemList = toRecordArray(rawParsed.result.etfItemList)
 
   return c.json({
     paid: true,
     service: 'crossfin-korea-etf',
-    totalCount: raw.result.etfItemList.length,
-    items: raw.result.etfItemList.slice(0, 50).map((e: any) => ({
-      name: e.itemname,
-      code: e.itemcode,
-      price: e.nowVal,
-      changeVal: e.changeVal,
-      changeRate: e.changeRate,
-      nav: e.nav,
-      volume: e.quant,
-      threeMonthReturn: e.threeMonthEarnRate,
-      marketCap: e.marketSum,
+    totalCount: etfItemList.length,
+    items: etfItemList.slice(0, 50).map((e) => ({
+      name: toStringValue(e.itemname),
+      code: toStringValue(e.itemcode),
+      price: toNumberValue(e.nowVal),
+      changeVal: toNumberValue(e.changeVal),
+      changeRate: toNumberValue(e.changeRate),
+      nav: toNumberValue(e.nav),
+      volume: toNumberValue(e.quant),
+      threeMonthReturn: toNumberValue(e.threeMonthEarnRate),
+      marketCap: toNumberValue(e.marketSum),
     })),
     source: 'naver-finance',
     at: new Date().toISOString(),
@@ -8669,7 +8809,7 @@ app.get('/api/premium/crypto/korea/upbit-candles', async (c) => {
   const market = `KRW-${coin}`
   const res = await fetch(`https://api.upbit.com/v1/candles/${type}?market=${market}&count=${count}`)
   if (!res.ok) throw new HTTPException(502, { message: 'Upbit candle data unavailable' })
-  const raw = await res.json() as any[]
+  const raw = toRecordArray(await res.json() as unknown)
 
   return c.json({
     paid: true,
@@ -8677,14 +8817,14 @@ app.get('/api/premium/crypto/korea/upbit-candles', async (c) => {
     market,
     type,
     count: raw.length,
-    candles: raw.map((r: any) => ({
-      date: r.candle_date_time_kst,
-      open: r.opening_price,
-      high: r.high_price,
-      low: r.low_price,
-      close: r.trade_price,
-      volume: r.candle_acc_trade_volume,
-      tradeAmount: r.candle_acc_trade_price,
+    candles: raw.map((r) => ({
+      date: toStringValue(r.candle_date_time_kst),
+      open: toNumberValue(r.opening_price),
+      high: toNumberValue(r.high_price),
+      low: toNumberValue(r.low_price),
+      close: toNumberValue(r.trade_price),
+      volume: toNumberValue(r.candle_acc_trade_volume),
+      tradeAmount: toNumberValue(r.candle_acc_trade_price),
     })),
     source: 'upbit',
     at: new Date().toISOString(),
@@ -8699,10 +8839,15 @@ app.get('/api/premium/market/global/indices-chart', async (c) => {
 
   const res = await fetch(`https://api.stock.naver.com/chart/foreign/index/${encodeURIComponent(index)}/${period}`)
   if (!res.ok) throw new HTTPException(502, { message: 'Global index chart data unavailable' })
-  const raw = await res.json() as any
+  const rawValue = await res.json() as unknown
 
-  if (Array.isArray(raw) && raw.length === 0) throw new HTTPException(404, { message: `No data for index ${index}. Available: .DJI, .IXIC, .HSI, .N225` })
-  const data = Array.isArray(raw) ? raw : []
+  if (Array.isArray(rawValue) && rawValue.length === 0) {
+    throw new HTTPException(404, { message: `No data for index ${index}. Available: .DJI, .IXIC, .HSI, .N225` })
+  }
+  if (!Array.isArray(rawValue)) {
+    throw new HTTPException(502, { message: 'Global index chart payload invalid' })
+  }
+  const data = toRecordArray(rawValue)
 
   return c.json({
     paid: true,
@@ -8710,13 +8855,13 @@ app.get('/api/premium/market/global/indices-chart', async (c) => {
     index,
     period,
     count: data.length,
-    candles: data.map((r: any) => ({
-      date: r.localDate,
-      open: r.openPrice,
-      high: r.highPrice,
-      low: r.lowPrice,
-      close: r.closePrice,
-      volume: r.accumulatedTradingVolume,
+    candles: data.map((r) => ({
+      date: toStringValue(r.localDate),
+      open: toNumberValue(r.openPrice),
+      high: toNumberValue(r.highPrice),
+      low: toNumberValue(r.lowPrice),
+      close: toNumberValue(r.closePrice),
+      volume: toNumberValue(r.accumulatedTradingVolume),
     })),
     source: 'naver-finance',
     at: new Date().toISOString(),
@@ -10222,6 +10367,16 @@ app.post('/api/agents/register', async (c) => {
   }
 
   const requiredSignupToken = (c.env.CROSSFIN_AGENT_SIGNUP_TOKEN ?? '').trim()
+  if (!requiredSignupToken) {
+    try {
+      await logAgentRegistrationAttempt(c.env.DB, ipHash, ipHint, name, false, 'signup_token_not_configured')
+      await audit(c.env.DB, null, 'agent.self_register', 'agents', null, 'blocked', 'signup_token_not_configured')
+    } catch (err) {
+      console.error('Failed to record missing signup-token configuration', err)
+    }
+    throw new HTTPException(503, { message: 'Agent registration is temporarily unavailable' })
+  }
+
   const providedSignupToken = (c.req.header('X-CrossFin-Signup-Token') ?? body.signup_token ?? '').trim()
   if (requiredSignupToken && !timingSafeEqual(providedSignupToken, requiredSignupToken)) {
     try {
@@ -11815,6 +11970,35 @@ app.post('/api/telegram/webhook', async (c) => {
 
     const chatIdStr = String(chatId)
     const MAX_HISTORY = 10
+
+    const [chatHourlyCountRow, globalDailyCountRow] = await Promise.all([
+      c.env.DB.prepare(
+        "SELECT COUNT(*) as count FROM telegram_messages WHERE role = 'user' AND chat_id = ? AND created_at >= datetime('now', '-1 hour')"
+      ).bind(chatIdStr).first<{ count: number | string }>(),
+      c.env.DB.prepare(
+        "SELECT COUNT(*) as count FROM telegram_messages WHERE role = 'user' AND created_at >= datetime('now', '-1 day')"
+      ).first<{ count: number | string }>(),
+    ])
+
+    const chatHourlyCount = Number(chatHourlyCountRow?.count ?? 0)
+    if (chatHourlyCount >= TELEGRAM_AI_MAX_MESSAGES_PER_CHAT_PER_HOUR) {
+      await telegramSendMessage(
+        botToken,
+        chatId,
+        `AI rate limit reached for this chat (${TELEGRAM_AI_MAX_MESSAGES_PER_CHAT_PER_HOUR}/hour). Please try again later or use slash commands like /route and /price.`,
+      )
+      return c.json({ ok: true, handled: true, mode: 'ai', blocked: 'chat_hourly_quota' })
+    }
+
+    const globalDailyCount = Number(globalDailyCountRow?.count ?? 0)
+    if (globalDailyCount >= TELEGRAM_AI_MAX_MESSAGES_GLOBAL_PER_DAY) {
+      await telegramSendMessage(
+        botToken,
+        chatId,
+        'AI mode is temporarily busy. Please use slash commands for now (/route, /price, /status).',
+      )
+      return c.json({ ok: true, handled: true, mode: 'ai', blocked: 'global_daily_quota' })
+    }
 
     await c.env.DB.prepare(
       `INSERT INTO telegram_messages (chat_id, role, content) VALUES (?, 'user', ?)`
