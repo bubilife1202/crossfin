@@ -155,6 +155,11 @@ function formatWithdrawalFee(value: number | undefined, coin: string | null): st
   return `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 6 })} ${coin}`
 }
 
+function formatSignedPpt(value: number): string {
+  const sign = value > 0 ? '+' : ''
+  return `${sign}${value.toFixed(2)}%p`
+}
+
 function defaultAmountForExchange(exchange: string): string {
   const cfg = EXCHANGE_CONFIG.find((e) => e.value === exchange)
   const cur = cfg?.currencies[0] ?? 'USDC'
@@ -499,6 +504,27 @@ export default function RouteGraph() {
   const alternatives = bridgeCoinFiltered.alternatives
   const bridgeCoinNote = bridgeCoinFiltered.note
   const manualBridgeOverride = bridgeCoinFiltered.manualOverride
+  const routeStats = useMemo(() => {
+    if (!optimal) return null
+    const pool = [optimal, ...alternatives]
+      .filter((r): r is Route => Boolean(r))
+      .filter((r, idx, arr) => arr.findIndex((x) => x.bridgeCoin.toUpperCase() === r.bridgeCoin.toUpperCase()) === idx)
+
+    if (pool.length === 0) return null
+
+    const costs = pool.map((r) => r.totalCostPct)
+    const best = Math.min(...costs)
+    const avg = costs.reduce((sum, v) => sum + v, 0) / costs.length
+    const rank = 1 + costs.filter((c) => c < optimal.totalCostPct - 1e-9).length
+    const avgDelta = optimal.totalCostPct - avg
+
+    return {
+      total: costs.length,
+      rank,
+      avgDelta,
+      isBest: Math.abs(optimal.totalCostPct - best) < 1e-9,
+    }
+  }, [optimal, alternatives])
 
   const graph = useMemo(() => {
     const requestFrom = data?.request.from ?? INITIAL_SCENARIO.from
@@ -827,8 +853,14 @@ export default function RouteGraph() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px' }}>
                 <div>
-                  <div style={{ color: 'var(--muted2)', fontSize: '0.74rem', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cost</div>
+                  <div style={{ color: 'var(--muted2)', fontSize: '0.74rem', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Cost % (lower is better)</div>
                   <div style={{ color: 'var(--green)', fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '0.96rem' }}>{optimal.totalCostPct.toFixed(2)}%</div>
+                  {routeStats && (
+                    <div style={{ color: 'var(--muted)', fontSize: '0.78rem', marginTop: 4, lineHeight: 1.4 }}>
+                      Rank {routeStats.rank}/{routeStats.total}
+                      {routeStats.isBest ? ' · lowest cost in current set' : ` · vs avg ${formatSignedPpt(routeStats.avgDelta)}`}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <div style={{ color: 'var(--muted2)', fontSize: '0.74rem', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Time</div>

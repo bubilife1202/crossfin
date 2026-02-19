@@ -576,11 +576,11 @@ export default function App() {
         </section>
 
         {/* ═══════════════════════════════════════════════
-            SECTION 6: AI Decision Layer
+            SECTION 6: Route Opportunity Scanner
             ═══════════════════════════════════════════════ */}
         <section className="panel decisionPanel">
           <div className="panelHeader">
-            <h2 className="panelTitle">AI Decision Layer</h2>
+            <h2 className="panelTitle">Route Opportunity Scanner</h2>
             <div className="decisionBadges">
               {arb?.marketCondition && (
                 <span
@@ -595,12 +595,13 @@ export default function App() {
               )}
               <span className="panelBadge">
                 <span className="liveDot" />
-                Live decisions
+                Live
               </span>
             </div>
           </div>
           <p className="decisionSubtext">
-            Signals are computed from the Bithumb (KRW) vs Binance (USD) price gap, then scored into EXECUTE/WAIT/SKIP decisions.
+            Compares Bithumb (Korea, KRW) vs Binance (Global, USD) prices for each coin.
+            When the price gap is wide enough to cover fees, it signals EXECUTE — otherwise WAIT or SKIP.
           </p>
           <div className="decisionGrid">
             {pairs.length === 0 && (
@@ -813,59 +814,7 @@ export default function App() {
 
         </div>
 
-        <section className="panel">
-          <div className="panelHeader">
-            <h2 className="panelTitle">Korea vs Global Price Gap</h2>
-            <span className="panelBadge">
-              <span className="liveDot" />
-              Auto-refresh 15s
-            </span>
-          </div>
-          <p className="panelSub" style={{ color: "var(--text-muted, #888)", fontSize: "0.82rem", margin: "-0.25rem 0 0.75rem" }}>
-            Same coin, different price across exchanges — the gap that makes cross-border routing profitable.
-          </p>
-          <div className="tableWrap">
-            <table className="dataTable">
-              <thead>
-                <tr>
-                  <th>Coin</th>
-                  <th>Price Gap</th>
-                  <th>Where It's Cheaper</th>
-                  <th>Signal</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pairs.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="emptyRow">
-                      Loading pairs…
-                    </td>
-                  </tr>
-                )}
-                {pairs.map((p) => (
-                  <tr key={p.coin} className="fadeIn">
-                    <td className="coinCell">{p.coin}</td>
-                    <td
-                      className={`pctCell ${p.premiumPct >= 0 ? "positive" : "negative"}`}
-                    >
-                      {p.premiumPct >= 0 ? "+" : ""}
-                      {p.premiumPct.toFixed(3)}%
-                    </td>
-                    <td className="dirCell">
-                      {p.premiumPct >= 0 ? "Cheaper on Global" : "Cheaper in Korea"}
-                    </td>
-                    <td>
-                      <span className={`statusPill ${(p.decision?.action ?? "MONITOR") === "EXECUTE" ? "active" : ""}`}>
-                        <span className="statusDotSmall" />
-                        {(p.decision?.action ?? "MONITOR") === "EXECUTE" ? "ROUTE NOW" : (p.decision?.action ?? "MONITOR")}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+
 
         {/* Agent Survival */}
         {survival && (
