@@ -73,6 +73,12 @@ type GraphEdge = {
   isOptimal: boolean
 }
 
+type RouteScenario = {
+  from: string
+  to: string
+  amount: number
+}
+
 const API_BASE = ((import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || 'https://crossfin.dev').replace(/\/$/, '')
 
 const EXCHANGE_LABELS: Record<string, string> = {
@@ -86,6 +92,17 @@ const EXCHANGE_LABELS: Record<string, string> = {
   okx: 'OKX',
   bybit: 'Bybit',
 }
+
+const ROTATING_SCENARIOS: readonly RouteScenario[] = [
+  { from: 'bithumb:KRW', to: 'binance:USDC', amount: 1_000_000 },
+  { from: 'upbit:KRW', to: 'okx:USDC', amount: 1_000_000 },
+  { from: 'coinone:KRW', to: 'bybit:USDC', amount: 1_000_000 },
+  { from: 'bitflyer:JPY', to: 'binance:USDC', amount: 100_000 },
+  { from: 'wazirx:INR', to: 'okx:USDC', amount: 100_000 },
+  { from: 'binance:USDC', to: 'bithumb:KRW', amount: 1_000 },
+  { from: 'bybit:USDC', to: 'upbit:KRW', amount: 1_000 },
+  { from: 'okx:USDC', to: 'wazirx:INR', amount: 1_000 },
+] as const
 
 function formatExchange(exchange: string): string {
   const key = exchange.trim().toLowerCase()
@@ -193,10 +210,8 @@ const CSS = `
 /* ── Component ───────────────────────────────────── */
 
 export default function RouteGraph() {
-  const from = 'bithumb:KRW'
-  const to = 'binance:USDC'
-  const amountInput = '1000000'
   const strategy: RoutingStrategy = 'cheapest'
+  const [scenarioIndex, setScenarioIndex] = useState<number>(0)
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<RoutingResponse | null>(null)
@@ -204,12 +219,13 @@ export default function RouteGraph() {
   const [countdown, setCountdown] = useState<number>(15)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const activeScenario = ROTATING_SCENARIOS[scenarioIndex] ?? ROTATING_SCENARIOS[0]
 
-  const loadRoute = useCallback(async () => {
+  const loadRoute = useCallback(async (scenario: RouteScenario) => {
     setLoading(true)
     setError(null)
 
-    const amount = Number(amountInput)
+    const amount = Number(scenario.amount)
     if (!Number.isFinite(amount) || amount <= 0) {
       setError('Amount must be a positive number')
       setLoading(false)
@@ -217,7 +233,7 @@ export default function RouteGraph() {
     }
 
     try {
-      const params = new URLSearchParams({ from, to, amount: String(amount), strategy })
+      const params = new URLSearchParams({ from: scenario.from, to: scenario.to, amount: String(amount), strategy })
       const res = await fetch(`${API_BASE}/api/routing/optimal?${params.toString()}`)
       if (!res.ok) {
         const text = await res.text()
@@ -232,19 +248,22 @@ export default function RouteGraph() {
     } finally {
       setLoading(false)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   /* ── auto-refresh every 15s ────────────────────── */
   useEffect(() => {
-    void loadRoute()
+    void loadRoute(ROTATING_SCENARIOS[0])
     setCountdown(15)
 
     if (intervalRef.current) clearInterval(intervalRef.current)
     if (countdownRef.current) clearInterval(countdownRef.current)
 
     intervalRef.current = setInterval(() => {
-      void loadRoute()
+      setScenarioIndex((prev) => {
+        const next = (prev + 1) % ROTATING_SCENARIOS.length
+        void loadRoute(ROTATING_SCENARIOS[next])
+        return next
+      })
       setCountdown(15)
     }, 15_000)
 
@@ -261,8 +280,8 @@ export default function RouteGraph() {
   /* ── build graph model ─────────────────────────── */
 
   const graph = useMemo(() => {
-    const fromEx = parseExchange(data?.request.from ?? from)
-    const toEx = parseExchange(data?.request.to ?? to)
+    const fromEx = parseExchange(data?.request.from ?? activeScenario.from)
+    const toEx = parseExchange(data?.request.to ?? activeScenario.to)
 
     const routePool = [data?.optimal, ...(data?.alternatives ?? [])].filter((r): r is Route => Boolean(r))
     const routedCoins = new Set(routePool.map((r) => r.bridgeCoin.toUpperCase()))
@@ -318,7 +337,7 @@ export default function RouteGraph() {
     })
 
     return { nodes, edges: Array.from(byKey.values()), fromEx, toEx }
-  }, [data])
+  }, [data, activeScenario.from, activeScenario.to])
 
   /* ── derived values ────────────────────────────── */
 
@@ -327,8 +346,10 @@ export default function RouteGraph() {
   const tradingFees = data?.fees.trading ?? {}
   const optimalCoin = optimal?.bridgeCoin?.toUpperCase() ?? null
   const withdrawalByExchange = data?.fees.withdrawal ?? {}
-  const fromCurrency = from.split(':')[1] ?? ''
-  const toCurrency = to.split(':')[1] ?? ''
+  const requestFrom = data?.request.from ?? activeScenario.from
+  const requestTo = data?.request.to ?? activeScenario.to
+  const fromCurrency = requestFrom.split(':')[1] ?? ''
+  const toCurrency = requestTo.split(':')[1] ?? ''
 
   const nodeById = new Map(graph.nodes.map((n) => [n.id, n]))
 
@@ -435,6 +456,7 @@ export default function RouteGraph() {
         <div>
           <h2 className="rg-title">Route Graph</h2>
           <p className="rg-sub">Real-time orderbook data + D1 fee table</p>
+          <p className="rg-sub">{activeScenario.from} {'\u2192'} {activeScenario.to}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontFamily: 'var(--mono)', fontSize: '0.72rem', color: 'var(--muted2)' }}>{countdown}s</span>
@@ -496,7 +518,7 @@ export default function RouteGraph() {
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
                 <span style={{ color: 'var(--cyan)', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: '0.88rem' }}>
-                  {formatExchange(parseExchange(data?.request.from ?? from))}
+                  {formatExchange(parseExchange(requestFrom))}
                 </span>
                 <span style={{ color: 'var(--muted2)' }}>{'\u2192'}</span>
                 <span style={{ color: 'var(--amber)', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: '0.88rem' }}>
@@ -504,7 +526,7 @@ export default function RouteGraph() {
                 </span>
                 <span style={{ color: 'var(--muted2)' }}>{'\u2192'}</span>
                 <span style={{ color: 'var(--green)', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: '0.88rem' }}>
-                  {formatExchange(parseExchange(data?.request.to ?? to))}
+                  {formatExchange(parseExchange(requestTo))}
                 </span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px' }}>
