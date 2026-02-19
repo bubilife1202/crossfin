@@ -82,20 +82,21 @@ function parseTelegramRouteCommand(text: string): {
   const trimmed = text.trim()
   if (!trimmed.startsWith('/route')) return null
 
-  const args = trimmed.split(/\s+/)
+  const args = trimmed.split(/\s+/).filter(Boolean)
   if (args.length < 4) {
-    throw new HTTPException(400, { message: 'Usage: /route fromExchange:FROM_CUR toExchange:TO_CUR amount [cheapest|fastest|balanced]' })
+    throw new HTTPException(400, {
+      message: 'Usage: /route fromExchange:FROM_CUR toExchange:TO_CUR amount [cheapest|fastest|balanced] or /route fromExchange toExchange amount [strategy]',
+    })
   }
 
-  const [fromExchangeRaw, fromCurrencyRaw] = String(args[1] ?? '').split(':')
-  const [toExchangeRaw, toCurrencyRaw] = String(args[2] ?? '').split(':')
+  const normalizeTupleToken = (value: string): string => value.trim().replace(/[,\u2192\u21c4]/g, '')
+  const [fromExchangeRaw, fromCurrencyRaw] = normalizeTupleToken(String(args[1] ?? '')).split(':')
+  const [toExchangeRaw, toCurrencyRaw] = normalizeTupleToken(String(args[2] ?? '')).split(':')
   const amount = Number(String(args[3] ?? '').replace(/,/g, ''))
   const strategyRaw = String(args[4] ?? 'cheapest').trim().toLowerCase()
 
   const fromExchange = String(fromExchangeRaw ?? '').trim().toLowerCase()
-  const fromCurrency = String(fromCurrencyRaw ?? '').trim().toUpperCase()
   const toExchange = String(toExchangeRaw ?? '').trim().toLowerCase()
-  const toCurrency = String(toCurrencyRaw ?? '').trim().toUpperCase()
 
   if (!ROUTING_EXCHANGES.includes(fromExchange as RoutingExchange)) {
     throw new HTTPException(400, { message: `Invalid from exchange: ${fromExchange}` })
@@ -103,9 +104,21 @@ function parseTelegramRouteCommand(text: string): {
   if (!ROUTING_EXCHANGES.includes(toExchange as RoutingExchange)) {
     throw new HTTPException(400, { message: `Invalid to exchange: ${toExchange}` })
   }
-  if (!fromCurrency || !toCurrency) {
-    throw new HTTPException(400, { message: 'Use exchange:currency format (e.g. bithumb:KRW binance:USDC)' })
+
+  const defaultCurrencyFor = (exchange: string): string => {
+    const allowed = ROUTING_EXCHANGE_CURRENCIES[exchange as RoutingExchange] ?? []
+    return String(allowed[0] ?? '').toUpperCase()
   }
+
+  const fromCurrency = String(fromCurrencyRaw ?? '').trim().toUpperCase() || defaultCurrencyFor(fromExchange)
+  const toCurrency = String(toCurrencyRaw ?? '').trim().toUpperCase() || defaultCurrencyFor(toExchange)
+
+  if (!fromCurrency || !toCurrency) {
+    throw new HTTPException(400, {
+      message: 'Cannot infer currency. Use /route exchange:currency exchange:currency amount (e.g. /route bithumb:KRW binance:USDC 5000000)',
+    })
+  }
+
   assertRoutingCurrencySupported(fromExchange, fromCurrency, 'from')
   assertRoutingCurrencySupported(toExchange, toCurrency, 'to')
   if (!Number.isFinite(amount) || amount <= 0) {
@@ -11581,6 +11594,7 @@ app.post('/api/telegram/webhook', async (c) => {
   const helpText = [
     'CrossFin Bot commands:',
     '/route fromExchange:FROM_CUR toExchange:TO_CUR amount [cheapest|fastest|balanced]',
+    '/route fromExchange toExchange amount [cheapest|fastest|balanced] (auto currency)',
     '/price [coin]',
     '/status',
     '/kimchi [coin]',
@@ -11588,6 +11602,7 @@ app.post('/api/telegram/webhook', async (c) => {
     '/help',
     '',
     'Example: /route bithumb:KRW binance:USDC 5000000 cheapest',
+    'Simple: /route bithumb binance 5000000 cheapest',
   ].join('\n')
 
   if (text.startsWith('/')) {
