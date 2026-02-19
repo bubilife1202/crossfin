@@ -182,6 +182,12 @@ interface AcpQuoteRoutePreview {
   estimatedInput?: number;
 }
 
+interface AcpQuoteMetaPreview {
+  routesEvaluated?: number;
+  bridgeCoinsTotal?: number;
+  evaluatedCoins?: string[];
+}
+
 interface AcpQuoteResponse {
   protocol: string;
   version: string;
@@ -191,6 +197,7 @@ interface AcpQuoteResponse {
   status: string;
   optimal_route: AcpQuoteRoutePreview | null;
   alternatives: AcpQuoteRoutePreview[];
+  meta?: AcpQuoteMetaPreview;
 }
 
 /* ─── Helpers ─── */
@@ -531,6 +538,12 @@ export default function App() {
   const routeOptimal = routeResult?.optimal_route;
   const routeAlts = routeResult?.alternatives ?? [];
   const routeAllRoutes = routeOptimal ? [routeOptimal, ...routeAlts] : [];
+  const previewRouteCount = routeAllRoutes.length;
+  const routesEvaluated = routeResult?.meta?.routesEvaluated ?? previewRouteCount;
+  const hiddenRouteCount = Math.max(0, routesEvaluated - previewRouteCount);
+  const upgradeBlurb = hiddenRouteCount > 0
+    ? `Full step-by-step execution guide + ${hiddenRouteCount.toLocaleString()} additional route option${hiddenRouteCount === 1 ? "" : "s"}`
+    : "Full step-by-step execution guide";
   const savingsCurrency = routeToCur;
   const routeToOptions = getReceiveCurrencyOptions(routeTo);
 
@@ -538,8 +551,12 @@ export default function App() {
     return formatCurrencyAmount(value, savingsCurrency);
   };
 
-  // Calculate savings vs worst route
-  const worstRoute = routeAllRoutes.length > 1 ? routeAllRoutes[routeAllRoutes.length - 1] : null;
+  // Calculate savings vs lowest-output route shown in preview
+  const worstRoute = routeAllRoutes.length > 1
+    ? routeAllRoutes.reduce((worst, current) =>
+      current.estimatedOutput < worst.estimatedOutput ? current : worst,
+    )
+    : null;
   const averageRouteOutput = routeAllRoutes.length > 0
     ? routeAllRoutes.reduce((sum, row) => sum + row.estimatedOutput, 0) / routeAllRoutes.length
     : null;
@@ -811,8 +828,8 @@ export default function App() {
                   <span className="routeSavingsEyebrow">Estimated Savings</span>
                   <span className="routeSavingsValue">{formatSavings(savingsVsWorst)}</span>
                   <span className="routeSavingsMeta">
-                    vs worst route ({savingsPctVsWorst.toFixed(2)}%)
-                    {savingsVsAverage > 0 ? ` · +${formatSavings(savingsVsAverage)} vs average route` : ""}
+                    vs lowest-output preview route ({savingsPctVsWorst.toFixed(2)}%)
+                    {savingsVsAverage > 0 ? ` · +${formatSavings(savingsVsAverage)} vs preview average` : ""}
                   </span>
                 </div>
               )}
@@ -839,7 +856,12 @@ export default function App() {
 
               {routeAllRoutes.length > 1 && (
                 <div className="routeAltSection">
-                  <h3 className="routeAltTitle">All Routes Compared</h3>
+                  <h3 className="routeAltTitle">Preview Routes Compared (Top {previewRouteCount})</h3>
+                  {hiddenRouteCount > 0 && (
+                    <p className="routeAltHint">
+                      Engine evaluated {routesEvaluated.toLocaleString()} routes. Free preview shows top {previewRouteCount}.
+                    </p>
+                  )}
                   <div className="tableWrap">
                     <table className="dataTable">
                       <thead>
@@ -881,7 +903,7 @@ export default function App() {
               )}
 
               <div className="routeUpgradeBanner">
-                <span>Full step-by-step execution guide + all {bridgeCoins.length} alternatives</span>
+                <span>{upgradeBlurb}</span>
                 <span className="routeUpgradePrice">$0.10 USDC via x402</span>
               </div>
             </div>

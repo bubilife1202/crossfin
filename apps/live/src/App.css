@@ -1339,6 +1339,13 @@
   margin: 0 0 14px;
 }
 
+.routeAltHint {
+  margin: -6px 0 12px;
+  font-size: 0.76rem;
+  color: var(--muted2);
+  line-height: 1.45;
+}
+
 .routeAltSection .coinCell {
   color: var(--cyan);
 }
@@ -1353,8 +1360,9 @@
   border-radius: 10px;
   padding: 16px 20px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
   margin-top: 12px;
 }
@@ -1363,6 +1371,8 @@
   font-size: 0.88rem;
   font-weight: 600;
   color: var(--muted);
+  line-height: 1.45;
+  flex: 1 1 280px;
 }
 
 .routeUpgradePrice {
@@ -1559,12 +1569,15 @@
   font-size: 0.74rem;
   font-weight: 600;
   color: var(--muted);
+  text-align: center;
+  line-height: 1.45;
+  max-width: 68ch;
 }
 
 .routeStatsRow {
-  display: flex;
-  justify-content: center;
-  gap: 32px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
   padding: 14px 0;
 }
 
@@ -1573,6 +1586,11 @@
   flex-direction: column;
   align-items: center;
   gap: 2px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.015);
+  padding: 10px 12px;
+  min-width: 0;
 }
 
 .routeStatVal {
@@ -2012,7 +2030,8 @@
     bottom: -10px;
   }
   .routeStatsRow {
-    gap: 20px;
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
   .survivalMetrics {
     grid-template-columns: 1fr;
