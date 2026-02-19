@@ -4,7 +4,12 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "build": "node scripts/build.mjs",
-    "deploy": "npm run build && npx wrangler pages deploy dist --project-name crossfin-docs"
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview",
+    "deploy": "vitepress build && npx wrangler pages deploy .vitepress/dist --project-name crossfin-docs"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4"
   }
 }
