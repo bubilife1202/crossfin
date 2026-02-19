@@ -80,29 +80,128 @@ function parseTelegramRouteCommand(text: string): {
   strategy: RoutingStrategy
 } | null {
   const trimmed = text.trim()
-  if (!trimmed.startsWith('/route')) return null
+  if (!/^\/route(?:@[a-zA-Z0-9_]+)?\b/i.test(trimmed)) return null
 
-  const args = trimmed.split(/\s+/).filter(Boolean)
-  if (args.length < 4) {
-    throw new HTTPException(400, {
-      message: 'Usage: /route fromExchange:FROM_CUR toExchange:TO_CUR amount [cheapest|fastest|balanced] or /route fromExchange toExchange amount [strategy]',
-    })
+  const usage =
+    'Usage: /route fromExchange:FROM_CUR toExchange:TO_CUR amount [cheapest|fastest|balanced]\n' +
+    'Example: /route bithumb:KRW binance:USDC 5000000 cheapest\n' +
+    'Simple: /route bithumb binance 5000000'
+
+  const content = trimmed.replace(/^\/route(?:@[a-zA-Z0-9_]+)?\s*/i, '').trim()
+  if (!content) {
+    throw new HTTPException(400, { message: usage })
   }
 
-  const normalizeTupleToken = (value: string): string => value.trim().replace(/[,\u2192\u21c4]/g, '')
-  const [fromExchangeRaw, fromCurrencyRaw] = normalizeTupleToken(String(args[1] ?? '')).split(':')
-  const [toExchangeRaw, toCurrencyRaw] = normalizeTupleToken(String(args[2] ?? '')).split(':')
-  const amount = Number(String(args[3] ?? '').replace(/,/g, ''))
-  const strategyRaw = String(args[4] ?? 'cheapest').trim().toLowerCase()
+  const parseAmountToken = (raw: string): number => {
+    const normalized = raw
+      .replace(/_/g, '')
+      .replace(/,/g, '')
+      .replace(/[^\d.]/g, '')
+      .trim()
+    if (!normalized) return NaN
+    return Number(normalized)
+  }
 
-  const fromExchange = String(fromExchangeRaw ?? '').trim().toLowerCase()
-  const toExchange = String(toExchangeRaw ?? '').trim().toLowerCase()
+  const splitExchangeCurrencyToken = (token: string): { exchange: string; currency: string } => {
+    const cleaned = token
+      .trim()
+      .replace(/^from[:=]/i, '')
+      .replace(/^to[:=]/i, '')
+      .replace(/[()[\],]/g, '')
+      .replace('/', ':')
+    const [exchangeRaw, currencyRaw] = cleaned.split(':')
+    return {
+      exchange: String(exchangeRaw ?? '').trim().toLowerCase(),
+      currency: String(currencyRaw ?? '').trim().toUpperCase(),
+    }
+  }
+
+  const strategySet = new Set<string>(['cheapest', 'fastest', 'balanced'])
+
+  let fromToken = ''
+  let toToken = ''
+  let amountToken = ''
+  let strategyRaw = 'cheapest'
+
+  const keyValueParts = content.split(/\s+/).filter(Boolean)
+  const keyValue = keyValueParts.reduce<Record<string, string>>((acc, part) => {
+    const eq = part.indexOf('=')
+    if (eq <= 0) return acc
+    const key = part.slice(0, eq).trim().toLowerCase()
+    const value = part.slice(eq + 1).trim()
+    if (key && value) acc[key] = value
+    return acc
+  }, {})
+
+  if (keyValue.from && keyValue.to && keyValue.amount) {
+    fromToken = keyValue.from
+    toToken = keyValue.to
+    amountToken = keyValue.amount
+    strategyRaw = String(keyValue.strategy ?? 'cheapest')
+  } else {
+    const tokens = content
+      .replace(/<->/g, ' ')
+      .replace(/-->/g, ' ')
+      .replace(/->/g, ' ')
+      .replace(/[\u2192\u21c4]/g, ' ')
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter(Boolean)
+
+    if (tokens.length < 3) {
+      throw new HTTPException(400, { message: usage })
+    }
+
+    const maybeStrategy = tokens[tokens.length - 1]?.toLowerCase() ?? ''
+    if (strategySet.has(maybeStrategy)) {
+      strategyRaw = maybeStrategy
+      tokens.pop()
+    }
+
+    let amountIndex = -1
+    for (let idx = tokens.length - 1; idx >= 0; idx -= 1) {
+      const candidate = tokens[idx] ?? ''
+      const parsedAmount = parseAmountToken(candidate)
+      if (Number.isFinite(parsedAmount) && parsedAmount > 0) {
+        amountIndex = idx
+        break
+      }
+    }
+    if (amountIndex < 0) {
+      throw new HTTPException(400, { message: `${usage}\namount must be a positive number` })
+    }
+
+    amountToken = tokens[amountIndex] ?? ''
+    const endpointTokens = tokens
+      .filter((_, idx) => idx !== amountIndex)
+      .map((token) => token.replace(/[()[\],]/g, '').trim())
+      .filter(Boolean)
+      .filter((token) => {
+        const lowered = token.toLowerCase()
+        return lowered !== 'from' && lowered !== 'to'
+      })
+
+    if (endpointTokens.length < 2) {
+      throw new HTTPException(400, { message: usage })
+    }
+
+    fromToken = endpointTokens[0] ?? ''
+    toToken = endpointTokens[1] ?? ''
+  }
+
+  const { exchange: fromExchange, currency: fromCurrencyRaw } = splitExchangeCurrencyToken(fromToken)
+  const { exchange: toExchange, currency: toCurrencyRaw } = splitExchangeCurrencyToken(toToken)
+  const amount = parseAmountToken(amountToken)
 
   if (!ROUTING_EXCHANGES.includes(fromExchange as RoutingExchange)) {
-    throw new HTTPException(400, { message: `Invalid from exchange: ${fromExchange}` })
+    throw new HTTPException(400, {
+      message: `Invalid from exchange: ${fromExchange || '(empty)'}\nSupported: ${ROUTING_EXCHANGES.join(', ')}`,
+    })
   }
   if (!ROUTING_EXCHANGES.includes(toExchange as RoutingExchange)) {
-    throw new HTTPException(400, { message: `Invalid to exchange: ${toExchange}` })
+    throw new HTTPException(400, {
+      message: `Invalid to exchange: ${toExchange || '(empty)'}\nSupported: ${ROUTING_EXCHANGES.join(', ')}`,
+    })
   }
 
   const defaultCurrencyFor = (exchange: string): string => {
@@ -125,8 +224,13 @@ function parseTelegramRouteCommand(text: string): {
     throw new HTTPException(400, { message: 'amount must be a positive number' })
   }
 
+  const strategyToken = String(strategyRaw).trim().toLowerCase().replace(/[^a-z]/g, '')
   const strategy: RoutingStrategy =
-    strategyRaw === 'fastest' ? 'fastest' : strategyRaw === 'balanced' ? 'balanced' : 'cheapest'
+    strategyToken === 'fastest'
+      ? 'fastest'
+      : strategyToken === 'balanced'
+        ? 'balanced'
+        : 'cheapest'
 
   return { fromExchange, fromCurrency, toExchange, toCurrency, amount, strategy }
 }
@@ -156,7 +260,7 @@ async function telegramSendMessage(
   text: string,
   parseMode?: 'Markdown',
 ): Promise<void> {
-  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -166,14 +270,22 @@ async function telegramSendMessage(
       parse_mode: parseMode,
     }),
   })
+  if (!response.ok) {
+    const details = await response.text().catch(() => '')
+    throw new Error(`telegram_send_message_failed:${response.status} ${details.slice(0, 180)}`)
+  }
 }
 
 async function telegramSendTyping(botToken: string, chatId: string | number): Promise<void> {
-  await fetch(`https://api.telegram.org/bot${botToken}/sendChatAction`, {
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendChatAction`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, action: 'typing' }),
   })
+  if (!response.ok) {
+    const details = await response.text().catch(() => '')
+    throw new Error(`telegram_send_typing_failed:${response.status} ${details.slice(0, 180)}`)
+  }
 }
 
 async function telegramSendTypingSafe(botToken: string, chatId: string | number): Promise<void> {
@@ -187,7 +299,7 @@ async function telegramSendTypingSafe(botToken: string, chatId: string | number)
 function startTelegramTypingLoop(
   botToken: string,
   chatId: string | number,
-  intervalMs: number = 4000,
+  intervalMs: number = 3000,
 ): () => void {
   let stopped = false
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -11953,7 +12065,11 @@ app.post('/api/telegram/webhook', async (c) => {
       return c.json({ ok: true, handled: true, mode: 'slash', fallback: 'help' })
     } catch (err) {
       const message = err instanceof HTTPException ? err.message : (err instanceof Error ? err.message : 'Failed to process command')
-      await telegramSendMessage(botToken, chatId, `Route error: ${message}`)
+      const prefix = command === '/route' ? 'Route error' : 'Command error'
+      const suffix = command === '/route'
+        ? '\n\nTry:\n/route bithumb:KRW binance:USDC 5000000 cheapest\n/route bithumb binance 5000000'
+        : ''
+      await telegramSendMessage(botToken, chatId, `${prefix}: ${message}${suffix}`)
       return c.json({ ok: true, handled: true, error: message, mode: 'slash' })
     } finally {
       stopTyping()
