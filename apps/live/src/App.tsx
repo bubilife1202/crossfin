@@ -330,7 +330,7 @@ export default function App() {
   const [routeResult, setRouteResult] = useState<AcpQuoteResponse | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+
 
   const refresh = useCallback(async () => {
     const results = await Promise.allSettled([
@@ -587,22 +587,6 @@ export default function App() {
     return `$${Math.round(val).toLocaleString()}`;
   };
 
-  const copyMcpConfig = () => {
-    navigator.clipboard.writeText(`{
-  "mcpServers": {
-    "crossfin": {
-      "command": "npx",
-      "args": ["-y", "crossfin-mcp"],
-      "env": {
-        "EVM_PRIVATE_KEY": "0x..."
-      }
-    }
-  }
-}`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   // Auto-run route on first load
   const hasAutoRun = useRef(false);
   useEffect(() => {
@@ -857,71 +841,7 @@ export default function App() {
           <RouteGraph />
         </section>
 
-        {/* ═══════════════════════════════════════════════
-            SECTION 2: Live Price Comparison (NEW)
-            ═══════════════════════════════════════════════ */}
-        <section className="panel priceComparisonPanel">
-          <div className="panelHeader">
-            <h2 className="panelTitle">Same coin, different prices</h2>
-            <span className="panelBadge">
-              <span className="liveDot" />
-              Live
-            </span>
-          </div>
-          <p className="panelSubtext">
-            This is why CrossFin exists — the same crypto trades at different prices on different exchanges.
-            The router finds which bridge coin minimizes your total cost.
-          </p>
-          <div className="tableWrap">
-            <table className="dataTable priceTable">
-              <thead>
-                <tr>
-                  <th>Coin</th>
-                  <th>Bithumb (KRW)</th>
-                  <th>Binance (USD)</th>
-                  <th>Spread</th>
-                  <th>Transfer</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bridgeCoins.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="emptyRow">
-                      Loading live prices…
-                    </td>
-                  </tr>
-                )}
-                {bridgeCoins.map((p) => {
-                  const krwInUsd = p.bithumbKrw && fxRate ? p.bithumbKrw / fxRate : null;
-                  const spreadPct = krwInUsd && p.binanceUsd
-                    ? ((krwInUsd - p.binanceUsd) / p.binanceUsd * 100)
-                    : null;
-                  return (
-                    <tr key={p.coin} className="fadeIn">
-                      <td className="coinCell">{p.coin}</td>
-                      <td>
-                        {p.bithumbKrw != null
-                          ? `₩${p.bithumbKrw.toLocaleString()}`
-                          : "—"}
-                      </td>
-                      <td>
-                        {p.binanceUsd != null
-                          ? `$${p.binanceUsd.toLocaleString()}`
-                          : "—"}
-                      </td>
-                      <td className={`pctCell ${spreadPct && spreadPct >= 0 ? "positive" : "negative"}`}>
-                        {spreadPct != null
-                          ? `${spreadPct >= 0 ? "+" : ""}${spreadPct.toFixed(2)}%`
-                          : "—"}
-                      </td>
-                      <td className="dirCell">~{p.transferTimeMin}m</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
+
 
         {/* ═══════════════════════════════════════════════
             SECTION 3: Agent Demo (NEW)
@@ -991,42 +911,7 @@ export default function App() {
           </div>
         </section>
 
-        {/* ═══════════════════════════════════════════════
-            SECTION 4: Install CTA (NEW)
-            ═══════════════════════════════════════════════ */}
-        <section className="panel installPanel">
-          <div className="installContent">
-            <h2 className="installTitle">Add to Claude Desktop</h2>
-            <p className="installSub">Copy this config and paste into your <code>claude_desktop_config.json</code></p>
-            <div className="installCodeBlock">
-              <pre>{`{
-  "mcpServers": {
-    "crossfin": {
-      "command": "npx",
-      "args": ["-y", "crossfin-mcp"],
-      "env": {
-        "EVM_PRIVATE_KEY": "0x..."
-      }
-    }
-  }
-}`}</pre>
-              <button type="button" className="copyBtn" onClick={copyMcpConfig}>
-                {copied ? "✓ Copied" : "Copy"}
-              </button>
-            </div>
-            <p className="installNote">
-              Free tools work without EVM key. Paid tools ($0.01–$0.10/call) need a Base wallet with USDC.
-            </p>
-            <div className="installLinks">
-              <a href="https://www.npmjs.com/package/crossfin-mcp" target="_blank" rel="noopener noreferrer" className="installLink">
-                npm: crossfin-mcp
-              </a>
-              <a href="https://github.com/bubilife1202/crossfin" target="_blank" rel="noopener noreferrer" className="installLink">
-                GitHub
-              </a>
-            </div>
-          </div>
-        </section>
+
 
         {/* ═══════════════════════════════════════════════
             SECTION 5: Metrics row (condensed)

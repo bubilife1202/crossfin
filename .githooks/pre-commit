@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+staged_files="$(git diff --cached --name-only --diff-filter=ACMR)"
+if [ -z "${staged_files}" ]; then
+  exit 0
+fi
+
+blocked=0
+
+while IFS= read -r file; do
+  case "$file" in
+    WALLETS.md|.mcpregistry_*)
+      echo "BLOCKED: forbidden file staged -> $file" >&2
+      blocked=1
+      ;;
+  esac
+done <<EOF
+${staged_files}
+EOF
+
+added_lines="$(
+  git diff --cached --no-color --unified=0 | awk '
+    /^\+\+\+ b\// { file = substr($0, 7); next }
+    /^\+/ && $0 !~ /^\+\+\+/ { print file ":" substr($0, 2) }
+  '
+)"
+
+redact_matches() {
+  sed -E \
+    -e 's/0x[0-9A-Fa-f]{64}/0x[REDACTED_PRIVATE_KEY]/g' \
+    -e 's/(gh[pousr]_)[A-Za-z0-9]+/\1[REDACTED]/g' \
+    -e 's/(AKIA)[0-9A-Z]{16}/\1[REDACTED]/g' \
+    -e 's/(AIza)[0-9A-Za-z_-]{35}/\1[REDACTED]/g' \
+    -e 's/(xox[baprs]-)[A-Za-z0-9-]+/\1[REDACTED]/g' \
+    -e 's/(sk-(proj|live|test)-)[A-Za-z0-9_-]{20,}/\1[REDACTED]/g' \
+    -e 's/(sk-)[A-Za-z0-9]{20,}/\1[REDACTED]/g' \
+    -e 's/eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/[REDACTED_JWT]/g'
+}
+
+check_pattern() {
+  local label="$1"
+  local pattern="$2"
+  local matches
+
+  matches="$(printf '%s\n' "$added_lines" | rg -n -S --no-heading "$pattern" || true)"
+  if [ -n "$matches" ]; then
+    echo "BLOCKED: $label" >&2
+    printf '%s\n' "$matches" | redact_matches >&2
+    blocked=1
+  fi
+}
+
+check_pattern \
+  "cloud/git/slack/openai style token pattern" \
+  "AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|gh[pousr]_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|sk-(proj|live|test)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|eyJ[A-Za-z0-9_-]{20,}\\.[A-Za-z0-9_-]{20,}\\.[A-Za-z0-9_-]{20,}"
+
+check_pattern \
+  "evm/private-key context with 64-hex key" \
+  "((?i:(evm_private_key|private[ _-]?key|mnemonic|seed phrase)).*(0x[0-9A-Fa-f]{64}))|((0x[0-9A-Fa-f]{64}).*(?i:(evm_private_key|private[ _-]?key|mnemonic|seed phrase)))"
+
+if [ "$blocked" -ne 0 ]; then
+  cat >&2 <<'EOF'
+Commit blocked by secret guard.
+
+How to verify staged content yourself:
+  git diff --cached
+  git diff --cached | rg -n "(gh[pousr]_|sk-|AKIA|AIza|PRIVATE KEY|EVM_PRIVATE_KEY|0x[0-9a-fA-F]{64})"
+
+Fix and stage again.
+EOF
+  exit 1
+fi
+
+exit 0

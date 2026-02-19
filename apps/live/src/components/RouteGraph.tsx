@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 type RoutingStrategy = 'cheapest' | 'fastest' | 'balanced'
 
@@ -75,17 +75,6 @@ type GraphEdge = {
 
 const API_BASE = ((import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || 'https://crossfin.dev').replace(/\/$/, '')
 
-const C = {
-  bg: '#0B0F1E',
-  card: '#141B2D',
-  accent: '#00C2FF',
-  green: '#00E68A',
-  gold: '#FFB800',
-  white: '#FFFFFF',
-  muted: '#7B8794',
-  dim: '#384152',
-}
-
 const EXCHANGE_LABELS: Record<string, string> = {
   bithumb: 'Bithumb',
   upbit: 'Upbit',
@@ -124,8 +113,85 @@ function toUsd(value: number): string {
   return `$${value.toFixed(2)}`
 }
 
+/* ── SVG layout helpers ──────────────────────────── */
+
+const NW: Record<GraphNode['type'], number> = { source: 136, coin: 96, dest: 136 }
+const NH: Record<GraphNode['type'], number> = { source: 52, coin: 38, dest: 52 }
+
+function bezierPath(x1: number, y1: number, x2: number, y2: number): string {
+  const cp = (x2 - x1) * 0.4
+  return `M${x1},${y1} C${x1 + cp},${y1} ${x2 - cp},${y2} ${x2},${y2}`
+}
+
+/* ── Scoped CSS ──────────────────────────────────── */
+
+const CSS = `
+@keyframes rgFadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes rgDash{to{stroke-dashoffset:-24}}
+@keyframes rgPulse{0%,100%{opacity:1}50%{opacity:.55}}
+
+.rg-wrap{animation:rgFadeIn .45s ease both}
+
+.rg-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.rg-title{margin:0;font-size:.92rem;font-weight:700;letter-spacing:-.01em;color:var(--ink)}
+.rg-sub{margin:3px 0 0;font-size:.76rem;color:var(--muted);font-weight:500}
+.rg-badge{display:inline-flex;align-items:center;gap:6px;font-size:.72rem;font-weight:600;color:var(--green);padding:3px 10px;border-radius:999px;border:1px solid rgba(0,255,136,.15);background:rgba(0,255,136,.04)}
+.rg-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px rgba(0,255,136,.5);animation:rgPulse 2s ease-in-out infinite}
+
+.rg-controls{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.rg-row{display:flex;align-items:center;gap:8px}
+
+.rg-sel,.rg-inp{background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--ink);font-family:var(--sans);font-size:.84rem;padding:9px 12px;outline:none;transition:border-color .2s,box-shadow .2s;flex:1;min-width:0}
+.rg-sel:hover,.rg-inp:hover{border-color:var(--border-hover)}
+.rg-sel:focus,.rg-inp:focus{border-color:var(--cyan);box-shadow:0 0 0 2px rgba(0,212,255,.08)}
+.rg-sel option{background:var(--bg2);color:var(--ink)}
+
+.rg-swap{display:flex;align-items:center;justify-content:center;width:36px;height:36px;flex-shrink:0;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);cursor:pointer;transition:all .2s}
+.rg-swap:hover{border-color:var(--cyan);color:var(--cyan);background:rgba(0,212,255,.06)}
+
+.rg-strats{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;flex-shrink:0}
+.rg-sb{padding:8px 14px;font-size:.78rem;font-weight:600;font-family:var(--sans);border:none;background:var(--bg2);color:var(--muted);cursor:pointer;transition:all .2s;border-right:1px solid var(--border);white-space:nowrap;text-transform:capitalize}
+.rg-sb:last-child{border-right:none}
+.rg-sb:hover{color:var(--ink);background:var(--card-hover)}
+.rg-sb.on{background:var(--cyan-dim);color:var(--cyan)}
+
+.rg-go{padding:9px 20px;font-size:.84rem;font-weight:700;font-family:var(--sans);border:none;border-radius:8px;background:var(--cyan);color:var(--bg);cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
+.rg-go:hover{box-shadow:0 0 20px rgba(0,212,255,.3)}
+.rg-go:disabled{opacity:.5;cursor:not-allowed}
+
+.rg-err{margin-bottom:12px;padding:10px 14px;background:var(--red-dim);border:1px solid rgba(255,68,102,.2);color:var(--red);border-radius:8px;font-size:.82rem;font-weight:500}
+
+.rg-gw{margin:0 -4px 16px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--bg);transition:opacity .3s}
+.rg-svg{display:block;width:100%}
+.rg-svg text{font-family:var(--sans)}
+
+.rg-dash{animation:rgDash 1s linear infinite}
+
+.rg-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.rg-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;transition:border-color .2s}
+.rg-card:hover{border-color:var(--border-hover)}
+.rg-lbl{font-size:.7rem;font-weight:650;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px}
+.rg-full{grid-column:1/-1}
+
+.rg-at{width:100%;border-collapse:collapse}
+.rg-at th{text-align:left;padding:6px 10px;font-size:.7rem;font-weight:650;text-transform:uppercase;letter-spacing:.04em;color:var(--muted2);border-bottom:1px solid var(--border)}
+.rg-at td{padding:7px 10px;font-size:.82rem;border-bottom:1px solid rgba(255,255,255,.03);color:var(--muted)}
+.rg-at tbody tr:hover{background:rgba(255,255,255,.02)}
+
+.rg-foot{margin-top:8px;font-size:.72rem;color:var(--muted2);text-align:right;font-family:var(--mono)}
+
+@media(max-width:640px){
+  .rg-row{flex-wrap:wrap}
+  .rg-sel,.rg-inp{flex:1 1 100%}
+  .rg-grid{grid-template-columns:1fr}
+  .rg-strats{flex:1 1 100%}
+  .rg-strats .rg-sb{flex:1}
+}
+`
+
+/* ── Component ───────────────────────────────────── */
+
 export default function RouteGraph() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
   const [from, setFrom] = useState<string>('bithumb:KRW')
   const [to, setTo] = useState<string>('binance:USDC')
   const [amountInput, setAmountInput] = useState<string>('1000000')
@@ -166,6 +232,8 @@ export default function RouteGraph() {
     void loadRoute()
   }, [loadRoute])
 
+  /* ── build graph model ─────────────────────────── */
+
   const graph = useMemo(() => {
     const fromEx = parseExchange(data?.request.from ?? from)
     const toEx = parseExchange(data?.request.to ?? to)
@@ -175,19 +243,21 @@ export default function RouteGraph() {
     const coins = Array.from(coinSet)
 
     const coinCount = Math.max(1, coins.length)
-    const gap = coinCount === 1 ? 0 : Math.max(28, Math.min(64, 300 / (coinCount - 1)))
-    const startY = coinCount === 1 ? 205 : 70
+    const gap = coinCount <= 1 ? 0 : Math.max(38, Math.min(56, 320 / (coinCount - 1)))
+    const totalH = (coinCount - 1) * gap
+    const midY = 210
+    const startY = midY - totalH / 2
 
     const nodes: GraphNode[] = [
-      { id: fromEx, label: formatExchange(fromEx), x: 90, y: 205, type: 'source' },
+      { id: fromEx, label: formatExchange(fromEx), x: 120, y: midY, type: 'source' },
       ...coins.map((coin, idx) => ({
         id: coin,
         label: coin,
-        x: 390,
+        x: 400,
         y: startY + idx * gap,
         type: 'coin' as const,
       })),
-      { id: toEx, label: formatExchange(toEx), x: 690, y: 205, type: 'dest' },
+      { id: toEx, label: formatExchange(toEx), x: 680, y: midY, type: 'dest' },
     ]
 
     const byKey = new Map<string, GraphEdge>()
@@ -221,217 +291,301 @@ export default function RouteGraph() {
     return { nodes, edges: Array.from(byKey.values()), fromEx, toEx }
   }, [data, from, to])
 
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    const width = 800
-    const height = 440
-    const dpr = window.devicePixelRatio || 1
-    canvas.width = width * dpr
-    canvas.height = height * dpr
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.scale(dpr, dpr)
-
-    ctx.fillStyle = C.bg
-    ctx.fillRect(0, 0, width, height)
-
-    ctx.font = 'bold 11px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.fillStyle = C.muted
-    ctx.fillText('From Exchange', 90, 28)
-    ctx.fillText('Bridge Coin', 390, 28)
-    ctx.fillText('To Exchange', 690, 28)
-
-    const nodeById = new Map(graph.nodes.map((n) => [n.id, n]))
-
-    graph.edges.forEach((edge) => {
-      const n1 = nodeById.get(edge.from)
-      const n2 = nodeById.get(edge.to)
-      if (!n1 || !n2) return
-
-      const x1 = n1.x + (n1.type === 'source' ? 55 : 34)
-      const y1 = n1.y + 18
-      const x2 = n2.x - (n2.type === 'dest' ? 55 : 34)
-      const y2 = n2.y + 18
-
-      ctx.beginPath()
-      ctx.moveTo(x1, y1)
-      ctx.lineTo(x2, y2)
-      ctx.strokeStyle = edge.isOptimal ? C.green : C.dim
-      ctx.lineWidth = edge.isOptimal ? 3 : 1
-      if (!edge.isOptimal) ctx.setLineDash([4, 4])
-      ctx.stroke()
-      ctx.setLineDash([])
-
-      const mx = (x1 + x2) / 2
-      const my = (y1 + y2) / 2
-      ctx.font = '10px sans-serif'
-      ctx.fillStyle = edge.isOptimal ? C.green : C.muted
-      ctx.fillText(toUsd(edge.cost), mx, my - 4)
-    })
-
-    graph.nodes.forEach((node) => {
-      const w = node.type === 'coin' ? 68 : 110
-      const h = 36
-      const isPathNode = (data?.optimal?.bridgeCoin?.toUpperCase() === node.id) ||
-        node.id === graph.fromEx ||
-        node.id === graph.toEx
-
-      const color = node.type === 'source' ? C.accent : node.type === 'coin' ? C.gold : C.green
-
-      ctx.fillStyle = isPathNode ? `${color}33` : C.card
-      ctx.strokeStyle = isPathNode ? color : C.dim
-      ctx.lineWidth = isPathNode ? 2 : 1
-      ctx.beginPath()
-      ctx.roundRect(node.x - w / 2, node.y, w, h, 6)
-      ctx.fill()
-      ctx.stroke()
-
-      ctx.font = isPathNode ? 'bold 12px sans-serif' : '11px sans-serif'
-      ctx.textAlign = 'center'
-      ctx.fillStyle = isPathNode ? color : C.white
-      ctx.fillText(node.label, node.x, node.y + 22)
-    })
-  }, [data, graph])
+  /* ── derived values ────────────────────────────── */
 
   const optimal = data?.optimal ?? null
   const alternatives = data?.alternatives ?? []
   const tradingFees = data?.fees.trading ?? {}
   const optimalCoin = optimal?.bridgeCoin?.toUpperCase() ?? null
   const withdrawalByExchange = data?.fees.withdrawal ?? {}
+  const fromCurrency = from.split(':')[1] ?? ''
+  const toCurrency = to.split(':')[1] ?? ''
+
+  const nodeById = new Map(graph.nodes.map((n) => [n.id, n]))
+
+  const handleSwap = () => { setFrom(to); setTo(from) }
+
+  const strategies: RoutingStrategy[] = ['cheapest', 'fastest', 'balanced']
+
+  /* ── render helpers ────────────────────────────── */
+
+  const renderEdge = (edge: GraphEdge, idx: number) => {
+    const n1 = nodeById.get(edge.from)
+    const n2 = nodeById.get(edge.to)
+    if (!n1 || !n2) return null
+    const x1 = n1.x + NW[n1.type] / 2
+    const y1 = n1.y
+    const x2 = n2.x - NW[n2.type] / 2
+    const y2 = n2.y
+    const d = bezierPath(x1, y1, x2, y2)
+    const mx = (x1 + x2) / 2
+    const my = (y1 + y2) / 2
+
+    if (edge.isOptimal) {
+      return (
+        <g key={`oe-${idx}`}>
+          <path d={d} fill="none" stroke="#00ff88" strokeWidth={8} opacity={0.08} />
+          <path d={d} fill="none" stroke="url(#rgGrad)" strokeWidth={2.5} strokeLinecap="round" />
+          <path d={d} fill="none" stroke="rgba(0,255,136,0.45)" strokeWidth={2} strokeLinecap="round" strokeDasharray="6 14" className="rg-dash" />
+          <rect x={mx - 26} y={my - 20} width={52} height={18} rx={4} fill="rgba(0,255,136,0.1)" stroke="rgba(0,255,136,0.25)" strokeWidth={0.5} />
+          <text x={mx} y={my - 8} textAnchor="middle" style={{ fill: '#00ff88', fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700 }}>{toUsd(edge.cost)}</text>
+        </g>
+      )
+    }
+    return (
+      <g key={`de-${idx}`}>
+        <path d={d} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={1} strokeDasharray="4 4" />
+        <text x={mx} y={my - 6} textAnchor="middle" style={{ fill: 'rgba(255,255,255,0.2)', fontSize: 9, fontFamily: 'var(--mono)' }}>{toUsd(edge.cost)}</text>
+      </g>
+    )
+  }
+
+  const renderNode = (node: GraphNode) => {
+    const w = NW[node.type]
+    const h = NH[node.type]
+    const isOnPath = node.id === graph.fromEx || node.id === graph.toEx || optimalCoin === node.id
+
+    let fill: string, stroke: string, txt: string, glow: string | undefined
+    if (node.type === 'source') {
+      fill = 'rgba(0,212,255,0.06)'; stroke = isOnPath ? 'rgba(0,212,255,0.5)' : 'rgba(255,255,255,0.08)'
+      txt = isOnPath ? '#00d4ff' : 'var(--ink)'; glow = isOnPath ? 'url(#rgGC)' : undefined
+    } else if (node.type === 'dest') {
+      fill = 'rgba(0,255,136,0.06)'; stroke = isOnPath ? 'rgba(0,255,136,0.5)' : 'rgba(255,255,255,0.08)'
+      txt = isOnPath ? '#00ff88' : 'var(--ink)'; glow = isOnPath ? 'url(#rgGG)' : undefined
+    } else {
+      const isBridge = optimalCoin === node.id
+      fill = isBridge ? 'rgba(0,255,136,0.08)' : 'rgba(255,255,255,0.02)'
+      stroke = isBridge ? 'rgba(0,255,136,0.4)' : 'rgba(255,255,255,0.08)'
+      txt = isBridge ? '#00ff88' : 'var(--muted)'; glow = isBridge ? 'url(#rgGG)' : undefined
+    }
+
+    const rx = node.type === 'coin' ? 8 : 10
+
+    return (
+      <g key={node.id}>
+        <rect x={node.x - w / 2} y={node.y - h / 2} width={w} height={h} rx={rx}
+          style={{ fill, stroke }} strokeWidth={isOnPath ? 1.5 : 1} filter={glow} />
+        {node.type === 'coin' ? (
+          <text x={node.x} y={node.y + 4} textAnchor="middle" style={{ fill: txt, fontSize: 12, fontWeight: 700, fontFamily: 'var(--mono)' }}>{node.label}</text>
+        ) : (
+          <>
+            <text x={node.x} y={node.y - 2} textAnchor="middle" style={{ fill: txt, fontSize: 13, fontWeight: 700 }}>{node.label}</text>
+            <text x={node.x} y={node.y + 14} textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 10, fontFamily: 'var(--mono)' }}>
+              {node.type === 'source' ? fromCurrency : toCurrency}
+            </text>
+          </>
+        )}
+      </g>
+    )
+  }
+
+  const actionColor = (action: string) =>
+    action === 'EXECUTE' ? 'var(--green)' : action === 'SKIP' ? 'var(--red)' : 'var(--amber)'
+
+  /* ── JSX ───────────────────────────────────────── */
 
   return (
-    <div style={{
-      background: C.bg,
-      border: `1px solid ${C.dim}`,
-      borderRadius: 8,
-      padding: 24,
-      maxWidth: 850,
-      margin: '0 auto',
-      fontFamily: "'Noto Sans KR', sans-serif",
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
+    <div className="rg-wrap">
+      <style>{CSS}</style>
+
+      {/* ── Header ───────────────────────────────── */}
+      <div className="rg-header">
         <div>
-          <h3 style={{ color: C.white, fontSize: 18, margin: 0 }}>CrossFin RouteGraph (Live)</h3>
-          <p style={{ color: C.muted, fontSize: 12, margin: '4px 0 0' }}>
-            Real orderbook/slippage route data + D1 fee table
-          </p>
+          <h2 className="rg-title">Route Graph</h2>
+          <p className="rg-sub">Real-time orderbook data + D1 fee table</p>
         </div>
-        <button
-          type="button"
-          onClick={() => void loadRoute()}
-          disabled={loading}
-          style={{
-            background: loading ? C.dim : C.accent,
-            color: C.bg,
-            border: 'none',
-            padding: '8px 18px',
-            borderRadius: 6,
-            fontWeight: 700,
-            cursor: loading ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {loading ? 'Loading...' : 'Refresh Live Route'}
-        </button>
+        <span className="rg-badge"><span className="rg-dot" /> LIVE</span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
-        <select value={from} onChange={(e) => setFrom(e.target.value)}>
-          {ENDPOINT_OPTIONS.map((opt) => <option key={`from-${opt.value}`} value={opt.value}>{opt.label}</option>)}
-        </select>
-        <select value={to} onChange={(e) => setTo(e.target.value)}>
-          {ENDPOINT_OPTIONS.map((opt) => <option key={`to-${opt.value}`} value={opt.value}>{opt.label}</option>)}
-        </select>
-        <input value={amountInput} onChange={(e) => setAmountInput(e.target.value)} placeholder="amount" />
-        <select value={strategy} onChange={(e) => setStrategy(e.target.value as RoutingStrategy)}>
-          <option value="cheapest">cheapest</option>
-          <option value="fastest">fastest</option>
-          <option value="balanced">balanced</option>
-        </select>
+      {/* ── Controls ─────────────────────────────── */}
+      <div className="rg-controls">
+        <div className="rg-row">
+          <select className="rg-sel" value={from} onChange={(e) => setFrom(e.target.value)}>
+            {ENDPOINT_OPTIONS.map((o) => <option key={`f-${o.value}`} value={o.value}>{o.label}</option>)}
+          </select>
+          <button type="button" className="rg-swap" onClick={handleSwap} aria-label="Swap">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" role="img" aria-hidden="true"><path d="M1 5h12M10 2l3 3-3 3M15 11H3M6 14l-3-3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+          <select className="rg-sel" value={to} onChange={(e) => setTo(e.target.value)}>
+            {ENDPOINT_OPTIONS.map((o) => <option key={`t-${o.value}`} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div className="rg-row">
+          <input className="rg-inp" value={amountInput} onChange={(e) => setAmountInput(e.target.value)} placeholder="Amount" />
+          <div className="rg-strats">
+            {strategies.map((s) => (
+              <button key={s} type="button" className={`rg-sb${strategy === s ? ' on' : ''}`} onClick={() => setStrategy(s)}>{s}</button>
+            ))}
+          </div>
+          <button type="button" className="rg-go" onClick={() => void loadRoute()} disabled={loading}>
+            {loading ? 'Loading\u2026' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
-      {error && (
-        <div style={{
-          marginBottom: 10,
-          padding: '8px 10px',
-          background: '#2D1010',
-          border: '1px solid #5B1F1F',
-          color: '#FFB4B4',
-          borderRadius: 6,
-          fontSize: 12,
-        }}>
-          {error}
-        </div>
-      )}
+      {/* ── Error ────────────────────────────────── */}
+      {error && <div className="rg-err">{error}</div>}
 
-      <canvas ref={canvasRef} style={{ width: 800, height: 440, borderRadius: 6 }} />
+      {/* ── SVG Graph ────────────────────────────── */}
+      <div className="rg-gw" style={{ opacity: loading ? 0.55 : 1 }}>
+        <svg viewBox="0 0 800 420" className="rg-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Route graph visualization">
+          <defs>
+            <filter id="rgGG" x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#00ff88" floodOpacity="0.5" />
+            </filter>
+            <filter id="rgGC" x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#00d4ff" floodOpacity="0.5" />
+            </filter>
+            <linearGradient id="rgGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#00d4ff" />
+              <stop offset="100%" stopColor="#00ff88" />
+            </linearGradient>
+            <pattern id="rgDots" width="24" height="24" patternUnits="userSpaceOnUse">
+              <circle cx="12" cy="12" r="0.6" fill="rgba(255,255,255,0.05)" />
+            </pattern>
+          </defs>
 
-      <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <div style={{ background: C.card, border: `1px solid ${C.dim}`, borderRadius: 6, padding: 12 }}>
-          <div style={{ color: C.white, fontWeight: 700, marginBottom: 8 }}>Optimal</div>
+          {/* background */}
+          <rect width="800" height="420" style={{ fill: 'var(--bg)' }} />
+          <rect width="800" height="420" fill="url(#rgDots)" />
+
+          {/* bridge column highlight */}
+          <rect x="344" y="40" width="112" height="350" rx="8" fill="rgba(255,170,0,0.02)" stroke="rgba(255,170,0,0.04)" strokeWidth={0.5} />
+
+          {/* column labels */}
+          <text x="120" y="32" textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em' }}>SOURCE</text>
+          <text x="400" y="32" textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em' }}>BRIDGE</text>
+          <text x="680" y="32" textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em' }}>DESTINATION</text>
+
+          {/* non-optimal edges (behind) */}
+          {graph.edges.filter((e) => !e.isOptimal).map(renderEdge)}
+          {/* optimal edges (on top) */}
+          {graph.edges.filter((e) => e.isOptimal).map(renderEdge)}
+          {/* nodes */}
+          {graph.nodes.map(renderNode)}
+        </svg>
+      </div>
+
+      {/* ── Info Grid ────────────────────────────── */}
+      <div className="rg-grid">
+        {/* Optimal Route */}
+        <div className="rg-card" style={{ borderLeft: '3px solid var(--green)' }}>
+          <div className="rg-lbl">Optimal Route</div>
           {optimal ? (
             <>
-              <div style={{ color: C.green, fontWeight: 700, marginBottom: 4 }}>
-                {formatExchange(parseExchange(data?.request.from ?? from))}
-                {' -> '}
-                {optimal.bridgeCoin.toUpperCase()}
-                {' -> '}
-                {formatExchange(parseExchange(data?.request.to ?? to))}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                <span style={{ color: 'var(--cyan)', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: '0.88rem' }}>
+                  {formatExchange(parseExchange(data?.request.from ?? from))}
+                </span>
+                <span style={{ color: 'var(--muted2)' }}>{'\u2192'}</span>
+                <span style={{ color: 'var(--amber)', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: '0.88rem' }}>
+                  {optimal.bridgeCoin.toUpperCase()}
+                </span>
+                <span style={{ color: 'var(--muted2)' }}>{'\u2192'}</span>
+                <span style={{ color: 'var(--green)', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: '0.88rem' }}>
+                  {formatExchange(parseExchange(data?.request.to ?? to))}
+                </span>
               </div>
-              <div style={{ color: C.muted, fontSize: 12 }}>Cost: {optimal.totalCostPct.toFixed(2)}% | Time: ~{optimal.totalTimeMinutes}m</div>
-              <div style={{ color: C.muted, fontSize: 12 }}>Action: {optimal.action} ({(optimal.confidence * 100).toFixed(0)}%)</div>
-              <div style={{ color: C.white, fontSize: 12, marginTop: 6 }}>{optimal.reason}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px' }}>
+                <div>
+                  <div style={{ color: 'var(--muted2)', fontSize: '0.68rem', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cost</div>
+                  <div style={{ color: 'var(--green)', fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '0.9rem' }}>{optimal.totalCostPct.toFixed(2)}%</div>
+                </div>
+                <div>
+                  <div style={{ color: 'var(--muted2)', fontSize: '0.68rem', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Time</div>
+                  <div style={{ color: 'var(--ink)', fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '0.9rem' }}>~{optimal.totalTimeMinutes}m</div>
+                </div>
+                <div>
+                  <div style={{ color: 'var(--muted2)', fontSize: '0.68rem', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Action</div>
+                  <div style={{ color: actionColor(optimal.action), fontWeight: 700, fontSize: '0.88rem' }}>{optimal.action}</div>
+                </div>
+                <div>
+                  <div style={{ color: 'var(--muted2)', fontSize: '0.68rem', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Confidence</div>
+                  <div style={{ color: 'var(--ink)', fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '0.9rem' }}>{(optimal.confidence * 100).toFixed(0)}%</div>
+                </div>
+              </div>
+              <p style={{ margin: '10px 0 0', fontSize: '0.78rem', color: 'var(--muted)', lineHeight: 1.5 }}>{optimal.reason}</p>
             </>
           ) : (
-            <div style={{ color: C.muted, fontSize: 12 }}>No route found</div>
+            <div style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>No route found</div>
           )}
         </div>
 
-        <div style={{ background: C.card, border: `1px solid ${C.dim}`, borderRadius: 6, padding: 12 }}>
-          <div style={{ color: C.white, fontWeight: 700, marginBottom: 8 }}>Route Data Freshness</div>
-          <div style={{ color: C.muted, fontSize: 12 }}>Evaluated routes: {data?.meta.routesEvaluated ?? 0}</div>
-          <div style={{ color: C.muted, fontSize: 12 }}>Global price source: {data?.meta.priceAge?.globalPrices?.source ?? 'n/a'}</div>
-          <div style={{ color: C.muted, fontSize: 12 }}>Price age: {data?.meta.priceAge?.globalPrices?.ageMs ?? 0}ms</div>
-          <div style={{ color: C.muted, fontSize: 12 }}>Data freshness: {data?.meta.dataFreshness ?? 'n/a'}</div>
-          <div style={{ color: C.muted, fontSize: 12 }}>Fees source: {data?.meta.feesSource ?? 'n/a'}</div>
-        </div>
-      </div>
-
-      <div style={{ marginTop: 10, background: C.card, border: `1px solid ${C.dim}`, borderRadius: 6, padding: 12 }}>
-        <div style={{ color: C.white, fontWeight: 700, marginBottom: 8 }}>Real Exchange Fees (D1)</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <div>
-            <div style={{ color: C.gold, fontSize: 12, marginBottom: 6 }}>Trading Fees</div>
-            {Object.entries(tradingFees).map(([exchange, fee]) => (
-              <div key={`trade-${exchange}`} style={{ color: C.muted, fontSize: 12 }}>
-                {formatExchange(exchange)}: {(fee * 100).toFixed(2)}%
-              </div>
-            ))}
-          </div>
-          <div>
-            <div style={{ color: C.gold, fontSize: 12, marginBottom: 6 }}>
-              Withdrawal Fees {optimalCoin ? `(${optimalCoin})` : ''}
-            </div>
-            {Object.entries(withdrawalByExchange).map(([exchange, byCoin]) => (
-              <div key={`wd-${exchange}`} style={{ color: C.muted, fontSize: 12 }}>
-                {formatExchange(exchange)}: {optimalCoin && byCoin[optimalCoin] !== undefined ? byCoin[optimalCoin] : '-'}
+        {/* Data Freshness */}
+        <div className="rg-card" style={{ borderLeft: '3px solid var(--cyan)' }}>
+          <div className="rg-lbl">Data Freshness</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {([
+              ['Routes evaluated', String(data?.meta.routesEvaluated ?? 0)],
+              ['Price source', data?.meta.priceAge?.globalPrices?.source ?? 'n/a'],
+              ['Price age', `${data?.meta.priceAge?.globalPrices?.ageMs ?? 0}ms`],
+              ['Data status', data?.meta.dataFreshness ?? 'n/a'],
+              ['Fee source', data?.meta.feesSource ?? 'n/a'],
+            ] as const).map(([label, value]) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{label}</span>
+                <span style={{ color: 'var(--ink)', fontSize: '0.8rem', fontFamily: 'var(--mono)', fontWeight: 600 }}>{value}</span>
               </div>
             ))}
           </div>
         </div>
+
+        {/* Exchange Fees */}
+        <div className="rg-card rg-full">
+          <div className="rg-lbl">Exchange Fees (D1)</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div>
+              <div style={{ fontSize: '0.72rem', fontWeight: 650, color: 'var(--amber)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Trading</div>
+              {Object.entries(tradingFees).map(([exchange, fee]) => (
+                <div key={`tf-${exchange}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.82rem' }}>
+                  <span style={{ color: 'var(--muted)' }}>{formatExchange(exchange)}</span>
+                  <span style={{ color: 'var(--ink)', fontFamily: 'var(--mono)', fontWeight: 600 }}>{(fee * 100).toFixed(2)}%</span>
+                </div>
+              ))}
+            </div>
+            <div>
+              <div style={{ fontSize: '0.72rem', fontWeight: 650, color: 'var(--amber)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Withdrawal{optimalCoin ? ` (${optimalCoin})` : ''}
+              </div>
+              {Object.entries(withdrawalByExchange).map(([exchange, byCoin]) => (
+                <div key={`wd-${exchange}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.82rem' }}>
+                  <span style={{ color: 'var(--muted)' }}>{formatExchange(exchange)}</span>
+                  <span style={{ color: 'var(--ink)', fontFamily: 'var(--mono)', fontWeight: 600 }}>
+                    {optimalCoin && byCoin[optimalCoin] !== undefined ? byCoin[optimalCoin] : '-'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Alternatives */}
+        {alternatives.length > 0 && (
+          <div className="rg-card rg-full">
+            <div className="rg-lbl">Alternatives</div>
+            <table className="rg-at">
+              <thead>
+                <tr><th>Coin</th><th>Cost</th><th>Time</th><th>Action</th></tr>
+              </thead>
+              <tbody>
+                {alternatives.slice(0, 5).map((alt, idx) => (
+                  <tr key={`${alt.bridgeCoin}-${idx}`}>
+                    <td style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--ink)' }}>{alt.bridgeCoin.toUpperCase()}</td>
+                    <td style={{ fontFamily: 'var(--mono)' }}>{alt.totalCostPct.toFixed(2)}%</td>
+                    <td style={{ fontFamily: 'var(--mono)' }}>~{alt.totalTimeMinutes}m</td>
+                    <td style={{ color: actionColor(alt.action), fontWeight: 600 }}>{alt.action}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {alternatives.length > 0 && (
-        <div style={{ marginTop: 10, background: C.card, border: `1px solid ${C.dim}`, borderRadius: 6, padding: 12 }}>
-          <div style={{ color: C.white, fontWeight: 700, marginBottom: 8 }}>Alternatives</div>
-          {alternatives.slice(0, 4).map((alt, idx) => (
-            <div key={`${alt.bridgeCoin}-${idx}`} style={{ color: C.muted, fontSize: 12, marginBottom: 3 }}>
-              {alt.bridgeCoin.toUpperCase()}: {alt.totalCostPct.toFixed(2)}% | ~{alt.totalTimeMinutes}m | {alt.action}
-            </div>
-          ))}
+      {/* ── Footer ───────────────────────────────── */}
+      {data && (
+        <div className="rg-foot">
+          {data.meta.routesEvaluated} routes / {data.meta.bridgeCoinsTotal} coins evaluated
         </div>
       )}
     </div>
