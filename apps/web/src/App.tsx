@@ -377,7 +377,7 @@ function App() {
           </div>
 
           <div className="heroPills">
-            <span className="pill">7 Exchanges</span>
+            <span className="pill">9 Exchanges</span>
             <span className="pill">11 Bridge Coins</span>
             <span className="pill">x402 Native</span>
             <span className="pill">MCP + ACP</span>
@@ -390,7 +390,7 @@ function App() {
             <div className="featureCard">
               <div className="featureIcon">&#x21C4;</div>
               <h3>Routing Engine</h3>
-              <p>Find the cheapest path across Bithumb, Upbit, Coinone, GoPax, Binance, OKX, and Bybit. Compares 11 bridge coins factoring fees, slippage, and transfer time.</p>
+              <p>Find the cheapest path across Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, and Bybit. Compares 11 bridge coins factoring fees, slippage, and transfer time.</p>
             </div>
             <div className="featureCard">
               <div className="featureIcon">&#x25B2;</div>
