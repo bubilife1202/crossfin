@@ -42,7 +42,15 @@ curl -X POST https://crossfin.dev/api/acp/quote \
 
 Returns optimal route with bridge coin, fees, and alternatives. No payment required.
 
-## Step 5: Paid optimal route (x402)
+## Step 5: Live optimal route graph data (free)
+
+```bash
+curl "https://crossfin.dev/api/routing/optimal?from=bithumb:KRW&to=binance:USDC&amount=5000000&strategy=cheapest"
+```
+
+Returns live optimal route + alternatives with real exchange fee table from D1.
+
+## Step 6: Paid optimal route (x402)
 
 ```
 GET /api/premium/route/find?from=bithumb:KRW&to=binance:USDC&amount=5000000&strategy=cheapest

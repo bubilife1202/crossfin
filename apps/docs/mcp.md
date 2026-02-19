@@ -38,7 +38,7 @@ No EVM key? Free tools work without one. Paid tools require a Base wallet with U
   { name: 'compare_exchange_prices', description: 'Live price comparison', price: 'Free' },
   { name: 'get_kimchi_premium', description: 'Korean vs global spread', price: 'Free' },
   { name: 'call_paid_service', description: 'Call any paid API with x402', price: 'Varies' },
-  { name: 'search_services', description: 'Search 184+ services', price: 'Free' },
+  { name: 'search_services', description: 'Search registered services', price: 'Free' },
   { name: 'list_services', description: 'Browse service catalog', price: 'Free' },
   { name: 'get_service', description: 'Service details', price: 'Free' },
   { name: 'list_categories', description: 'Service categories', price: 'Free' },

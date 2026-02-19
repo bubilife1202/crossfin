@@ -9,6 +9,7 @@ Base URL: `https://crossfin.dev` — 7 exchanges: Bithumb, Upbit, Coinone, GoPax
   { method: 'GET', path: '/api/route/status', description: 'Exchange network health (7/7 online)', price: 'Free' },
   { method: 'GET', path: '/api/route/pairs', description: 'Bridge pairs with live prices', price: 'Free' },
   { method: 'GET', path: '/api/route/fees', description: 'Trading + withdrawal fee table', price: 'Free' },
+  { method: 'GET', path: '/api/routing/optimal', description: 'Live optimal route + real exchange fees (for RouteGraph)', price: 'Free' },
   { method: 'GET', path: '/api/premium/route/find', description: 'Full optimal route analysis', price: '$0.10' },
 ]" />
 
@@ -78,6 +79,7 @@ Base URL: `https://crossfin.dev` — 7 exchanges: Bithumb, Upbit, Coinone, GoPax
   { method: 'GET', path: '/api/registry/search?q=', description: 'Full-text search', price: 'Free' },
   { method: 'GET', path: '/api/registry/categories', description: 'Categories with counts', price: 'Free' },
   { method: 'GET', path: '/.well-known/crossfin.json', description: 'Agent auto-discovery', price: 'Free' },
+  { method: 'GET', path: '/.well-known/x402.json', description: 'x402 discovery metadata', price: 'Free' },
   { method: 'GET', path: '/api/openapi.json', description: 'OpenAPI 3.1 spec', price: 'Free' },
   { method: 'GET', path: '/api/docs/guide', description: 'Structured agent guide', price: 'Free' },
 ]" />

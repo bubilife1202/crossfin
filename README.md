@@ -91,7 +91,7 @@ Supports bidirectional routing: Korea → Global and Global → Korea.
 | `list_exchange_fees` | Trading + withdrawal fee comparison |
 | `compare_exchange_prices` | Live price comparison across Korean exchanges |
 | `get_kimchi_premium` | Korean vs. global price spread (free preview) |
-| `search_services` | Search 184 registered services |
+| `search_services` | Search registered services |
 | `get_guide` | Full agent guide (services, payment flow, examples) |
 | `call_paid_service` | Call any paid API with automatic x402 payment |
 | `create_wallet` | Local ledger wallet |
@@ -185,11 +185,12 @@ All paid via x402 (USDC on Base). No API key needed.
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/registry` | List all 184 services |
+| `GET /api/registry` | List all registered services |
 | `GET /api/registry/search?q=...` | Full-text search |
 | `GET /api/registry/categories` | Categories with counts |
 | `GET /api/docs/guide` | Structured agent guide |
 | `GET /.well-known/crossfin.json` | Agent auto-discovery |
+| `GET /.well-known/x402.json` | x402 discovery metadata |
 | `GET /api/openapi.json` | OpenAPI 3.1 spec |
 
 </details>

@@ -42,7 +42,7 @@ npx -y crossfin-mcp
 | `compare_exchange_prices` | Free | Live price comparison across Korean exchanges |
 | `get_kimchi_premium` | Free | Korean vs. global price spread preview |
 | `call_paid_service` | Varies | Call any of 35 paid APIs with automatic x402 payment |
-| `search_services` | Free | Search 184 registered services |
+| `search_services` | Free | Search registered services |
 | `list_services` | Free | Browse service catalog |
 | `get_service` | Free | Service details |
 | `list_categories` | Free | Service categories |
