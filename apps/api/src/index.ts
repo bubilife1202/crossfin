@@ -8615,17 +8615,18 @@ app.get('/api/cron/snapshot-kimchi', async (c) => {
 
 // === Guardian Rules CRUD ===
 
-app.get('/api/guardian/rules', async (c) => {
+app.get('/api/guardian/rules', agentAuth, async (c) => {
   requireGuardianEnabled(c)
-  const agentId = c.req.query('agent_id')
-  let query = "SELECT * FROM guardian_rules WHERE active = 1"
-  const binds: string[] = []
-  if (agentId) {
-    query += " AND (agent_id IS NULL OR agent_id = ?)"
-    binds.push(agentId)
+  const requesterAgentId = c.get('agentId')
+  const requestedAgentId = (c.req.query('agent_id') ?? '').trim()
+  if (requestedAgentId && requestedAgentId !== requesterAgentId) {
+    throw new HTTPException(403, { message: 'Forbidden' })
   }
-  query += " ORDER BY type, created_at DESC"
-  const stmt = binds.length ? c.env.DB.prepare(query).bind(...binds) : c.env.DB.prepare(query)
+
+  const targetAgentId = requestedAgentId || requesterAgentId
+  const stmt = c.env.DB.prepare(
+    "SELECT * FROM guardian_rules WHERE active = 1 AND (agent_id IS NULL OR agent_id = ?) ORDER BY type, created_at DESC"
+  ).bind(targetAgentId)
   const { results } = await stmt.all()
   return c.json({
     rules: (results ?? []).map((r: any) => ({
@@ -8672,17 +8673,25 @@ app.delete('/api/guardian/rules/:id', async (c) => {
 
 // === Guardian Status (public, for live dashboard) ===
 
-app.get('/api/guardian/status', async (c) => {
+app.get('/api/guardian/status', agentAuth, async (c) => {
   requireGuardianEnabled(c)
+  const agentId = c.get('agentId')
+
   const [rules, recentActions, spendToday] = await Promise.all([
-    c.env.DB.prepare("SELECT id, agent_id, type, params, created_at FROM guardian_rules WHERE active = 1 ORDER BY created_at DESC LIMIT 20").all(),
-    c.env.DB.prepare("SELECT id, agent_id, action_type, decision, confidence, cost_usd, rule_applied, details, created_at FROM autonomous_actions ORDER BY created_at DESC LIMIT 30").all(),
-    c.env.DB.prepare("SELECT agent_id, SUM(amount_usd) as total FROM agent_spend WHERE created_at >= datetime('now', '-1 day') GROUP BY agent_id").all(),
+    c.env.DB.prepare(
+      "SELECT id, agent_id, type, params, created_at FROM guardian_rules WHERE active = 1 AND (agent_id IS NULL OR agent_id = ?) ORDER BY created_at DESC LIMIT 20"
+    ).bind(agentId).all(),
+    c.env.DB.prepare(
+      "SELECT id, agent_id, action_type, decision, confidence, cost_usd, rule_applied, details, created_at FROM autonomous_actions WHERE agent_id = ? ORDER BY created_at DESC LIMIT 30"
+    ).bind(agentId).all(),
+    c.env.DB.prepare(
+      "SELECT agent_id, SUM(amount_usd) as total FROM agent_spend WHERE agent_id = ? AND created_at >= datetime('now', '-1 day') GROUP BY agent_id"
+    ).bind(agentId).all(),
   ])
 
   const blockedCount = await c.env.DB.prepare(
-    "SELECT COUNT(*) as cnt FROM autonomous_actions WHERE decision = 'BLOCK' AND created_at >= datetime('now', '-1 day')"
-  ).first<{ cnt: number }>()
+    "SELECT COUNT(*) as cnt FROM autonomous_actions WHERE agent_id = ? AND decision = 'BLOCK' AND created_at >= datetime('now', '-1 day')"
+  ).bind(agentId).first<{ cnt: number }>()
 
   return c.json({
     guardian: {
@@ -8717,9 +8726,14 @@ app.get('/api/guardian/status', async (c) => {
 
 // === Autonomous Actions Log ===
 
-app.get('/api/agents/:agentId/actions', async (c) => {
+app.get('/api/agents/:agentId/actions', agentAuth, async (c) => {
   requireGuardianEnabled(c)
+  const requesterAgentId = c.get('agentId')
   const agentId = c.req.param('agentId')
+  if (agentId !== requesterAgentId) {
+    throw new HTTPException(403, { message: 'Forbidden' })
+  }
+
   const limit = Math.min(parseInt(c.req.query('limit') ?? '50', 10), 200)
 
   const { results } = await c.env.DB.prepare(
@@ -8840,20 +8854,13 @@ app.post('/api/deposits', agentAuth, async (c) => {
   }, 201)
 })
 
-app.get('/api/deposits', async (c) => {
+app.get('/api/deposits', agentAuth, async (c) => {
   requireGuardianEnabled(c)
-  const agentId = c.req.query('agent_id')
+  const agentId = c.get('agentId')
   const limit = Math.min(parseInt(c.req.query('limit') ?? '20', 10), 100)
-  let query = 'SELECT * FROM deposits'
-  const binds: (string | number)[] = []
-  if (agentId) {
-    query += ' WHERE agent_id = ?'
-    binds.push(agentId)
-  }
-  query += ' ORDER BY created_at DESC LIMIT ?'
-  binds.push(limit)
-  const stmt = binds.length === 1 ? c.env.DB.prepare(query).bind(binds[0]) : c.env.DB.prepare(query).bind(...binds)
-  const { results } = await stmt.all()
+  const { results } = await c.env.DB.prepare(
+    'SELECT * FROM deposits WHERE agent_id = ? ORDER BY created_at DESC LIMIT ?'
+  ).bind(agentId, limit).all()
   return c.json({
     deposits: (results ?? []).map((d: any) => ({
       ...d,
