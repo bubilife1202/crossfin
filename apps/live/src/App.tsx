@@ -600,7 +600,7 @@ export default function App() {
             </div>
           </div>
           <p className="decisionSubtext">
-            Real-time routing decisions with confidence scoring from cross-exchange spread signals.
+            Signals are computed from the Bithumb (KRW) vs Binance (USD) price gap, then scored into EXECUTE/WAIT/SKIP decisions.
           </p>
           <div className="decisionGrid">
             {pairs.length === 0 && (
@@ -1076,6 +1076,7 @@ function DecisionCard({ pair }: { pair: ArbitragePair }) {
         ? "wait"
         : "skip"
     : "skip";
+  const directionText = getSpreadDirectionText(pair.direction);
 
   return (
     <div className={`decisionCard ${actionClass}`}>
@@ -1089,8 +1090,9 @@ function DecisionCard({ pair }: { pair: ArbitragePair }) {
         <span className={actionClass === "skip" ? "negative" : "positive"}>
           {Math.abs(pair.premiumPct).toFixed(3)}%
         </span>
-        <span className="decisionDir">{pair.direction}</span>
+        <span className="decisionDir">{directionText}</span>
       </div>
+      <span className="decisionBasis">Bithumb (KRW) vs Binance (USD) price gap</span>
       {d && (
         <div className="decisionMeta">
           <div className="confidenceBar">
@@ -1102,11 +1104,30 @@ function DecisionCard({ pair }: { pair: ArbitragePair }) {
           <span className="confidenceLabel">
             {Math.round(d.confidence * 100)}% confidence
           </span>
-          <span className="decisionReason">{d.reason}</span>
+          <span className="decisionReason">{clarifyDecisionReason(d.reason)}</span>
         </div>
       )}
     </div>
   );
+}
+
+function getSpreadDirectionText(direction: string): string {
+  const raw = direction.trim().toLowerCase();
+  if (raw.includes("premium")) return "Korean exchange price > global";
+  if (raw.includes("discount")) return "Korean exchange price < global";
+  return "Korean vs global price gap";
+}
+
+function clarifyDecisionReason(reason: string): string {
+  return reason
+    .replace(
+      /Korea premium setup \(buy global -> sell Korea\)/gi,
+      "Bithumb KRW > Binance USD (buy global -> sell Korea)",
+    )
+    .replace(
+      /Korea discount setup \(buy Korea -> sell global\)/gi,
+      "Bithumb KRW < Binance USD (buy Korea -> sell global)",
+    );
 }
 
 function rtClass(ms: number): string {

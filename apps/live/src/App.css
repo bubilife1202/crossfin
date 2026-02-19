@@ -701,6 +701,13 @@
   color: var(--muted2);
 }
 
+.decisionBasis {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: var(--muted3);
+}
+
 .decisionMeta {
   display: flex;
   flex-direction: column;
