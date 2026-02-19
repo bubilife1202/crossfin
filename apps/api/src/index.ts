@@ -5867,6 +5867,8 @@ const ROUTING_EXCHANGE_CURRENCIES: Record<RoutingExchange, readonly string[]> = 
   bybit: ['USDC', 'USDT', 'USD'],
 }
 
+const ROUTING_SUPPORTED_CURRENCIES = ['KRW', 'JPY', 'INR', 'USDC', 'USDT', 'USD'] as const
+
 const EXCHANGE_DISPLAY_NAME: Record<RoutingExchange, string> = {
   bithumb: 'Bithumb',
   upbit: 'Upbit',
@@ -11446,7 +11448,10 @@ app.get('/api/acp/status', (c) => {
     provider: 'crossfin',
     capabilities: ['quote', 'execute', 'execution_status'],
     supported_exchanges: [...ROUTING_EXCHANGES],
-    supported_currencies: { source: ['KRW'], destination: ['USDC', 'USDT', 'KRW'] },
+    supported_currencies: {
+      source: [...ROUTING_SUPPORTED_CURRENCIES],
+      destination: [...ROUTING_SUPPORTED_CURRENCIES],
+    },
     bridge_coins: [...BRIDGE_COINS],
     execution_mode: 'tracked_orchestration',
     tracking: {
