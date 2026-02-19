@@ -21,6 +21,8 @@ FACILITATOR_URL = "https://facilitator.payai.network"
 X402_NETWORK = "eip155:8453"
 PAYMENT_RECEIVER_ADDRESS = "0xe4E79Ce6a1377C58f0Bb99D023908858A4DB5779"
 # TELEGRAM_BOT_TOKEN and TELEGRAM_WEBHOOK_SECRET are stored as secrets
+# Optional hardening: require token on /api/agents/register
+# CROSSFIN_AGENT_SIGNUP_TOKEN should be set as a secret
 # Set via: echo '<value>' | npx wrangler secret put TELEGRAM_BOT_TOKEN
 
 [triggers]
