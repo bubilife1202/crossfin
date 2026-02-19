@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type RoutingStrategy = 'cheapest' | 'fastest' | 'balanced'
 
@@ -129,6 +129,8 @@ const CSS = `
 @keyframes rgFadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @keyframes rgDash{to{stroke-dashoffset:-24}}
 @keyframes rgPulse{0%,100%{opacity:1}50%{opacity:.55}}
+@keyframes rgDraw{from{stroke-dashoffset:700}to{stroke-dashoffset:0}}
+@keyframes rgGlowIn{from{opacity:0}to{opacity:1}}
 
 .rg-wrap{animation:rgFadeIn .45s ease both}
 
@@ -166,6 +168,13 @@ const CSS = `
 .rg-svg text{font-family:var(--sans)}
 
 .rg-dash{animation:rgDash 1s linear infinite}
+.rg-draw{stroke-dasharray:700;animation:rgDraw .8s ease-out forwards}
+.rg-draw2{stroke-dasharray:700;animation:rgDraw .8s ease-out .6s forwards;stroke-dashoffset:700}
+.rg-glow-in{animation:rgGlowIn .3s ease-out forwards}
+.rg-glow-in2{animation:rgGlowIn .3s ease-out .6s forwards;opacity:0}
+.rg-dash-delayed{animation:rgDash 1s linear 1.4s infinite;opacity:0;animation-fill-mode:forwards}
+.rg-label-in{animation:rgGlowIn .3s ease-out .5s forwards;opacity:0}
+.rg-label-in2{animation:rgGlowIn .3s ease-out 1.1s forwards;opacity:0}
 
 .rg-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
 .rg-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;transition:border-color .2s}
@@ -199,6 +208,10 @@ export default function RouteGraph() {
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<RoutingResponse | null>(null)
+  const [dataVersion, setDataVersion] = useState<number>(0)
+  const [countdown, setCountdown] = useState<number>(15)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const loadRoute = useCallback(async () => {
     setLoading(true)
@@ -220,6 +233,7 @@ export default function RouteGraph() {
       }
       const json = await res.json() as RoutingResponse
       setData(json)
+      setDataVersion((v) => v + 1)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to fetch route data')
       setData(null)
@@ -228,8 +242,27 @@ export default function RouteGraph() {
     }
   }, [amountInput, from, strategy, to])
 
+  /* ── auto-refresh every 15s ────────────────────── */
   useEffect(() => {
     void loadRoute()
+    setCountdown(15)
+
+    if (intervalRef.current) clearInterval(intervalRef.current)
+    if (countdownRef.current) clearInterval(countdownRef.current)
+
+    intervalRef.current = setInterval(() => {
+      void loadRoute()
+      setCountdown(15)
+    }, 15_000)
+
+    countdownRef.current = setInterval(() => {
+      setCountdown((c) => Math.max(0, c - 1))
+    }, 1_000)
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+      if (countdownRef.current) clearInterval(countdownRef.current)
+    }
   }, [loadRoute])
 
   /* ── build graph model ─────────────────────────── */
@@ -309,6 +342,11 @@ export default function RouteGraph() {
 
   /* ── render helpers ────────────────────────────── */
 
+  const isFirstLeg = (edge: GraphEdge) => {
+    const n1 = nodeById.get(edge.from)
+    return n1?.type === 'source'
+  }
+
   const renderEdge = (edge: GraphEdge, idx: number) => {
     const n1 = nodeById.get(edge.from)
     const n2 = nodeById.get(edge.to)
@@ -322,13 +360,21 @@ export default function RouteGraph() {
     const my = (y1 + y2) / 2
 
     if (edge.isOptimal) {
+      const first = isFirstLeg(edge)
+      const drawClass = first ? 'rg-draw' : 'rg-draw2'
+      const glowClass = first ? 'rg-glow-in' : 'rg-glow-in2'
+      const labelClass = first ? 'rg-label-in' : 'rg-label-in2'
+
       return (
-        <g key={`oe-${idx}`}>
-          <path d={d} fill="none" stroke="#00ff88" strokeWidth={8} opacity={0.08} />
-          <path d={d} fill="none" stroke="url(#rgGrad)" strokeWidth={2.5} strokeLinecap="round" />
-          <path d={d} fill="none" stroke="rgba(0,255,136,0.45)" strokeWidth={2} strokeLinecap="round" strokeDasharray="6 14" className="rg-dash" />
-          <rect x={mx - 26} y={my - 20} width={52} height={18} rx={4} fill="rgba(0,255,136,0.1)" stroke="rgba(0,255,136,0.25)" strokeWidth={0.5} />
-          <text x={mx} y={my - 8} textAnchor="middle" style={{ fill: '#00ff88', fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700 }}>{toUsd(edge.cost)}</text>
+        <g key={`oe-${idx}-${dataVersion}`}>
+          <path d={d} fill="none" stroke="#00ff88" strokeWidth={8} opacity={0.08} className={glowClass} />
+          <path d={d} fill="none" stroke="url(#rgGrad)" strokeWidth={2.5} strokeLinecap="round" className={drawClass} />
+          <path d={d} fill="none" stroke="rgba(0,255,136,0.45)" strokeWidth={2} strokeLinecap="round" strokeDasharray="6 14"
+            style={{ animationDelay: first ? '1.0s' : '1.6s', opacity: 0, animationFillMode: 'forwards', animationName: 'rgDash', animationDuration: '1s', animationIterationCount: 'infinite' }} />
+          <g className={labelClass}>
+            <rect x={mx - 26} y={my - 20} width={52} height={18} rx={4} fill="rgba(0,255,136,0.1)" stroke="rgba(0,255,136,0.25)" strokeWidth={0.5} />
+            <text x={mx} y={my - 8} textAnchor="middle" style={{ fill: '#00ff88', fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700 }}>{toUsd(edge.cost)}</text>
+          </g>
         </g>
       )
     }
@@ -360,9 +406,11 @@ export default function RouteGraph() {
     }
 
     const rx = node.type === 'coin' ? 8 : 10
+    const nodeDelay = node.type === 'source' ? '0s' : node.type === 'dest' ? '1.2s' : (optimalCoin === node.id ? '0.5s' : '0s')
+    const needsReveal = isOnPath && data
 
     return (
-      <g key={node.id}>
+      <g key={`${node.id}-${dataVersion}`} style={needsReveal ? { opacity: 0, animation: `rgGlowIn 0.3s ease-out ${nodeDelay} forwards` } : undefined}>
         <rect x={node.x - w / 2} y={node.y - h / 2} width={w} height={h} rx={rx}
           style={{ fill, stroke }} strokeWidth={isOnPath ? 1.5 : 1} filter={glow} />
         {node.type === 'coin' ? (
@@ -394,7 +442,10 @@ export default function RouteGraph() {
           <h2 className="rg-title">Route Graph</h2>
           <p className="rg-sub">Real-time orderbook data + D1 fee table</p>
         </div>
-        <span className="rg-badge"><span className="rg-dot" /> LIVE</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: '0.72rem', color: 'var(--muted2)' }}>{countdown}s</span>
+          <span className="rg-badge"><span className="rg-dot" /> LIVE</span>
+        </div>
       </div>
 
       {/* ── Controls ─────────────────────────────── */}
