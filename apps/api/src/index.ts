@@ -27,6 +27,7 @@ type Bindings = {
   TELEGRAM_BOT_TOKEN?: string
   TELEGRAM_WEBHOOK_SECRET?: string
   ZAI_API_KEY?: string
+  CROSSFIN_AGENT_SIGNUP_TOKEN?: string
 }
 
 type Variables = {
@@ -335,6 +336,8 @@ const app = new Hono<Env>()
 const PUBLIC_RATE_LIMIT_WINDOW_MS = 60_000
 const PUBLIC_RATE_LIMIT_PER_WINDOW = 120
 const PUBLIC_RATE_LIMIT_MAX_BUCKETS = 20_000
+const AGENT_REGISTER_ATTEMPT_WINDOW_MINUTES = 60
+const AGENT_REGISTER_MAX_ATTEMPTS_PER_WINDOW = 3
 const HOST_RESOLUTION_CACHE_TTL_MS = 5 * 60_000
 const HOST_RESOLUTION_CACHE_MAX_SIZE = 20_000
 
@@ -508,6 +511,7 @@ app.use('*', cors({
 app.use('/api/*', publicRateLimit)
 
 let endpointCallsTableReady: Promise<void> | null = null
+let agentRegistrationAttemptsTableReady: Promise<void> | null = null
 
 async function ensureEndpointCallsTable(db: D1Database): Promise<void> {
   if (!endpointCallsTableReady) {
@@ -531,6 +535,72 @@ async function ensureEndpointCallsTable(db: D1Database): Promise<void> {
   }
 
   await endpointCallsTableReady
+}
+
+async function ensureAgentRegistrationAttemptsTable(db: D1Database): Promise<void> {
+  if (!agentRegistrationAttemptsTableReady) {
+    agentRegistrationAttemptsTableReady = db.batch([
+      db.prepare(
+        `CREATE TABLE IF NOT EXISTS agent_registration_attempts (
+           id TEXT PRIMARY KEY,
+           ip_hash TEXT NOT NULL,
+           ip_hint TEXT NOT NULL,
+           name TEXT,
+           success INTEGER NOT NULL DEFAULT 0 CHECK (success IN (0, 1)),
+           reason TEXT NOT NULL,
+           agent_id TEXT REFERENCES agents(id),
+           created_at TEXT NOT NULL DEFAULT (datetime('now'))
+         )`
+      ),
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_agent_registration_attempts_ip_created ON agent_registration_attempts(ip_hash, created_at DESC)'),
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_agent_registration_attempts_success_created ON agent_registration_attempts(success, created_at DESC)'),
+    ]).then(() => undefined).catch((err) => {
+      agentRegistrationAttemptsTableReady = null
+      throw err
+    })
+  }
+
+  await agentRegistrationAttemptsTableReady
+}
+
+function maskIpForAudit(ip: string): string {
+  const raw = ip.trim()
+  if (!raw || raw === 'unknown') return 'unknown'
+
+  if (raw.includes(':')) {
+    const parts = raw.split(':').filter(Boolean)
+    if (parts.length >= 2) return `${parts[0]}:${parts[1]}:*`
+    return `${parts[0] ?? 'ipv6'}:*`
+  }
+
+  const parts = raw.split('.')
+  if (parts.length === 4) return `${parts[0]}.${parts[1]}.*.*`
+  return raw
+}
+
+async function logAgentRegistrationAttempt(
+  db: D1Database,
+  ipHash: string,
+  ipHint: string,
+  name: string,
+  success: boolean,
+  reason: string,
+  agentId: string | null = null,
+): Promise<void> {
+  await ensureAgentRegistrationAttemptsTable(db)
+  await db.prepare(
+    `INSERT INTO agent_registration_attempts
+      (id, ip_hash, ip_hint, name, success, reason, agent_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    crypto.randomUUID(),
+    ipHash,
+    ipHint,
+    name || null,
+    success ? 1 : 0,
+    reason,
+    agentId,
+  ).run()
 }
 
 /** Origins whose API calls should NOT be counted in endpoint telemetry (dashboard self-calls). */
@@ -9645,13 +9715,66 @@ app.get('/api/deposits', agentAuth, async (c) => {
 // === Agent Self-Registration ===
 
 app.post('/api/agents/register', async (c) => {
-  const body = await c.req.json<{
-    name: string
+  let body: {
+    name?: string
     evm_address?: string
-  }>()
+    signup_token?: string
+  }
 
-  if (!body.name?.trim()) {
+  try {
+    body = await c.req.json()
+  } catch {
+    throw new HTTPException(400, { message: 'Invalid JSON body' })
+  }
+
+  const name = body.name?.trim() ?? ''
+  if (!name) {
     throw new HTTPException(400, { message: 'name is required' })
+  }
+
+  const clientIp = getClientRateLimitKey(c)
+  const ipHint = maskIpForAudit(clientIp)
+  const ipHash = await sha256Hex(`agent-register:${clientIp}`)
+
+  await ensureAgentRegistrationAttemptsTable(c.env.DB)
+
+  const attemptWindowModifier = `-${AGENT_REGISTER_ATTEMPT_WINDOW_MINUTES} minutes`
+  const attemptsRow = await c.env.DB.prepare(
+    "SELECT COUNT(*) as count FROM agent_registration_attempts WHERE ip_hash = ? AND created_at >= datetime('now', ?)"
+  ).bind(ipHash, attemptWindowModifier).first<{ count: number | string }>()
+
+  const recentAttempts = Number(attemptsRow?.count ?? 0)
+  if (recentAttempts >= AGENT_REGISTER_MAX_ATTEMPTS_PER_WINDOW) {
+    try {
+      await logAgentRegistrationAttempt(c.env.DB, ipHash, ipHint, name, false, 'rate_limited')
+      await audit(
+        c.env.DB,
+        null,
+        'agent.self_register',
+        'agents',
+        null,
+        'blocked',
+        `rate_limited ip=${ipHint} window=${AGENT_REGISTER_ATTEMPT_WINDOW_MINUTES}m limit=${AGENT_REGISTER_MAX_ATTEMPTS_PER_WINDOW}`,
+      )
+    } catch (err) {
+      console.error('Failed to record rate-limited registration attempt', err)
+    }
+
+    throw new HTTPException(429, {
+      message: `Too many registration attempts from this IP. Try again in ${AGENT_REGISTER_ATTEMPT_WINDOW_MINUTES} minutes.`,
+    })
+  }
+
+  const requiredSignupToken = (c.env.CROSSFIN_AGENT_SIGNUP_TOKEN ?? '').trim()
+  const providedSignupToken = (c.req.header('X-CrossFin-Signup-Token') ?? body.signup_token ?? '').trim()
+  if (requiredSignupToken && !timingSafeEqual(providedSignupToken, requiredSignupToken)) {
+    try {
+      await logAgentRegistrationAttempt(c.env.DB, ipHash, ipHint, name, false, 'invalid_signup_token')
+      await audit(c.env.DB, null, 'agent.self_register', 'agents', null, 'blocked', `invalid_signup_token ip=${ipHint}`)
+    } catch (err) {
+      console.error('Failed to record invalid-token registration attempt', err)
+    }
+    throw new HTTPException(401, { message: 'Invalid signup token' })
   }
 
   const id = crypto.randomUUID()
@@ -9660,7 +9783,7 @@ app.post('/api/agents/register', async (c) => {
 
   await c.env.DB.prepare(
     "INSERT INTO agents (id, name, api_key, status) VALUES (?, ?, ?, 'active')"
-  ).bind(id, body.name.trim(), keyHash).run()
+  ).bind(id, name, keyHash).run()
 
   // Create default wallet
   const walletId = crypto.randomUUID()
@@ -9689,10 +9812,15 @@ app.post('/api/agents/register', async (c) => {
   }
 
   await audit(c.env.DB, id, 'agent.self_register', 'agents', id, 'success')
+  try {
+    await logAgentRegistrationAttempt(c.env.DB, ipHash, ipHint, name, true, 'created', id)
+  } catch (err) {
+    console.error('Failed to record successful registration attempt', err)
+  }
 
   return c.json({
     id,
-    name: body.name.trim(),
+    name,
     apiKey: rawApiKey,
     walletId,
     guardianRules: guardianApplied ? defaultRules.map((r) => r.type) : [],
