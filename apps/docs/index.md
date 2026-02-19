@@ -25,7 +25,7 @@ features:
 ## Core Endpoints
 
 <ApiTable :endpoints="[
-  { method: 'GET', path: '/api/route/status', description: 'Exchange network health (9/9 online)', price: 'Free' },
+  { method: 'GET', path: '/api/route/status', description: 'Exchange network health (live status across 9 exchanges)', price: 'Free' },
   { method: 'GET', path: '/api/route/fees', description: 'Trading + withdrawal fee table', price: 'Free' },
   { method: 'GET', path: '/api/arbitrage/demo', description: 'Top 3 route spread decisions', price: 'Free' },
   { method: 'GET', path: '/api/premium/route/find', description: 'Full optimal route analysis', price: '$0.10' },

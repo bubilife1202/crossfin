@@ -391,7 +391,7 @@
     {
       "id": "crossfin_route_find",
       "name": "CrossFin Optimal Route Finder",
-      "description": "Find cheapest/fastest crypto transfer route across 7 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit). Compares bridge coins, fees, transfer times.",
+      "description": "Find cheapest/fastest crypto transfer route across 9 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit). Compares bridge coins, fees, transfer times.",
       "category": "routing",
       "path": "/api/premium/route/find",
       "sampleQuery": "from=bithumb:KRW&to=binance:USDC&amount=1000000&strategy=cheapest",

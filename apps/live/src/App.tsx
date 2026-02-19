@@ -1115,6 +1115,9 @@ export default function App() {
                 {onlineExchanges}/{totalExchangeCount} Online
               </span>
             </div>
+            <p className="panelSubtext">
+              Korea: Bithumb, Upbit, Coinone, GoPax · Regional Fiat: bitFlyer (JPY), WazirX (INR) · Global: Binance, OKX, Bybit
+            </p>
             <div className="exchangeHubGrid">
               <div className="exchangeHubCard korea">
                 <div className="exchangeHubHead">

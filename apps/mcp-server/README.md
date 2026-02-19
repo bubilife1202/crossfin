@@ -37,7 +37,7 @@ npx -y crossfin-mcp
 
 | Tool | Free/Paid | Description |
 |------|-----------|-------------|
-| `find_optimal_route` | $0.10 | Optimal crypto transfer path across 7 exchanges (11 bridge coins) |
+| `find_optimal_route` | $0.10 | Optimal crypto transfer path across 9 exchanges (11 bridge coins) |
 | `list_exchange_fees` | Free | Trading + withdrawal fee comparison |
 | `compare_exchange_prices` | Free | Live price comparison across Korean exchanges |
 | `get_kimchi_premium` | Free | Korean vs. global price spread preview |
@@ -56,7 +56,7 @@ npx -y crossfin-mcp
 
 ## Supported exchanges
 
-Bithumb, Upbit, Coinone, GoPax (Korea) + Binance, OKX, Bybit (Global)
+Bithumb, Upbit, Coinone, GoPax (Korea) + bitFlyer, WazirX (Regional Fiat) + Binance, OKX, Bybit (Global)
 
 ## Bridge coins
 
