@@ -392,7 +392,10 @@ function getEndpointTelemetryRouteKey(path: string): string | null {
   if (
     normalized === '/api/analytics/overview' ||
     normalized === '/api/analytics/funnel/overview' ||
-    normalized === '/api/analytics/funnel/events'
+    normalized === '/api/analytics/funnel/events' ||
+    normalized === '/api/stats' ||
+    normalized === '/api/registry/stats' ||
+    normalized === '/api/registry/categories'
   ) {
     return null
   }
@@ -506,9 +509,30 @@ async function ensureEndpointCallsTable(db: D1Database): Promise<void> {
   await endpointCallsTableReady
 }
 
+/** Origins whose API calls should NOT be counted in endpoint telemetry (dashboard self-calls). */
+const TELEMETRY_EXCLUDED_ORIGINS = new Set([
+  'https://crossfin.dev',
+  'https://www.crossfin.dev',
+  'https://crossfin.pages.dev',
+  'https://live.crossfin.dev',
+  'https://crossfin-live.pages.dev',
+  'http://localhost:5173',
+])
+
+function isSelfDashboardCall(c: Context<Env>): boolean {
+  const origin = (c.req.header('Origin') ?? '').trim().toLowerCase()
+  if (origin && TELEMETRY_EXCLUDED_ORIGINS.has(origin)) return true
+
+  const referer = (c.req.header('Referer') ?? '').trim().toLowerCase()
+  if (!referer) return false
+  try {
+    return TELEMETRY_EXCLUDED_ORIGINS.has(new URL(referer).origin)
+  } catch { return false }
+}
+
 const endpointTelemetry: MiddlewareHandler<Env> = async (c, next) => {
   const routeKey = getEndpointTelemetryRouteKey(c.req.path)
-  if (!routeKey || c.req.method === 'OPTIONS') {
+  if (!routeKey || c.req.method === 'OPTIONS' || isSelfDashboardCall(c)) {
     await next()
     return
   }
@@ -4961,13 +4985,14 @@ app.get('/api/analytics/funnel/overview', async (c) => {
   const guideOpens = counts.mcp_guide_open
   const installVerifies = counts.mcp_install_verify
 
+  const pct = (n: number, d: number) => d > 0 ? Math.min(100, Math.round((n / d) * 1000) / 10) : 0
   const conversion = quickstartViews > 0
     ? {
-        commandCopyPct: Math.round((commandCopies / quickstartViews) * 1000) / 10,
-        configViewPct: Math.round((configViews / quickstartViews) * 1000) / 10,
-        configCopyPct: Math.round((configCopies / quickstartViews) * 1000) / 10,
-        guideOpenPct: Math.round((guideOpens / quickstartViews) * 1000) / 10,
-        installVerifyPct: Math.round((installVerifies / quickstartViews) * 1000) / 10,
+        commandCopyPct: pct(commandCopies, quickstartViews),
+        configViewPct: pct(configViews, quickstartViews),
+        configCopyPct: pct(configCopies, quickstartViews),
+        guideOpenPct: pct(guideOpens, quickstartViews),
+        installVerifyPct: pct(installVerifies, quickstartViews),
       }
     : {
         commandCopyPct: 0,
