@@ -979,7 +979,7 @@ console.log(await res.json());`}</code></pre>
               <div className="stepNumber">STEP 04</div>
               <h3 className="stepTitle">Browse &amp; Discover</h3>
               <p className="stepDesc">
-                Search {registryStats.status === 'success' ? registryStats.data.total : '162+'} services in the registry.
+                Search {registryStats.status === 'success' ? registryStats.data.total : '184+'} services in the registry.
               </p>
               <div className="codeBlock">
                 <div className="codeBlockHeader">

@@ -2,12 +2,12 @@
   "x402Version": 2,
   "provider": {
     "name": "CrossFin",
-    "description": "Cross-border crypto routing engine for AI agents. Routes capital across 7 Korean/global exchanges (Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit). Real-time kimchi premium, 11 bridge coins, arbitrage signals.",
+    "description": "Cross-border crypto routing engine for AI agents. Routes capital across 9 Korean/global exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit). Real-time route spread, 11 bridge coins, arbitrage signals.",
     "url": "https://crossfin.dev",
     "docs": "https://docs.crossfin.dev",
     "github": "https://github.com/bubilife1202/crossfin",
     "categories": ["crypto-routing", "korean-market-data", "arbitrage", "exchange-data", "defi"],
-    "tags": ["kimchi-premium", "cross-exchange", "korean-crypto", "bithumb", "upbit", "binance", "okx", "bybit", "mcp", "ai-agent"]
+    "tags": ["route-spread", "cross-exchange", "korean-crypto", "bithumb", "upbit", "bitflyer", "wazirx", "binance", "okx", "bybit", "mcp", "ai-agent"]
   },
   "payment": {
     "network": "eip155:8453",
@@ -21,7 +21,7 @@
   "endpoints": [
     { "resource": "https://crossfin.dev/api/premium/arbitrage/kimchi", "method": "GET", "price": "$0.05", "description": "Real-time Kimchi Premium Index — Korean vs global exchange price spread for 11 crypto pairs" },
     { "resource": "https://crossfin.dev/api/premium/arbitrage/opportunities", "method": "GET", "price": "$0.10", "description": "AI-ready arbitrage decisions: EXECUTE/WAIT/SKIP with confidence scores" },
-    { "resource": "https://crossfin.dev/api/premium/route/find", "method": "GET", "price": "$0.10", "description": "Optimal crypto transfer route across 7 exchanges using 11 bridge coins" },
+    { "resource": "https://crossfin.dev/api/premium/route/find", "method": "GET", "price": "$0.10", "description": "Optimal crypto transfer route across 9 exchanges using 11 bridge coins" },
     { "resource": "https://crossfin.dev/api/premium/bithumb/orderbook", "method": "GET", "price": "$0.02", "description": "Live Bithumb orderbook depth (30 levels)" },
     { "resource": "https://crossfin.dev/api/premium/market/upbit/ticker", "method": "GET", "price": "$0.02", "description": "Upbit real-time ticker" },
     { "resource": "https://crossfin.dev/api/premium/market/upbit/orderbook", "method": "GET", "price": "$0.02", "description": "Upbit orderbook depth" },

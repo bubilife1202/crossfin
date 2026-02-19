@@ -719,13 +719,20 @@ async function ensureEndpointCallsTable(db: D1Database): Promise<void> {
            response_time_ms INTEGER,
            traffic_source TEXT NOT NULL DEFAULT 'external' CHECK (traffic_source IN ('external', 'internal', 'dashboard')),
            user_agent TEXT,
+           ip_hash TEXT,
+           session_fingerprint TEXT,
            created_at TEXT NOT NULL DEFAULT (datetime('now'))
          )`
       ),
       db.prepare('CREATE INDEX IF NOT EXISTS idx_endpoint_calls_v2_path_created ON endpoint_calls_v2(path, created_at)'),
       db.prepare('CREATE INDEX IF NOT EXISTS idx_endpoint_calls_v2_created ON endpoint_calls_v2(created_at)'),
       db.prepare('CREATE INDEX IF NOT EXISTS idx_endpoint_calls_v2_source_created ON endpoint_calls_v2(traffic_source, created_at)'),
-    ]).then(() => undefined).catch((err) => {
+    ]).then(async () => {
+      await db.exec('ALTER TABLE endpoint_calls_v2 ADD COLUMN ip_hash TEXT').catch(() => {})
+      await db.exec('ALTER TABLE endpoint_calls_v2 ADD COLUMN session_fingerprint TEXT').catch(() => {})
+      await db.exec('CREATE INDEX IF NOT EXISTS idx_endpoint_calls_v2_ip_hash ON endpoint_calls_v2(ip_hash)').catch(() => {})
+      await db.exec('CREATE INDEX IF NOT EXISTS idx_endpoint_calls_v2_fingerprint ON endpoint_calls_v2(session_fingerprint)').catch(() => {})
+    }).catch((err) => {
       endpointCallsTableReady = null
       throw err
     })
@@ -865,17 +872,35 @@ const endpointTelemetry: MiddlewareHandler<Env> = async (c, next) => {
 
     try {
       await ensureEndpointCallsTable(c.env.DB)
-      await c.env.DB.batch([
-        c.env.DB.prepare(
-          'INSERT INTO endpoint_calls (id, method, path, status, response_time_ms) VALUES (?, ?, ?, ?, ?)'
-        ).bind(
-          `endpoint_call_${crypto.randomUUID()}`,
-          c.req.method,
-          routeKey,
-          status,
-          responseTimeMs,
-        ),
-        c.env.DB.prepare(
+      const clientIp = getClientRateLimitKey(c)
+      const userAgent = (c.req.header('User-Agent') ?? '').slice(0, 180)
+      const ipHash = await sha256Hex(`endpoint-telemetry:${clientIp}`).catch(() => null)
+      const fingerprint = await sha256Hex(`fp:${clientIp}:${userAgent}`).catch(() => null)
+
+      await c.env.DB.prepare(
+        'INSERT INTO endpoint_calls (id, method, path, status, response_time_ms) VALUES (?, ?, ?, ?, ?)'
+      ).bind(
+        `endpoint_call_${crypto.randomUUID()}`,
+        c.req.method,
+        routeKey,
+        status,
+        responseTimeMs,
+      ).run()
+
+      await c.env.DB.prepare(
+        'INSERT INTO endpoint_calls_v2 (id, method, path, status, response_time_ms, traffic_source, user_agent, ip_hash, session_fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(
+        `endpoint_call_v2_${crypto.randomUUID()}`,
+        c.req.method,
+        routeKey,
+        status,
+        responseTimeMs,
+        source,
+        userAgent,
+        ipHash,
+        fingerprint,
+      ).run().catch(() => {
+        return c.env.DB.prepare(
           'INSERT INTO endpoint_calls_v2 (id, method, path, status, response_time_ms, traffic_source, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)'
         ).bind(
           `endpoint_call_v2_${crypto.randomUUID()}`,
@@ -884,9 +909,9 @@ const endpointTelemetry: MiddlewareHandler<Env> = async (c, next) => {
           status,
           responseTimeMs,
           source,
-          (c.req.header('User-Agent') ?? '').slice(0, 180),
-        ),
-      ])
+          userAgent,
+        ).run()
+      })
     } catch (err) {
       console.error('Failed to log endpoint call', err)
     }
@@ -5610,6 +5635,22 @@ app.get('/api/analytics/overview', async (c) => {
   const totalServices = Number((servicesCountRes?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
   const crossfinServices = Number((crossfinCountRes?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
 
+  let uniqueUsersTotal = 0
+  let uniqueUsers24h = 0
+  let uniqueUsers7d = 0
+  try {
+    const [uAll, u24h, u7d] = await c.env.DB.batch([
+      c.env.DB.prepare("SELECT COUNT(DISTINCT ip_hash) as count FROM endpoint_calls_v2 WHERE traffic_source = 'external' AND ip_hash IS NOT NULL"),
+      c.env.DB.prepare("SELECT COUNT(DISTINCT ip_hash) as count FROM endpoint_calls_v2 WHERE traffic_source = 'external' AND ip_hash IS NOT NULL AND created_at >= datetime('now', '-1 day')"),
+      c.env.DB.prepare("SELECT COUNT(DISTINCT ip_hash) as count FROM endpoint_calls_v2 WHERE traffic_source = 'external' AND ip_hash IS NOT NULL AND created_at >= datetime('now', '-7 day')"),
+    ])
+    uniqueUsersTotal = Number((uAll?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
+    uniqueUsers24h = Number((u24h?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
+    uniqueUsers7d = Number((u7d?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
+  } catch {
+    /* ip_hash column may not exist yet on first deploy */
+  }
+
   const [topAll, topExternal] = await Promise.all([
     c.env.DB.prepare(
       `SELECT method, path, COUNT(*) as calls
@@ -5669,6 +5710,11 @@ app.get('/api/analytics/overview', async (c) => {
     totalCallsExternal,
     totalServices,
     crossfinServices,
+    uniqueUsers: {
+      total: uniqueUsersTotal,
+      last24h: uniqueUsers24h,
+      last7d: uniqueUsers7d,
+    },
     topServices: topServicesAll,
     topServicesAll,
     topServicesExternal,

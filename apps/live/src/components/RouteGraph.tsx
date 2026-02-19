@@ -442,32 +442,63 @@ export default function RouteGraph() {
   const rawAlternatives = data?.alternatives ?? EMPTY_ROUTES
 
   const bridgeCoinFiltered = useMemo(() => {
-    if (selectedBridgeCoin === 'auto' || !rawOptimal) {
-      return { optimal: rawOptimal, alternatives: rawAlternatives, note: null as string | null }
+    if (!rawOptimal) {
+      return {
+        primary: null as Route | null,
+        engineOptimal: null as Route | null,
+        alternatives: rawAlternatives,
+        note: null as string | null,
+        manualOverride: false,
+      }
+    }
+    if (selectedBridgeCoin === 'auto') {
+      return {
+        primary: rawOptimal,
+        engineOptimal: rawOptimal,
+        alternatives: rawAlternatives,
+        note: null as string | null,
+        manualOverride: false,
+      }
     }
     const coin = selectedBridgeCoin.toUpperCase()
     if (rawOptimal.bridgeCoin.toUpperCase() === coin) {
-      return { optimal: rawOptimal, alternatives: rawAlternatives, note: null as string | null }
+      return {
+        primary: rawOptimal,
+        engineOptimal: rawOptimal,
+        alternatives: rawAlternatives,
+        note: null as string | null,
+        manualOverride: false,
+      }
     }
     const match = rawAlternatives.find((r) => r.bridgeCoin.toUpperCase() === coin)
     if (match) {
+      const costGap = match.totalCostPct - rawOptimal.totalCostPct
+      const gapLabel = costGap >= 0
+        ? `+${costGap.toFixed(2)}%p higher`
+        : `${Math.abs(costGap).toFixed(2)}%p lower`
       const rest = [rawOptimal, ...rawAlternatives.filter((r) => r !== match)]
       return {
-        optimal: match,
+        primary: match,
+        engineOptimal: rawOptimal,
         alternatives: rest,
-        note: `Engine\u2019s optimal: ${rawOptimal.bridgeCoin.toUpperCase()} (${rawOptimal.totalCostPct.toFixed(2)}% cost)`,
+        note: `Manual bridge override: showing ${coin}. Engine optimal is ${rawOptimal.bridgeCoin.toUpperCase()} (${rawOptimal.totalCostPct.toFixed(2)}%, ${gapLabel}).`,
+        manualOverride: true,
       }
     }
     return {
-      optimal: rawOptimal,
+      primary: rawOptimal,
+      engineOptimal: rawOptimal,
       alternatives: rawAlternatives,
-      note: `${selectedBridgeCoin} not available for this route`,
+      note: `${coin} is not available for this route`,
+      manualOverride: false,
     }
   }, [rawOptimal, rawAlternatives, selectedBridgeCoin])
 
-  const optimal = bridgeCoinFiltered.optimal
+  const optimal = bridgeCoinFiltered.primary
+  const engineOptimal = bridgeCoinFiltered.engineOptimal
   const alternatives = bridgeCoinFiltered.alternatives
   const bridgeCoinNote = bridgeCoinFiltered.note
+  const manualBridgeOverride = bridgeCoinFiltered.manualOverride
 
   const graph = useMemo(() => {
     const requestFrom = data?.request.from ?? INITIAL_SCENARIO.from
@@ -772,9 +803,15 @@ export default function RouteGraph() {
       <div className="rg-grid">
         {/* Optimal Route */}
         <div className="rg-card" style={{ borderLeft: '3px solid var(--green)' }}>
-          <div className="rg-lbl">Optimal Route</div>
+          <div className="rg-lbl">{manualBridgeOverride ? 'Selected Bridge Route' : 'Optimal Route'}</div>
           {optimal ? (
             <>
+              {manualBridgeOverride && engineOptimal && (
+                <p style={{ margin: '0 0 10px', fontSize: '0.8rem', color: 'var(--amber)', lineHeight: 1.45 }}>
+                  Engine optimal: {engineOptimal.bridgeCoin.toUpperCase()} ({engineOptimal.totalCostPct.toFixed(2)}%).
+                  Selected: {optimal.bridgeCoin.toUpperCase()} ({optimal.totalCostPct.toFixed(2)}%).
+                </p>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
                 <span style={{ color: 'var(--cyan)', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: '0.94rem' }}>
                   {formatExchange(parseExchange(requestFrom))}
@@ -865,7 +902,7 @@ export default function RouteGraph() {
         {/* Alternatives */}
         {alternatives.length > 0 && (
           <div className="rg-card rg-full">
-            <div className="rg-lbl">Other Bridge Coins</div>
+            <div className="rg-lbl">{manualBridgeOverride ? 'Other Bridge Coins (incl. engine optimal)' : 'Other Bridge Coins'}</div>
             <table className="rg-at">
               <thead>
                 <tr><th>Coin</th><th>Cost</th><th>Time</th><th>Signal</th></tr>
