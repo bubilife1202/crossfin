@@ -914,6 +914,69 @@ app.get('/.well-known/crossfin.json', (c) => {
   })
 })
 
+app.get('/.well-known/x402.json', (c) => {
+  const origin = new URL(c.req.url).origin
+  const payTo = c.env.PAYMENT_RECEIVER_ADDRESS
+  const network = c.env.X402_NETWORK || 'eip155:8453'
+  const usdcAsset = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
+
+  return c.json({
+    x402Version: 2,
+    provider: {
+      name: 'CrossFin',
+      description: 'Cross-border crypto routing engine for AI agents. Routes capital across 7 Korean/global exchanges (Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit). Real-time kimchi premium, 11 bridge coins, arbitrage signals.',
+      url: 'https://crossfin.dev',
+      docs: 'https://docs.crossfin.dev',
+      github: 'https://github.com/bubilife1202/crossfin',
+      categories: ['crypto-routing', 'korean-market-data', 'arbitrage', 'exchange-data', 'defi'],
+      tags: ['kimchi-premium', 'cross-exchange', 'korean-crypto', 'bithumb', 'upbit', 'binance', 'okx', 'bybit', 'mcp', 'ai-agent'],
+    },
+    payment: {
+      network,
+      asset: usdcAsset,
+      currency: 'USDC',
+      payTo,
+      facilitator: c.env.FACILITATOR_URL || 'https://facilitator.payai.network',
+      scheme: 'exact',
+      maxTimeoutSeconds: 300,
+    },
+    endpoints: [
+      { resource: `${origin}/api/premium/arbitrage/kimchi`, method: 'GET', price: '$0.05', description: 'Real-time Kimchi Premium Index — Korean vs global exchange price spread for 11 crypto pairs' },
+      { resource: `${origin}/api/premium/arbitrage/opportunities`, method: 'GET', price: '$0.10', description: 'AI-ready arbitrage decisions: EXECUTE/WAIT/SKIP with confidence scores' },
+      { resource: `${origin}/api/premium/route/find`, method: 'GET', price: '$0.10', description: 'Optimal crypto transfer route across 7 exchanges using 11 bridge coins' },
+      { resource: `${origin}/api/premium/bithumb/orderbook`, method: 'GET', price: '$0.02', description: 'Live Bithumb orderbook depth (30 levels)' },
+      { resource: `${origin}/api/premium/market/upbit/ticker`, method: 'GET', price: '$0.02', description: 'Upbit real-time ticker' },
+      { resource: `${origin}/api/premium/market/upbit/orderbook`, method: 'GET', price: '$0.02', description: 'Upbit orderbook depth' },
+      { resource: `${origin}/api/premium/market/coinone/ticker`, method: 'GET', price: '$0.02', description: 'Coinone real-time ticker' },
+      { resource: `${origin}/api/premium/market/fx/usdkrw`, method: 'GET', price: '$0.01', description: 'USD/KRW exchange rate' },
+      { resource: `${origin}/api/premium/market/korea`, method: 'GET', price: '$0.03', description: 'Korean market sentiment overview' },
+      { resource: `${origin}/api/premium/crypto/korea/5exchange`, method: 'GET', price: '$0.08', description: '4-exchange Korean crypto price comparison' },
+      { resource: `${origin}/api/premium/morning/brief`, method: 'GET', price: '$0.20', description: 'Morning Brief bundle: kimchi premium + FX + KOSPI/KOSDAQ + headlines' },
+      { resource: `${origin}/api/premium/crypto/snapshot`, method: 'GET', price: '$0.15', description: 'Crypto Snapshot: 5-exchange prices + kimchi + volume + FX' },
+      { resource: `${origin}/api/premium/market/korea/indices`, method: 'GET', price: '$0.03', description: 'KOSPI & KOSDAQ real-time indices' },
+      { resource: `${origin}/api/premium/market/korea/investor-flow`, method: 'GET', price: '$0.05', description: 'Stock investor flow: foreign/institutional/individual' },
+      { resource: `${origin}/api/premium/market/korea/stocks/momentum`, method: 'GET', price: '$0.05', description: 'Top gainers/losers/market cap' },
+    ],
+    free: [
+      { resource: `${origin}/api/arbitrage/demo`, method: 'GET', description: 'Free kimchi premium preview (top 3 pairs)' },
+      { resource: `${origin}/api/route/exchanges`, method: 'GET', description: 'Supported exchanges and coins' },
+      { resource: `${origin}/api/route/fees`, method: 'GET', description: 'Fee comparison table' },
+      { resource: `${origin}/api/route/pairs`, method: 'GET', description: 'Trading pairs with live prices' },
+      { resource: `${origin}/api/route/status`, method: 'GET', description: 'Exchange health check' },
+      { resource: `${origin}/api/registry`, method: 'GET', description: 'Full service registry (184 services)' },
+      { resource: `${origin}/api/docs/guide`, method: 'GET', description: 'Structured agent onboarding guide' },
+      { resource: `${origin}/api/openapi.json`, method: 'GET', description: 'OpenAPI 3.1 spec' },
+    ],
+    mcp: {
+      package: 'crossfin-mcp',
+      install: 'npx -y crossfin-mcp',
+      tools: 16,
+      repo: 'https://github.com/bubilife1202/crossfin/tree/main/apps/mcp-server',
+    },
+    updatedAt: new Date().toISOString(),
+  })
+})
+
 // === OpenAPI Spec ===
 
 app.get('/api/openapi.json', (c) => {
@@ -1569,7 +1632,7 @@ app.get('/api/openapi.json', (c) => {
         post: {
           operationId: 'acpQuote',
           summary: 'Request routing quote (ACP-compatible)',
-          description: 'ACP endpoint. Requests a routing quote compatible with OpenAI + Stripe style agent commerce flows.',
+          description: 'ACP endpoint. Requests a routing quote compatible with OpenAI + Stripe style agent commerce flows. Supports both from/to (exchange:currency) and from_exchange/from_currency style inputs.',
           tags: ['ACP'],
           requestBody: {
             required: true,
@@ -1578,14 +1641,19 @@ app.get('/api/openapi.json', (c) => {
                 schema: {
                   type: 'object',
                   properties: {
+                    from: { type: 'string', description: 'Source exchange:currency (e.g., bithumb:KRW)' },
+                    to: { type: 'string', description: 'Destination exchange:currency (e.g., binance:USDC)' },
                     from_exchange: { type: 'string' },
                     from_currency: { type: 'string' },
                     to_exchange: { type: 'string' },
                     to_currency: { type: 'string' },
                     amount: { type: 'number' },
-                    strategy: { type: 'string', default: 'cheapest' },
+                    strategy: { type: 'string', enum: ['cheapest', 'fastest', 'balanced'], default: 'cheapest' },
                   },
-                  required: ['from_exchange', 'from_currency', 'to_exchange', 'to_currency', 'amount'],
+                  oneOf: [
+                    { required: ['from', 'to', 'amount'] },
+                    { required: ['from_exchange', 'from_currency', 'to_exchange', 'to_currency', 'amount'] },
+                  ],
                 },
               },
             },
@@ -10113,6 +10181,75 @@ app.get('/api/route/status', async (c) => {
   return c.json(await getRouteStatusPayload(c.env.DB))
 })
 
+function parseAcpExchangeCurrency(
+  body: Record<string, unknown>,
+  tupleKey: 'from' | 'to',
+  exchangeKey: 'from_exchange' | 'to_exchange',
+  currencyKey: 'from_currency' | 'to_currency',
+): { exchange: string; currency: string } {
+  const tupleRaw = typeof body[tupleKey] === 'string' ? String(body[tupleKey]).trim() : ''
+  const exchangeRaw = typeof body[exchangeKey] === 'string' ? String(body[exchangeKey]).trim().toLowerCase() : ''
+  const currencyRaw = typeof body[currencyKey] === 'string' ? String(body[currencyKey]).trim().toUpperCase() : ''
+
+  const normalizeTuple = (value: string): { exchange: string; currency: string } => {
+    const parts = value.split(':')
+    if (parts.length !== 2) {
+      throw new HTTPException(400, { message: `${tupleKey} must use exchange:currency format (e.g., bithumb:KRW)` })
+    }
+
+    const exchange = String(parts[0] ?? '').trim().toLowerCase()
+    const currency = String(parts[1] ?? '').trim().toUpperCase()
+    if (!exchange || !currency) {
+      throw new HTTPException(400, { message: `${tupleKey} must use exchange:currency format (e.g., bithumb:KRW)` })
+    }
+
+    return { exchange, currency }
+  }
+
+  let exchange = exchangeRaw
+  let currency = currencyRaw
+
+  if (tupleRaw) {
+    const parsed = normalizeTuple(tupleRaw)
+    exchange = parsed.exchange
+    currency = parsed.currency
+
+    if (exchangeRaw && exchangeRaw !== exchange) {
+      throw new HTTPException(400, { message: `Conflicting ${tupleKey} and ${exchangeKey} values` })
+    }
+    if (currencyRaw && currencyRaw !== currency) {
+      throw new HTTPException(400, { message: `Conflicting ${tupleKey} and ${currencyKey} values` })
+    }
+  } else if (!exchange || !currency) {
+    throw new HTTPException(400, {
+      message: `Provide either ${tupleKey} (exchange:currency) or both ${exchangeKey} and ${currencyKey}`,
+    })
+  }
+
+  if (!ROUTING_EXCHANGES.includes(exchange as RoutingExchange)) {
+    throw new HTTPException(400, {
+      message: `Unsupported ${exchangeKey}: ${exchange}. Supported: ${ROUTING_EXCHANGES.join(', ')}`,
+    })
+  }
+
+  if (!/^[A-Z0-9]{2,12}$/.test(currency)) {
+    throw new HTTPException(400, { message: `Invalid ${currencyKey}: ${currency}` })
+  }
+
+  return { exchange, currency }
+}
+
+function parseRoutingStrategyInput(value: unknown): RoutingStrategy {
+  const raw = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (!raw) return 'cheapest'
+
+  if (raw === 'cheapest' || raw === 'fastest' || raw === 'balanced') {
+    return raw
+  }
+
+  throw new HTTPException(400, { message: 'strategy must be one of: cheapest, fastest, balanced' })
+}
+
 // ============================================================
 // ACP (Agentic Commerce Protocol) — Compatibility Layer (MUST be before app.route('/api', api))
 // ============================================================
@@ -10126,14 +10263,19 @@ app.post('/api/acp/quote', async (c) => {
     throw new HTTPException(400, { message: 'Invalid JSON body' })
   }
 
-  const fromExchange = String(body.from_exchange ?? 'bithumb')
-  const fromCurrency = String(body.from_currency ?? 'KRW')
-  const toExchange = String(body.to_exchange ?? 'binance')
-  const toCurrency = String(body.to_currency ?? 'USDC')
-  const amount = Number(body.amount ?? 0)
-  const strategy = String(body.strategy ?? 'cheapest') as RoutingStrategy
+  const fromParsed = parseAcpExchangeCurrency(body, 'from', 'from_exchange', 'from_currency')
+  const toParsed = parseAcpExchangeCurrency(body, 'to', 'to_exchange', 'to_currency')
 
-  if (amount <= 0) throw new HTTPException(400, { message: 'amount must be positive' })
+  const fromExchange = fromParsed.exchange
+  const fromCurrency = fromParsed.currency
+  const toExchange = toParsed.exchange
+  const toCurrency = toParsed.currency
+  const amount = Number(body.amount ?? 0)
+  const strategy = parseRoutingStrategyInput(body.strategy)
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new HTTPException(400, { message: 'amount must be a positive number' })
+  }
 
   const { optimal, alternatives, meta } = await findOptimalRoute(
     fromExchange, fromCurrency, toExchange, toCurrency, amount, strategy, c.env.DB,
