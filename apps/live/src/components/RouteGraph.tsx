@@ -143,37 +143,37 @@ const CSS = `
 
 .rg-wrap{animation:rgFadeIn .45s ease both}
 
-.rg-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border)}
-.rg-title{margin:0;font-size:.92rem;font-weight:700;letter-spacing:-.01em;color:var(--ink)}
-.rg-sub{margin:3px 0 0;font-size:.76rem;color:var(--muted);font-weight:500}
-.rg-badge{display:inline-flex;align-items:center;gap:6px;font-size:.72rem;font-weight:600;color:var(--green);padding:3px 10px;border-radius:999px;border:1px solid rgba(0,255,136,.15);background:rgba(0,255,136,.04)}
+.rg-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border);gap:12px}
+.rg-title{margin:0;font-size:1.05rem;font-weight:700;letter-spacing:-.01em;color:var(--ink)}
+.rg-sub{margin:3px 0 0;font-size:.86rem;color:var(--muted);font-weight:500;line-height:1.45}
+.rg-badge{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;color:var(--green);padding:4px 11px;border-radius:999px;border:1px solid rgba(0,255,136,.15);background:rgba(0,255,136,.04)}
 .rg-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px rgba(0,255,136,.5);animation:rgPulse 2s ease-in-out infinite}
 
 .rg-controls{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
 .rg-row{display:flex;align-items:center;gap:8px}
 
-.rg-sel,.rg-inp{background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--ink);font-family:var(--sans);font-size:.84rem;padding:9px 12px;outline:none;transition:border-color .2s,box-shadow .2s;flex:1;min-width:0}
+.rg-sel,.rg-inp{background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--ink);font-family:var(--sans);font-size:.92rem;padding:10px 12px;outline:none;transition:border-color .2s,box-shadow .2s;flex:1;min-width:0}
 .rg-sel:hover,.rg-inp:hover{border-color:var(--border-hover)}
 .rg-sel:focus,.rg-inp:focus{border-color:var(--cyan);box-shadow:0 0 0 2px rgba(0,212,255,.08)}
 .rg-sel option{background:var(--bg2);color:var(--ink)}
 
-.rg-swap{display:flex;align-items:center;justify-content:center;width:36px;height:36px;flex-shrink:0;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);cursor:pointer;transition:all .2s}
+.rg-swap{display:flex;align-items:center;justify-content:center;width:40px;height:40px;flex-shrink:0;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);cursor:pointer;transition:all .2s}
 .rg-swap:hover{border-color:var(--cyan);color:var(--cyan);background:rgba(0,212,255,.06)}
 
 .rg-strats{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;flex-shrink:0}
-.rg-sb{padding:8px 14px;font-size:.78rem;font-weight:600;font-family:var(--sans);border:none;background:var(--bg2);color:var(--muted);cursor:pointer;transition:all .2s;border-right:1px solid var(--border);white-space:nowrap;text-transform:capitalize}
+.rg-sb{padding:9px 14px;font-size:.82rem;font-weight:600;font-family:var(--sans);border:none;background:var(--bg2);color:var(--muted);cursor:pointer;transition:all .2s;border-right:1px solid var(--border);white-space:nowrap;text-transform:capitalize}
 .rg-sb:last-child{border-right:none}
 .rg-sb:hover{color:var(--ink);background:var(--card-hover)}
 .rg-sb.on{background:var(--cyan-dim);color:var(--cyan)}
 
-.rg-go{padding:9px 20px;font-size:.84rem;font-weight:700;font-family:var(--sans);border:none;border-radius:8px;background:var(--cyan);color:var(--bg);cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
+.rg-go{padding:10px 18px;font-size:.9rem;font-weight:700;font-family:var(--sans);border:none;border-radius:8px;background:var(--cyan);color:var(--bg);cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
 .rg-go:hover{box-shadow:0 0 20px rgba(0,212,255,.3)}
 .rg-go:disabled{opacity:.5;cursor:not-allowed}
 
-.rg-err{margin-bottom:12px;padding:10px 14px;background:var(--red-dim);border:1px solid rgba(255,68,102,.2);color:var(--red);border-radius:8px;font-size:.82rem;font-weight:500}
+.rg-err{margin-bottom:12px;padding:10px 14px;background:var(--red-dim);border:1px solid rgba(255,68,102,.2);color:var(--red);border-radius:8px;font-size:.88rem;font-weight:500}
 
-.rg-gw{margin:0 -4px 16px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--bg);transition:opacity .3s}
-.rg-svg{display:block;width:100%}
+.rg-gw{margin:0 0 16px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--bg);transition:opacity .3s;width:100%}
+.rg-svg{display:block;width:100%;height:auto}
 .rg-svg text{font-family:var(--sans)}
 
 .rg-dash{animation:rgDash 1s linear infinite}
@@ -185,25 +185,35 @@ const CSS = `
 .rg-label-in{animation:rgGlowIn .3s ease-out .5s forwards;opacity:0}
 .rg-label-in2{animation:rgGlowIn .3s ease-out 1.1s forwards;opacity:0}
 
-.rg-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
-.rg-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;transition:border-color .2s}
+.rg-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px}
+.rg-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;transition:border-color .2s}
 .rg-card:hover{border-color:var(--border-hover)}
-.rg-lbl{font-size:.7rem;font-weight:650;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px}
+.rg-lbl{font-size:.76rem;font-weight:650;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px}
 .rg-full{grid-column:1/-1}
 
 .rg-at{width:100%;border-collapse:collapse}
-.rg-at th{text-align:left;padding:6px 10px;font-size:.7rem;font-weight:650;text-transform:uppercase;letter-spacing:.04em;color:var(--muted2);border-bottom:1px solid var(--border)}
-.rg-at td{padding:7px 10px;font-size:.82rem;border-bottom:1px solid rgba(255,255,255,.03);color:var(--muted)}
+.rg-at th{text-align:left;padding:6px 10px;font-size:.74rem;font-weight:650;text-transform:uppercase;letter-spacing:.04em;color:var(--muted2);border-bottom:1px solid var(--border)}
+.rg-at td{padding:8px 10px;font-size:.9rem;border-bottom:1px solid rgba(255,255,255,.03);color:var(--muted)}
 .rg-at tbody tr:hover{background:rgba(255,255,255,.02)}
 
-.rg-foot{margin-top:8px;font-size:.72rem;color:var(--muted2);text-align:right;font-family:var(--mono)}
+.rg-foot{margin-top:8px;font-size:.78rem;color:var(--muted2);text-align:right;font-family:var(--mono)}
+
+@media(max-width:980px){
+  .rg-grid{grid-template-columns:1fr}
+}
 
 @media(max-width:640px){
+  .rg-header{align-items:flex-start}
+  .rg-title{font-size:.96rem}
+  .rg-sub{font-size:.8rem}
   .rg-row{flex-wrap:wrap}
   .rg-sel,.rg-inp{flex:1 1 100%}
   .rg-grid{grid-template-columns:1fr}
   .rg-strats{flex:1 1 100%}
   .rg-strats .rg-sb{flex:1}
+  .rg-gw{overflow-x:auto}
+  .rg-svg{min-width:760px}
+  .rg-foot{text-align:left}
 }
 `
 
@@ -388,7 +398,7 @@ export default function RouteGraph() {
             style={{ animationDelay: first ? '1.0s' : '1.6s', opacity: 0, animationFillMode: 'forwards', animationName: 'rgDash', animationDuration: '1.2s', animationIterationCount: 'infinite' }} />
           <g className={labelClass}>
             <rect x={mx - 24} y={my - 18} width={48} height={16} rx={3} fill="rgba(0,255,136,0.08)" stroke="rgba(0,255,136,0.2)" strokeWidth={0.5} />
-            <text x={mx} y={my - 7} textAnchor="middle" style={{ fill: '#00ff88', fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 600 }}>{toUsd(edge.cost)}</text>
+            <text x={mx} y={my - 7} textAnchor="middle" style={{ fill: '#00ff88', fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 600 }}>{toUsd(edge.cost)}</text>
           </g>
         </g>
       )
@@ -396,7 +406,7 @@ export default function RouteGraph() {
     return (
       <g key={`de-${idx}`}>
         <path d={d} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={0.75} strokeDasharray="3 5" />
-        <text x={mx} y={my - 5} textAnchor="middle" style={{ fill: 'rgba(255,255,255,0.15)', fontSize: 8, fontFamily: 'var(--mono)' }}>{toUsd(edge.cost)}</text>
+        <text x={mx} y={my - 5} textAnchor="middle" style={{ fill: 'rgba(255,255,255,0.15)', fontSize: 9, fontFamily: 'var(--mono)' }}>{toUsd(edge.cost)}</text>
       </g>
     )
   }
@@ -429,11 +439,11 @@ export default function RouteGraph() {
         <rect x={node.x - w / 2} y={node.y - h / 2} width={w} height={h} rx={rx}
           style={{ fill, stroke }} strokeWidth={isOnPath ? 1 : 0.5} filter={glow} />
         {node.type === 'coin' ? (
-          <text x={node.x} y={node.y + 4} textAnchor="middle" style={{ fill: txt, fontSize: 10, fontWeight: 700, fontFamily: 'var(--mono)' }}>{node.label}</text>
+          <text x={node.x} y={node.y + 4} textAnchor="middle" style={{ fill: txt, fontSize: 11, fontWeight: 700, fontFamily: 'var(--mono)' }}>{node.label}</text>
         ) : (
           <>
-            <text x={node.x} y={node.y - 1} textAnchor="middle" style={{ fill: txt, fontSize: 11, fontWeight: 700 }}>{node.label}</text>
-            <text x={node.x} y={node.y + 12} textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 9, fontFamily: 'var(--mono)' }}>
+            <text x={node.x} y={node.y - 1} textAnchor="middle" style={{ fill: txt, fontSize: 12, fontWeight: 700 }}>{node.label}</text>
+            <text x={node.x} y={node.y + 12} textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 10, fontFamily: 'var(--mono)' }}>
               {node.type === 'source' ? fromCurrency : toCurrency}
             </text>
           </>
@@ -459,7 +469,7 @@ export default function RouteGraph() {
           <p className="rg-sub">{activeScenario.from} {'\u2192'} {activeScenario.to}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: '0.72rem', color: 'var(--muted2)' }}>{countdown}s</span>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: '0.8rem', color: 'var(--muted2)' }}>{countdown}s</span>
           <span className="rg-badge"><span className="rg-dot" /> LIVE</span>
         </div>
       </div>
@@ -496,9 +506,9 @@ export default function RouteGraph() {
           <rect x="352" y="40" width="96" height="400" rx="8" fill="rgba(255,170,0,0.02)" stroke="rgba(255,170,0,0.04)" strokeWidth={0.5} />
 
           {/* column labels */}
-          <text x="120" y="32" textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em' }}>SOURCE</text>
-          <text x="400" y="32" textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em' }}>BRIDGE</text>
-          <text x="680" y="32" textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em' }}>DESTINATION</text>
+          <text x="120" y="32" textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em' }}>SOURCE</text>
+          <text x="400" y="32" textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em' }}>BRIDGE</text>
+          <text x="680" y="32" textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em' }}>DESTINATION</text>
 
           {/* non-optimal edges (behind) */}
           {graph.edges.filter((e) => !e.isOptimal).map(renderEdge)}
@@ -517,40 +527,40 @@ export default function RouteGraph() {
           {optimal ? (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-                <span style={{ color: 'var(--cyan)', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: '0.88rem' }}>
+                <span style={{ color: 'var(--cyan)', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: '0.94rem' }}>
                   {formatExchange(parseExchange(requestFrom))}
                 </span>
                 <span style={{ color: 'var(--muted2)' }}>{'\u2192'}</span>
-                <span style={{ color: 'var(--amber)', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: '0.88rem' }}>
+                <span style={{ color: 'var(--amber)', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: '0.94rem' }}>
                   {optimal.bridgeCoin.toUpperCase()}
                 </span>
                 <span style={{ color: 'var(--muted2)' }}>{'\u2192'}</span>
-                <span style={{ color: 'var(--green)', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: '0.88rem' }}>
+                <span style={{ color: 'var(--green)', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: '0.94rem' }}>
                   {formatExchange(parseExchange(requestTo))}
                 </span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px' }}>
                 <div>
-                  <div style={{ color: 'var(--muted2)', fontSize: '0.68rem', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cost</div>
-                  <div style={{ color: 'var(--green)', fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '0.9rem' }}>{optimal.totalCostPct.toFixed(2)}%</div>
+                  <div style={{ color: 'var(--muted2)', fontSize: '0.74rem', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cost</div>
+                  <div style={{ color: 'var(--green)', fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '0.96rem' }}>{optimal.totalCostPct.toFixed(2)}%</div>
                 </div>
                 <div>
-                  <div style={{ color: 'var(--muted2)', fontSize: '0.68rem', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Time</div>
-                  <div style={{ color: 'var(--ink)', fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '0.9rem' }}>~{optimal.totalTimeMinutes}m</div>
+                  <div style={{ color: 'var(--muted2)', fontSize: '0.74rem', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Time</div>
+                  <div style={{ color: 'var(--ink)', fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '0.96rem' }}>~{optimal.totalTimeMinutes}m</div>
                 </div>
                 <div>
-                  <div style={{ color: 'var(--muted2)', fontSize: '0.68rem', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Action</div>
-                  <div style={{ color: actionColor(optimal.action), fontWeight: 700, fontSize: '0.88rem' }}>{optimal.action}</div>
+                  <div style={{ color: 'var(--muted2)', fontSize: '0.74rem', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Action</div>
+                  <div style={{ color: actionColor(optimal.action), fontWeight: 700, fontSize: '0.94rem' }}>{optimal.action}</div>
                 </div>
                 <div>
-                  <div style={{ color: 'var(--muted2)', fontSize: '0.68rem', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Confidence</div>
-                  <div style={{ color: 'var(--ink)', fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '0.9rem' }}>{(optimal.confidence * 100).toFixed(0)}%</div>
+                  <div style={{ color: 'var(--muted2)', fontSize: '0.74rem', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Confidence</div>
+                  <div style={{ color: 'var(--ink)', fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '0.96rem' }}>{(optimal.confidence * 100).toFixed(0)}%</div>
                 </div>
               </div>
-              <p style={{ margin: '10px 0 0', fontSize: '0.78rem', color: 'var(--muted)', lineHeight: 1.5 }}>{optimal.reason}</p>
+              <p style={{ margin: '10px 0 0', fontSize: '0.86rem', color: 'var(--muted)', lineHeight: 1.55 }}>{optimal.reason}</p>
             </>
           ) : (
-            <div style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>No route found</div>
+            <div style={{ color: 'var(--muted)', fontSize: '0.88rem' }}>No route found</div>
           )}
         </div>
 
@@ -566,8 +576,8 @@ export default function RouteGraph() {
               ['Fee source', data?.meta.feesSource ?? 'n/a'],
             ] as const).map(([label, value]) => (
               <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{label}</span>
-                <span style={{ color: 'var(--ink)', fontSize: '0.8rem', fontFamily: 'var(--mono)', fontWeight: 600 }}>{value}</span>
+                <span style={{ color: 'var(--muted)', fontSize: '0.86rem' }}>{label}</span>
+                <span style={{ color: 'var(--ink)', fontSize: '0.86rem', fontFamily: 'var(--mono)', fontWeight: 600 }}>{value}</span>
               </div>
             ))}
           </div>
@@ -578,20 +588,20 @@ export default function RouteGraph() {
           <div className="rg-lbl">Exchange Fees (D1)</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
-              <div style={{ fontSize: '0.72rem', fontWeight: 650, color: 'var(--amber)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Trading</div>
+              <div style={{ fontSize: '0.76rem', fontWeight: 650, color: 'var(--amber)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Trading</div>
               {Object.entries(tradingFees).map(([exchange, fee]) => (
-                <div key={`tf-${exchange}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.82rem' }}>
+                <div key={`tf-${exchange}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.88rem' }}>
                   <span style={{ color: 'var(--muted)' }}>{formatExchange(exchange)}</span>
                   <span style={{ color: 'var(--ink)', fontFamily: 'var(--mono)', fontWeight: 600 }}>{(fee * 100).toFixed(2)}%</span>
                 </div>
               ))}
             </div>
             <div>
-              <div style={{ fontSize: '0.72rem', fontWeight: 650, color: 'var(--amber)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <div style={{ fontSize: '0.76rem', fontWeight: 650, color: 'var(--amber)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 Withdrawal{optimalCoin ? ` (${optimalCoin})` : ''}
               </div>
               {Object.entries(withdrawalByExchange).map(([exchange, byCoin]) => (
-                <div key={`wd-${exchange}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.82rem' }}>
+                <div key={`wd-${exchange}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.88rem' }}>
                   <span style={{ color: 'var(--muted)' }}>{formatExchange(exchange)}</span>
                   <span style={{ color: 'var(--ink)', fontFamily: 'var(--mono)', fontWeight: 600 }}>
                     {optimalCoin && byCoin[optimalCoin] !== undefined ? byCoin[optimalCoin] : '-'}

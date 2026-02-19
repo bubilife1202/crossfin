@@ -913,7 +913,7 @@ export default function App() {
         {/* ═══════════════════════════════════════════════
             SECTION 1.5: RouteGraph Visualization (Live)
             ═══════════════════════════════════════════════ */}
-        <section className="panel">
+        <section className="panel routeGraphPanel">
           <RouteGraph />
         </section>
 
