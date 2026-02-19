@@ -22,7 +22,7 @@
     { "path": "/api/health", "label": "Health Check" },
     { "path": "/api/registry/stats", "label": "Registry Stats" },
     { "path": "/api/registry/categories", "label": "Categories" },
-    { "path": "/api/arbitrage/demo", "label": "Kimchi Premium Preview" },
+    { "path": "/api/arbitrage/demo", "label": "Route Spread Preview" },
     { "path": "/api/analytics/overview", "label": "Analytics Overview" },
     { "path": "/api/stats", "label": "Agent Stats" },
     { "path": "/api/openapi.json", "label": "OpenAPI Spec" },
@@ -54,24 +54,24 @@
     },
     {
       "id": "crossfin_kimchi_premium",
-      "name": "CrossFin Kimchi Premium Index",
-      "description": "Real-time price spread between Korean exchange (Bithumb) and global markets.",
+      "name": "CrossFin Route Spread Index",
+      "description": "Real-time regional-vs-global route spread index for arbitrage monitoring.",
       "category": "korea-crypto",
       "path": "/api/premium/arbitrage/kimchi",
       "price": "$0.05",
       "tags": ["korea", "crypto", "arbitrage", "kimchi-premium"],
-      "playgroundLabel": "Kimchi Premium"
+      "playgroundLabel": "Route Spread"
     },
     {
       "id": "crossfin_kimchi_premium_history",
-      "name": "CrossFin Kimchi Premium History (Hourly)",
-      "description": "Historical hourly snapshots of kimchi premium data captured by CrossFin cron.",
+      "name": "CrossFin Route Spread History (Hourly)",
+      "description": "Historical hourly snapshots of route spread data captured by CrossFin cron.",
       "category": "korea-crypto",
       "path": "/api/premium/arbitrage/kimchi/history",
       "sampleQuery": "hours=24",
       "price": "$0.05",
       "tags": ["korea", "crypto", "arbitrage", "kimchi-premium", "history"],
-      "playgroundLabel": "Kimchi History"
+      "playgroundLabel": "Route Spread History"
     },
     {
       "id": "crossfin_arbitrage_opportunities",
@@ -350,7 +350,7 @@
     {
       "id": "crossfin_morning_brief",
       "name": "CrossFin Morning Brief",
-      "description": "One-call daily market summary: kimchi premium, FX rate, KOSPI/KOSDAQ, stock momentum, headlines.",
+      "description": "One-call daily market summary: route spread index, FX rate, KOSPI/KOSDAQ, stock momentum, headlines.",
       "category": "korea-bundle",
       "path": "/api/premium/morning/brief",
       "price": "$0.20",
@@ -360,7 +360,7 @@
     {
       "id": "crossfin_crypto_snapshot",
       "name": "CrossFin Crypto Snapshot",
-      "description": "One-call crypto market overview: kimchi premium, 5-exchange prices, Bithumb volume, FX rate.",
+      "description": "One-call crypto market overview: route spread index, 5-exchange prices, Bithumb volume, FX rate.",
       "category": "korea-bundle",
       "path": "/api/premium/crypto/snapshot",
       "price": "$0.15",
@@ -369,13 +369,13 @@
     },
     {
       "id": "crossfin_kimchi_stats",
-      "name": "CrossFin Kimchi Stats",
-      "description": "Comprehensive kimchi premium analysis: current spreads, 24h trend, top arbitrage signal, cross-exchange spread.",
+      "name": "CrossFin Route Spread Stats",
+      "description": "Comprehensive route spread analysis: current spreads, 24h trend, top arbitrage signal, cross-exchange spread.",
       "category": "korea-bundle",
       "path": "/api/premium/kimchi/stats",
       "price": "$0.15",
       "tags": ["korea", "crypto", "bundle", "kimchi-premium", "arbitrage", "agent-ready"],
-      "playgroundLabel": "Kimchi Stats"
+      "playgroundLabel": "Route Spread Stats"
     },
     {
       "id": "crossfin_stock_brief",

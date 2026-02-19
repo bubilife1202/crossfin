@@ -394,8 +394,8 @@ function App() {
             </div>
             <div className="featureCard">
               <div className="featureIcon">&#x25B2;</div>
-              <h3>Kimchi Premium</h3>
-              <p>Real-time Korean vs. global price spread for 11 crypto pairs. Arbitrage decisions with EXECUTE/WAIT/SKIP signals and confidence scores.</p>
+              <h3>Route Spread Intelligence</h3>
+              <p>Real-time regional-vs-global spread signals for 11 bridge coins. Decision output includes EXECUTE/WAIT/SKIP with confidence scoring.</p>
             </div>
             <div className="featureCard">
               <div className="featureIcon">&#x26A1;</div>

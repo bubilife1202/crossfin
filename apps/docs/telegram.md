@@ -1,6 +1,6 @@
 # Telegram Bot
 
-CrossFin AI agent on Telegram. Korean crypto market data, routing, and kimchi premium — all from a chat window.
+CrossFin AI agent on Telegram. Korean/Asia crypto market data, routing, and route spread signals — all from a chat window.
 
 ## Open the Bot
 
@@ -12,7 +12,7 @@ CrossFin AI agent on Telegram. Korean crypto market data, routing, and kimchi pr
 |---------|-------------|
 | `/route <from> <to> <amount>` | Find the cheapest transfer path across 9 exchanges |
 | `/price <coin>` | Live price comparison across Korean exchanges |
-| `/kimchi [coin]` | Kimchi premium (Korean vs global spread) |
+| `/kimchi [coin]` | Route spread index (legacy kimchi metric) |
 | `/fees [coin]` | Trading + withdrawal fee comparison |
 | `/status` | Exchange network health (9 exchanges) |
 | `/help` | List all commands |

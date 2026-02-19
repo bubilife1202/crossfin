@@ -14,8 +14,8 @@ hero:
 features:
   - title: Routing Engine
     details: Cheapest regional-fiat→stablecoin route across 9 exchanges with 11 bridge coins
-  - title: Kimchi Premium
-    details: Real-time Korean vs global price spread with AI decision layer
+  - title: Route Spread Intelligence
+    details: Real-time regional-vs-global spread monitoring with AI decision layer
   - title: MCP Integration
     details: 16 tools for Claude Desktop — routing, pricing, wallet management
   - title: Telegram Bot
@@ -27,7 +27,7 @@ features:
 <ApiTable :endpoints="[
   { method: 'GET', path: '/api/route/status', description: 'Exchange network health (9/9 online)', price: 'Free' },
   { method: 'GET', path: '/api/route/fees', description: 'Trading + withdrawal fee table', price: 'Free' },
-  { method: 'GET', path: '/api/arbitrage/demo', description: 'Top 3 kimchi premium decisions', price: 'Free' },
+  { method: 'GET', path: '/api/arbitrage/demo', description: 'Top 3 route spread decisions', price: 'Free' },
   { method: 'GET', path: '/api/premium/route/find', description: 'Full optimal route analysis', price: '$0.10' },
 ]" />
 

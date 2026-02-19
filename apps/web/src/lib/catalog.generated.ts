@@ -17,7 +17,7 @@ export const CROSSFIN_PLAYGROUND_ENDPOINTS: { path: string; label: string }[] = 
   },
   {
     "path": "/api/arbitrage/demo",
-    "label": "[Free] Kimchi Premium Preview"
+    "label": "[Free] Route Spread Preview"
   },
   {
     "path": "/api/analytics/overview",
@@ -57,11 +57,11 @@ export const CROSSFIN_PLAYGROUND_ENDPOINTS: { path: string; label: string }[] = 
   },
   {
     "path": "/api/premium/arbitrage/kimchi",
-    "label": "[Paid] Kimchi Premium ($0.05)"
+    "label": "[Paid] Route Spread ($0.05)"
   },
   {
     "path": "/api/premium/arbitrage/kimchi/history?hours=24",
-    "label": "[Paid] Kimchi History ($0.05)"
+    "label": "[Paid] Route Spread History ($0.05)"
   },
   {
     "path": "/api/premium/arbitrage/opportunities",
@@ -177,7 +177,7 @@ export const CROSSFIN_PLAYGROUND_ENDPOINTS: { path: string; label: string }[] = 
   },
   {
     "path": "/api/premium/kimchi/stats",
-    "label": "[Paid] Kimchi Stats ($0.15)"
+    "label": "[Paid] Route Spread Stats ($0.15)"
   },
   {
     "path": "/api/premium/market/korea/stock-brief?stock=005930",

@@ -15,11 +15,11 @@ Base URL: `https://crossfin.dev` — 9 exchanges: Bithumb, Upbit, Coinone, GoPax
 
 ---
 
-## 2. Arbitrage & Kimchi Premium
+## 2. Arbitrage & Route Spread (Kimchi Index)
 
 <ApiTable :endpoints="[
   { method: 'GET', path: '/api/arbitrage/demo', description: 'Top-3 decisions (EXECUTE/WAIT/SKIP)', price: 'Free' },
-  { method: 'GET', path: '/api/premium/arbitrage/kimchi', description: 'Full 11-pair kimchi premium', price: '$0.05' },
+  { method: 'GET', path: '/api/premium/arbitrage/kimchi', description: 'Full 11-pair route spread index', price: '$0.05' },
   { method: 'GET', path: '/api/premium/arbitrage/opportunities', description: 'Full arbitrage scan', price: '$0.10' },
   { method: 'GET', path: '/api/premium/arbitrage/kimchi/history', description: '7-day history', price: '$0.05' },
 ]" />
@@ -56,7 +56,7 @@ Base URL: `https://crossfin.dev` — 9 exchanges: Bithumb, Upbit, Coinone, GoPax
 <ApiTable :endpoints="[
   { method: 'GET', path: '/api/premium/morning/brief', description: 'Morning Brief', price: '$0.20' },
   { method: 'GET', path: '/api/premium/crypto/snapshot', description: 'Crypto Snapshot', price: '$0.15' },
-  { method: 'GET', path: '/api/premium/kimchi/stats', description: 'Kimchi Stats', price: '$0.15' },
+  { method: 'GET', path: '/api/premium/kimchi/stats', description: 'Route Spread Stats', price: '$0.15' },
   { method: 'GET', path: '/api/premium/market/korea/stock-brief', description: 'Stock Brief', price: '$0.10' },
 ]" />
 
