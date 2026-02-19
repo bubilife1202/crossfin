@@ -133,6 +133,14 @@ async function telegramSendMessage(
   })
 }
 
+async function telegramSendTyping(botToken: string, chatId: string | number): Promise<void> {
+  await fetch(`https://api.telegram.org/bot${botToken}/sendChatAction`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, action: 'typing' }),
+  })
+}
+
 interface GlmMessage {
   role: string
   content?: string
@@ -210,7 +218,7 @@ const CROSSFIN_TELEGRAM_TOOLS: GlmTool[] = [
   },
 ]
 
-const CROSSFIN_TELEGRAM_SYSTEM_PROMPT = 'You are CrossFin Bot — an AI assistant for cross-border crypto routing across 7 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit). You find the cheapest transfer paths, check live prices, exchange status, kimchi premium, and fees. Rules: 1) Never use emojis. 2) Be concise — short sentences, no filler. 3) Match the user\'s language (Korean or English). 4) When you have enough info, call tools immediately instead of asking more questions. 5) If info is missing, ask in one short sentence, not a numbered list. 6) Only answer questions related to CrossFin, crypto routing, exchange prices, fees, kimchi premium, and Korean/global crypto markets. For unrelated topics, politely decline and redirect to what you can help with.'
+const CROSSFIN_TELEGRAM_SYSTEM_PROMPT = 'You are CrossFin Bot — an AI assistant that finds the cheapest crypto transfer routes across 7 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit). You also check live prices, exchange status, kimchi premium, and fees. Rules: 1) Never use emojis. 2) Be concise — short sentences, no filler. 3) Match the user\'s language (Korean or English). 4) When you have enough info, call tools immediately instead of asking more questions. 5) If info is missing, ask in one short sentence, not a numbered list. 6) Only answer questions about crypto routing, exchange prices, fees, kimchi premium, and Korean/global crypto markets. For unrelated topics, say you only handle crypto routing and suggest what you can help with. 7) You are read-only — you CANNOT execute trades, send crypto, or move funds. You only FIND and RECOMMEND routes. Never ask "실행하시겠습니까" or suggest you can execute anything. 8) After showing a route, suggest the user can try different amounts or exchange pairs.'
 
 async function glmChatCompletion(apiKey: string, messages: GlmMessage[], tools: GlmTool[]): Promise<GlmMessage> {
   const res = await fetch('https://api.z.ai/api/coding/paas/v4/chat/completions', {
@@ -9717,6 +9725,8 @@ app.post('/api/telegram/webhook', async (c) => {
       return c.json({ ok: true, handled: true, mode: 'ai', configured: false })
     }
 
+    await telegramSendTyping(botToken, chatId)
+
     const chatIdStr = String(chatId)
     const MAX_HISTORY = 10
 
@@ -9745,6 +9755,7 @@ app.post('/api/telegram/webhook', async (c) => {
     let finalReply = ''
 
     for (let loop = 0; loop < maxToolLoops; loop += 1) {
+      await telegramSendTyping(botToken, chatId)
       const assistantMessage = await glmChatCompletion(zaiApiKey, messages, CROSSFIN_TELEGRAM_TOOLS)
       messages.push({
         role: 'assistant',
