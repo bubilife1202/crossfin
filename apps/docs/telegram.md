@@ -12,7 +12,7 @@ CrossFin AI agent on Telegram. Korean/Asia crypto market data, routing, and rout
 |---------|-------------|
 | `/route <from> <to> <amount>` | Find the cheapest transfer path across 9 exchanges |
 | `/price <coin>` | Live price comparison across Korean exchanges |
-| `/kimchi [coin]` | Route spread index (legacy kimchi metric) |
+| `/spread [coin]` | Route spread index (Korea vs global) |
 | `/fees [coin]` | Trading + withdrawal fee comparison |
 | `/status` | Exchange network health (9 exchanges) |
 | `/help` | List all commands |
@@ -23,7 +23,7 @@ No need to memorize commands. Ask in plain Korean or English:
 
 > 빗썸에서 바이낸스로 500만원 보내는 가장 싼 방법 알려줘
 
-> 지금 김치 프리미엄 얼마야?
+> 지금 한국-글로벌 스프레드 얼마야?
 
 > XRP 거래소별 가격 비교해줘
 
@@ -36,7 +36,7 @@ The bot understands context and maintains conversation history (last 10 messages
 ```
 /route bithumb:KRW binance:USDC 5000000
 /price XRP
-/kimchi BTC
+/spread BTC
 /fees SOL
 /status
 ```

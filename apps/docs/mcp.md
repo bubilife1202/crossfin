@@ -57,7 +57,7 @@ No EVM key? Free tools work without one. Paid tools require a Base wallet with U
 
 > 빗썸에서 바이낸스로 500만원 USDC 만들려면 가장 싼 방법이 뭐야?
 
-> 지금 김치 프리미엄 얼마야?
+> 지금 한국-글로벌 스프레드 얼마야?
 
 > 거래소별 XRP 가격 비교해줘
 

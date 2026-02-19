@@ -397,7 +397,7 @@ const CROSSFIN_TELEGRAM_TOOLS: GlmTool[] = [
     type: 'function',
     function: {
       name: 'get_kimchi_premium',
-      description: 'Get the kimchi premium — price difference between Korean and global crypto exchanges. Use when user asks about kimchi premium, price spread, arbitrage, or Korean crypto premium.',
+      description: 'Get the Korea-vs-global route spread (legacy kimchi metric). Use when user asks about price spread, arbitrage, or Korea/global premium.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -411,7 +411,7 @@ const CROSSFIN_TELEGRAM_TOOLS: GlmTool[] = [
   },
 ]
 
-const CROSSFIN_TELEGRAM_SYSTEM_PROMPT = 'You are CrossFin Bot — an AI assistant that finds the cheapest crypto transfer routes across 9 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit). You also check live prices, exchange status, kimchi premium, and fees. Rules: 1) Never use emojis. 2) Be concise — short sentences, no filler. 3) Match the user\'s language (Korean or English). 4) When you have enough info, call tools immediately instead of asking more questions. 5) If info is missing, ask in one short sentence, not a numbered list. 6) Only answer questions about crypto routing, exchange prices, fees, kimchi premium, and Korean/global crypto markets. For unrelated topics, say you only handle crypto routing and suggest what you can help with. 7) You are read-only — you CANNOT execute trades, send crypto, or move funds. You only FIND and RECOMMEND routes. Never ask "실행하시겠습니까" or suggest you can execute anything. 8) After showing a route, suggest the user can try different amounts or exchange pairs.'
+const CROSSFIN_TELEGRAM_SYSTEM_PROMPT = 'You are CrossFin Bot — an AI assistant that finds the cheapest crypto transfer routes across 9 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit). You also check live prices, exchange status, route spread, and fees. Rules: 1) Never use emojis. 2) Be concise — short sentences, no filler. 3) Match the user\'s language (Korean or English). 4) When you have enough info, call tools immediately instead of asking more questions. 5) If info is missing, ask in one short sentence, not a numbered list. 6) Only answer questions about crypto routing, exchange prices, fees, route spread, and Korean/global crypto markets. For unrelated topics, say you only handle crypto routing and suggest what you can help with. 7) You are read-only — you CANNOT execute trades, send crypto, or move funds. You only FIND and RECOMMEND routes. Never ask "실행하시겠습니까" or suggest you can execute anything. 8) After showing a route, suggest the user can try different amounts or exchange pairs.'
 
 async function glmChatCompletion(apiKey: string, messages: GlmMessage[], tools: GlmTool[]): Promise<GlmMessage> {
   const res = await fetch('https://api.z.ai/api/coding/paas/v4/chat/completions', {
@@ -2071,7 +2071,7 @@ app.get('/api/openapi.json', (c) => {
         post: {
           operationId: 'telegramWebhook',
           summary: 'Telegram bot webhook endpoint',
-          description: 'Receives Telegram updates and executes /route, /price, /status, /kimchi, /fees commands. If TELEGRAM_BOT_TOKEN is configured, X-Telegram-Bot-Api-Secret-Token must match TELEGRAM_WEBHOOK_SECRET.',
+          description: 'Receives Telegram updates and executes /route, /price, /status, /spread, /fees commands (/kimchi remains as legacy alias). If TELEGRAM_BOT_TOKEN is configured, X-Telegram-Bot-Api-Secret-Token must match TELEGRAM_WEBHOOK_SECRET.',
           tags: ['Telegram'],
           parameters: [
             {
@@ -11874,6 +11874,7 @@ app.post('/api/telegram/webhook', async (c) => {
     '다른 명령어:',
     '/status',
     '/price BTC',
+    '/spread BTC',
     '/fees XRP',
     '/help',
     '',
@@ -11982,7 +11983,7 @@ app.post('/api/telegram/webhook', async (c) => {
         return c.json({ ok: true, handled: true, mode: 'slash' })
       }
 
-      if (command === '/kimchi') {
+      if (command === '/kimchi' || command === '/spread') {
         const coinArg = parseTelegramCoinArgument(text)
         if (coinArg && !isTrackedPairCoin(coinArg)) {
           await telegramSendMessage(
@@ -12009,7 +12010,7 @@ app.post('/api/telegram/webhook', async (c) => {
           await telegramSendMessage(
             botToken,
             chatId,
-            `No free demo snapshot for ${coinArg} right now.\nTry /price ${coinArg} or paid endpoint /api/premium/arbitrage/kimchi.`,
+            `No free route spread snapshot for ${coinArg} right now.\nTry /price ${coinArg} or paid endpoint /api/premium/arbitrage/kimchi.`,
           )
           return c.json({ ok: true, handled: true, mode: 'slash', coin: coinArg, preview: false })
         }
@@ -12025,8 +12026,8 @@ app.post('/api/telegram/webhook', async (c) => {
 
         const reply = [
           coinArg
-            ? `Kimchi premium (demo, ${coinArg}): avg ${avgPremiumPct.toFixed(2)}%`
-            : `Kimchi premium (demo): avg ${avgPremiumPct.toFixed(2)}%`,
+            ? `Route spread (demo, ${coinArg}): avg ${avgPremiumPct.toFixed(2)}%`
+            : `Route spread (demo): avg ${avgPremiumPct.toFixed(2)}%`,
           `Market condition: ${marketCondition}`,
           ...lines,
         ].join('\n')
