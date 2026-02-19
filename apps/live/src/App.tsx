@@ -639,6 +639,11 @@ export default function App() {
           strategy: routeStrategy,
         }),
       });
+      if (!res.ok) {
+        const errorBody = await res.text().catch(() => "");
+        const detail = errorBody.slice(0, 140).trim();
+        throw new Error(`quote request failed (${res.status})${detail ? `: ${detail}` : ""}`);
+      }
       const data = (await res.json()) as AcpQuoteResponse;
       if (!data.optimal_route) {
         setRouteError("No route found. Check inputs and try again.");
