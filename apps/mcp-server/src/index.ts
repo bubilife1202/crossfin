@@ -338,9 +338,9 @@ server.registerTool(
 server.registerTool(
   'get_kimchi_premium',
   {
-    title: 'Get kimchi premium',
+    title: 'Get route spread',
     description:
-      'Get free preview of the Kimchi Premium index — real-time price spread between Korean and global crypto exchanges (top 3 pairs)',
+      'Get free preview of the Route Spread index — real-time price spread between Korean and global crypto exchanges (top 3 pairs)',
     inputSchema: z.object({}),
   },
   async (_params): Promise<CallToolResult> => {

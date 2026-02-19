@@ -28,7 +28,7 @@ Add this to your Claude Desktop config (`claude_desktop_config.json`):
 
 Restart Claude Desktop. Done. 16 tools available immediately.
 
-> **No EVM key?** Free tools (price lookup, fee comparison, kimchi premium) work without one. Paid tools ($0.01–$0.10 per call) require a Base wallet with USDC.
+> **No EVM key?** Free tools (price lookup, fee comparison, route spread) work without one. Paid tools ($0.01–$0.10 per call) require a Base wallet with USDC.
 
 ---
 
@@ -37,9 +37,9 @@ Restart Claude Desktop. Done. 16 tools available immediately.
 **Ask your agent:**
 
 - "빗썸에서 바이낸스로 500만원 USDC 만들려면 가장 싼 방법이 뭐야?" → Routing engine evaluates 11 bridge coins across 9 exchanges, returns optimal path with fees
-- "지금 김치 프리미엄 얼마야?" → Real-time price spread between Korean and global exchanges for 11 crypto pairs
+- "지금 한국-글로벌 스프레드 얼마야?" → Real-time price spread between Korean and global exchanges for 11 crypto pairs
 - "삼성전자 외국인 매수 동향 알려줘" → Korean stock investor flow data (foreign/institutional/individual)
-- "오늘 한국 시장 브리핑해줘" → Morning Brief bundle: kimchi premium + FX + KOSPI/KOSDAQ + stock momentum + headlines
+- "오늘 한국 시장 브리핑해줘" → Morning Brief bundle: route spread + FX + KOSPI/KOSDAQ + stock momentum + headlines
 
 **For developers/agents:**
 
@@ -54,7 +54,7 @@ Restart Claude Desktop. Done. 16 tools available immediately.
 
 **Korean exchanges are a walled garden.** Korean-language APIs, IP restrictions, real-name bank account requirements (실명확인 계좌제), and no English documentation. AI agents can't access them — unless they go through CrossFin.
 
-**Prices differ across exchanges.** The same BTC can be 2-3% more expensive on Korean exchanges (kimchi premium). CrossFin's routing engine finds the cheapest bridge coin and path, factoring in trading fees, withdrawal fees, slippage, and transfer time.
+**Prices differ across exchanges.** The same BTC can be 2-3% more expensive on Korean exchanges (route spread). CrossFin's routing engine finds the cheapest bridge coin and path, factoring in trading fees, withdrawal fees, slippage, and transfer time.
 
 **x402 native.** No API keys, no subscriptions, no invoices. Agents pay per call with USDC on Base. $0.01 for an FX rate, $0.10 for a full routing analysis.
 
@@ -74,7 +74,7 @@ Output: Buy AVAX on Bithumb → Transfer to Binance → Sell for USDC
         DOT  → 0.38% | ~6 min  | $3,441
 ```
 
-Considers: trading fees (0.10–0.25%), withdrawal fees (fixed per coin), orderbook slippage, transfer time, kimchi premium direction.
+Considers: trading fees (0.10–0.25%), withdrawal fees (fixed per coin), orderbook slippage, transfer time, route spread direction.
 
 Supports bidirectional routing: Korea → Global and Global → Korea.
 
@@ -115,7 +115,7 @@ All paid via x402 (USDC on Base). No API key needed.
 
 | Endpoint | Price | Description |
 |----------|-------|-------------|
-| `/api/premium/arbitrage/kimchi` | $0.05 | Full Kimchi Premium (11 pairs incl. KAIA) |
+| `/api/premium/arbitrage/kimchi` | $0.05 | Full Route Spread (11 pairs incl. KAIA) |
 | `/api/premium/arbitrage/opportunities` | $0.10 | Arbitrage decisions (EXECUTE/WAIT/SKIP) |
 | `/api/premium/bithumb/orderbook?pair=BTC` | $0.02 | Bithumb orderbook (30 levels) |
 | `/api/premium/market/upbit/ticker` | $0.02 | Upbit ticker |
@@ -125,7 +125,7 @@ All paid via x402 (USDC on Base). No API key needed.
 | `/api/premium/market/korea` | $0.03 | Korean market sentiment |
 | `/api/premium/market/cross-exchange` | $0.08 | Cross-exchange arbitrage decision |
 | `/api/premium/news/korea/headlines` | $0.03 | Korean headlines |
-| `/api/premium/arbitrage/kimchi/history` | $0.05 | Kimchi premium history (7 days) |
+| `/api/premium/arbitrage/kimchi/history` | $0.05 | Route spread history (7 days) |
 | `/api/premium/bithumb/volume-analysis` | $0.03 | Bithumb volume analysis |
 | `/api/premium/market/upbit/signals` | $0.05 | Upbit trading signals |
 | `/api/premium/crypto/korea/5exchange` | $0.08 | 4-exchange price comparison |
@@ -159,9 +159,9 @@ All paid via x402 (USDC on Base). No API key needed.
 
 | Endpoint | Price | Description |
 |----------|-------|-------------|
-| `/api/premium/morning/brief` | $0.20 | Morning Brief (kimchi + FX + stocks + headlines) |
-| `/api/premium/crypto/snapshot` | $0.15 | Crypto Snapshot (5-exchange + kimchi + volume + FX) |
-| `/api/premium/kimchi/stats` | $0.15 | Kimchi Stats (spreads + trend + arbitrage signal) |
+| `/api/premium/morning/brief` | $0.20 | Morning Brief (route spread + FX + stocks + headlines) |
+| `/api/premium/crypto/snapshot` | $0.15 | Crypto Snapshot (5-exchange + route spread + volume + FX) |
+| `/api/premium/kimchi/stats` | $0.15 | Route Spread Stats (spreads + trend + arbitrage signal) |
 | `/api/premium/market/korea/stock-brief` | $0.10 | Stock Brief (fundamentals + news + flow) |
 
 </details>

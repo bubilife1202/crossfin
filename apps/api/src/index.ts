@@ -397,7 +397,7 @@ const CROSSFIN_TELEGRAM_TOOLS: GlmTool[] = [
     type: 'function',
     function: {
       name: 'get_kimchi_premium',
-      description: 'Get the Korea-vs-global route spread (legacy kimchi metric). Use when user asks about price spread, arbitrage, or Korea/global premium.',
+      description: 'Get the Korea-vs-global route spread. Use when user asks about price spread, arbitrage, or Korea/global premium.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -861,7 +861,7 @@ const endpointTelemetry: MiddlewareHandler<Env> = async (c, next) => {
     throw err
   } finally {
     const responseTimeMs = Date.now() - startedAt
-    const status = statusCode >= 200 && statusCode < 400 ? 'success' : 'error'
+    const status = statusCode >= 200 && statusCode < 500 ? 'success' : 'error'
 
     try {
       await ensureEndpointCallsTable(c.env.DB)
@@ -961,7 +961,7 @@ app.get('/api/docs/guide', (c) => {
       { path: '/api/registry/categories', description: 'List categories with counts' },
       { path: '/api/registry/stats', description: 'Total service counts' },
       { path: '/api/registry/{id}', description: 'Service details by ID' },
-      { path: '/api/arbitrage/demo', description: 'Free kimchi premium preview (top 3 pairs)' },
+      { path: '/api/arbitrage/demo', description: 'Free route spread preview (top 3 pairs)' },
       { path: '/api/analytics/overview', description: 'Gateway usage analytics' },
       { path: '/api/analytics/funnel/overview', description: 'Web onboarding conversion funnel analytics' },
       { path: '/api/analytics/funnel/events', description: 'Track web onboarding events (POST)' },
@@ -990,8 +990,8 @@ app.get('/api/docs/guide', (c) => {
     crossfinServices: {
       _note: '35 paid endpoints organized by category. All paid via x402 with USDC on Base mainnet.',
       crypto_arbitrage: [
-        { id: 'crossfin_kimchi_premium', endpoint: '/api/premium/arbitrage/kimchi', price: '$0.05', description: 'Real-time Kimchi Premium Index — price spread between Korean (Bithumb) and global (Binance) exchanges for 11 crypto pairs including KAIA.' },
-        { id: 'crossfin_kimchi_premium_history', endpoint: '/api/premium/arbitrage/kimchi/history', price: '$0.05', description: 'Hourly snapshots of kimchi premium data from D1 database, up to 7 days lookback. Query by coin and time range.' },
+        { id: 'crossfin_kimchi_premium', endpoint: '/api/premium/arbitrage/kimchi', price: '$0.05', description: 'Real-time Route Spread Index — price spread between Korean (Bithumb) and global (Binance) exchanges for 11 crypto pairs including KAIA.' },
+        { id: 'crossfin_kimchi_premium_history', endpoint: '/api/premium/arbitrage/kimchi/history', price: '$0.05', description: 'Hourly snapshots of route spread data from D1 database, up to 7 days lookback. Query by coin and time range.' },
         { id: 'crossfin_arbitrage_opportunities', endpoint: '/api/premium/arbitrage/opportunities', price: '$0.10', description: 'AI-ready arbitrage decisions: EXECUTE/WAIT/SKIP with slippage, premium trends, transfer time risk, and confidence scores.' },
         { id: 'crossfin_cross_exchange', endpoint: '/api/premium/market/cross-exchange', price: '$0.08', description: 'Compare prices across 4 Korean exchanges with ARBITRAGE/HOLD/MONITOR signals and best buy/sell routing.' },
         { id: 'crossfin_5exchange', endpoint: '/api/premium/crypto/korea/5exchange?coin=BTC', price: '$0.08', description: 'Compare crypto prices across 4 Korean exchanges (Upbit, Bithumb, Coinone, GoPax) for any coin.' },
@@ -1030,9 +1030,9 @@ app.get('/api/docs/guide', (c) => {
         { id: 'crossfin_global_indices_chart', endpoint: '/api/premium/market/global/indices-chart?index=.DJI', price: '$0.02', description: 'Global index chart — Dow (.DJI), NASDAQ (.IXIC), Hang Seng (.HSI), Nikkei (.N225).' },
       ],
       bundle_apis: [
-        { id: 'crossfin_morning_brief', endpoint: '/api/premium/morning/brief', price: '$0.20', description: 'Morning Brief — kimchi premium + FX + KOSPI/KOSDAQ + stock momentum + headlines in one call. Best value for daily market overview.' },
-        { id: 'crossfin_crypto_snapshot', endpoint: '/api/premium/crypto/snapshot', price: '$0.15', description: 'Crypto Snapshot — 5-exchange BTC prices + kimchi premium + Bithumb volume + FX rate in one call.' },
-        { id: 'crossfin_kimchi_stats', endpoint: '/api/premium/kimchi/stats', price: '$0.15', description: 'Kimchi Stats — current spreads + 24h trend + arbitrage signal + cross-exchange spread in one call.' },
+        { id: 'crossfin_morning_brief', endpoint: '/api/premium/morning/brief', price: '$0.20', description: 'Morning Brief — route spread + FX + KOSPI/KOSDAQ + stock momentum + headlines in one call. Best value for daily market overview.' },
+        { id: 'crossfin_crypto_snapshot', endpoint: '/api/premium/crypto/snapshot', price: '$0.15', description: 'Crypto Snapshot — 5-exchange BTC prices + route spread + Bithumb volume + FX rate in one call.' },
+        { id: 'crossfin_kimchi_stats', endpoint: '/api/premium/kimchi/stats', price: '$0.15', description: 'Route Spread Stats — current spreads + 24h trend + arbitrage signal + cross-exchange spread in one call.' },
         { id: 'crossfin_stock_brief', endpoint: '/api/premium/market/korea/stock-brief?stock=005930', price: '$0.10', description: 'Stock Brief — fundamentals + news + investor flow + disclosures for any Korean stock in one call.' },
       ],
       routing_engine: [
@@ -1063,8 +1063,8 @@ app.get('/api/docs/guide', (c) => {
         { id: 'balanced', description: 'Weighted combination of cost and speed.' },
       ],
       directions: {
-        koreaToGlobal: { example: 'from=bithumb:KRW&to=binance:USDC&amount=1000000', description: 'Transfer KRW from Korean exchange to USDC on Binance. Common for taking profits from kimchi premium.' },
-        globalToKorea: { example: 'from=binance:USDC&to=bithumb:KRW&amount=1000', description: 'Transfer USDC from Binance to KRW on Korean exchange. Profitable when kimchi premium is positive (buy cheap globally, sell expensive in Korea).' },
+        koreaToGlobal: { example: 'from=bithumb:KRW&to=binance:USDC&amount=1000000', description: 'Transfer KRW from Korean exchange to USDC on Binance. Common for taking profits from route spread.' },
+        globalToKorea: { example: 'from=binance:USDC&to=bithumb:KRW&amount=1000', description: 'Transfer USDC from Binance to KRW on Korean exchange. Profitable when route spread is positive (buy cheap globally, sell expensive in Korea).' },
       },
       responseIncludes: ['Optimal route with step-by-step execution plan', 'Up to 10 alternative routes ranked by strategy', 'Fee breakdown (trading + withdrawal)', 'Estimated output amount and net profit/loss %', 'Transfer time estimate per bridge coin', 'User-friendly summary with recommendation (GOOD_DEAL/PROCEED/EXPENSIVE/VERY_EXPENSIVE)', 'Live exchange rates used for calculation'],
       freeEndpoints: [
@@ -1103,12 +1103,12 @@ app.get('/api/docs/guide', (c) => {
       {
         name: 'Daily Market Brief Agent',
         description: 'Agent that sends a daily summary of Korean markets to a Slack/Discord channel.',
-        flow: '1. Call /api/premium/morning/brief ($0.20) for full market overview. 2. Parse kimchi premium, KOSPI, FX rate, headlines. 3. Format and post to channel.',
+        flow: '1. Call /api/premium/morning/brief ($0.20) for full market overview. 2. Parse route spread, KOSPI, FX rate, headlines. 3. Format and post to channel.',
         cost: '$0.20/day',
       },
       {
-        name: 'Kimchi Premium Monitor',
-        description: 'Agent that monitors kimchi premium and alerts when arbitrage opportunity appears.',
+        name: 'Route Spread Monitor',
+        description: 'Agent that monitors route spread and alerts when arbitrage opportunity appears.',
         flow: '1. Poll /api/premium/arbitrage/opportunities ($0.10) every 15 minutes. 2. When signal=EXECUTE, call /api/premium/route/find ($0.10) for optimal route. 3. Alert user with route details.',
         cost: '~$10/day (polling every 15m)',
       },
@@ -1164,7 +1164,7 @@ app.get('/api/docs/guide', (c) => {
         { name: 'list_services', description: 'List services with optional category filter' },
         { name: 'get_service', description: 'Get details for a specific service' },
         { name: 'list_categories', description: 'List all categories with counts' },
-        { name: 'get_kimchi_premium', description: 'Free kimchi premium preview' },
+        { name: 'get_kimchi_premium', description: 'Free route spread preview' },
         { name: 'get_analytics', description: 'Gateway usage analytics' },
         { name: 'get_guide', description: 'Get the full CrossFin agent guide' },
         { name: 'create_wallet', description: 'Create a wallet in local ledger' },
@@ -1270,7 +1270,7 @@ app.get('/.well-known/x402.json', (c) => {
       maxTimeoutSeconds: 300,
     },
     endpoints: [
-      { resource: `${origin}/api/premium/arbitrage/kimchi`, method: 'GET', price: '$0.05', description: 'Real-time Kimchi Premium Index — Korean vs global exchange price spread for 11 crypto pairs' },
+      { resource: `${origin}/api/premium/arbitrage/kimchi`, method: 'GET', price: '$0.05', description: 'Real-time Route Spread Index — Korean vs global exchange price spread for 11 crypto pairs' },
       { resource: `${origin}/api/premium/arbitrage/opportunities`, method: 'GET', price: '$0.10', description: 'AI-ready arbitrage decisions: EXECUTE/WAIT/SKIP with confidence scores' },
       { resource: `${origin}/api/premium/route/find`, method: 'GET', price: '$0.10', description: 'Optimal crypto transfer route across 9 exchanges using 11 bridge coins' },
       { resource: `${origin}/api/premium/bithumb/orderbook`, method: 'GET', price: '$0.02', description: 'Live Bithumb orderbook depth (30 levels)' },
@@ -1280,14 +1280,14 @@ app.get('/.well-known/x402.json', (c) => {
       { resource: `${origin}/api/premium/market/fx/usdkrw`, method: 'GET', price: '$0.01', description: 'USD/KRW exchange rate' },
       { resource: `${origin}/api/premium/market/korea`, method: 'GET', price: '$0.03', description: 'Korean market sentiment overview' },
       { resource: `${origin}/api/premium/crypto/korea/5exchange`, method: 'GET', price: '$0.08', description: '4-exchange Korean crypto price comparison' },
-      { resource: `${origin}/api/premium/morning/brief`, method: 'GET', price: '$0.20', description: 'Morning Brief bundle: kimchi premium + FX + KOSPI/KOSDAQ + headlines' },
-      { resource: `${origin}/api/premium/crypto/snapshot`, method: 'GET', price: '$0.15', description: 'Crypto Snapshot: 5-exchange prices + kimchi + volume + FX' },
+      { resource: `${origin}/api/premium/morning/brief`, method: 'GET', price: '$0.20', description: 'Morning Brief bundle: route spread + FX + KOSPI/KOSDAQ + headlines' },
+      { resource: `${origin}/api/premium/crypto/snapshot`, method: 'GET', price: '$0.15', description: 'Crypto Snapshot: 5-exchange prices + route spread + volume + FX' },
       { resource: `${origin}/api/premium/market/korea/indices`, method: 'GET', price: '$0.03', description: 'KOSPI & KOSDAQ real-time indices' },
       { resource: `${origin}/api/premium/market/korea/investor-flow`, method: 'GET', price: '$0.05', description: 'Stock investor flow: foreign/institutional/individual' },
       { resource: `${origin}/api/premium/market/korea/stocks/momentum`, method: 'GET', price: '$0.05', description: 'Top gainers/losers/market cap' },
     ],
     free: [
-      { resource: `${origin}/api/arbitrage/demo`, method: 'GET', description: 'Free kimchi premium preview (top 3 pairs)' },
+      { resource: `${origin}/api/arbitrage/demo`, method: 'GET', description: 'Free route spread preview (top 3 pairs)' },
       { resource: `${origin}/api/route/exchanges`, method: 'GET', description: 'Supported exchanges and coins' },
       { resource: `${origin}/api/route/fees`, method: 'GET', description: 'Fee comparison table' },
       { resource: `${origin}/api/route/pairs`, method: 'GET', description: 'Trading pairs with live prices' },
@@ -1359,12 +1359,12 @@ app.get('/api/openapi.json', (c) => {
       '/api/arbitrage/demo': {
         get: {
           operationId: 'arbitrageDemo',
-          summary: 'Free Kimchi Premium preview (top 3 pairs)',
-          description: 'Free preview of the Kimchi Premium index. Shows top 3 pairs by premium percentage. No payment required.',
+          summary: 'Free Route Spread preview (top 3 pairs)',
+          description: 'Free preview of the Route Spread index. Shows top 3 pairs by premium percentage. No payment required.',
           tags: ['Free'],
           responses: {
             '200': {
-              description: 'Preview of kimchi premium data',
+              description: 'Preview of route spread data',
               content: { 'application/json': { schema: { type: 'object', properties: {
                 demo: { type: 'boolean' },
                 note: { type: 'string' },
@@ -1420,12 +1420,12 @@ app.get('/api/openapi.json', (c) => {
       '/api/premium/arbitrage/kimchi': {
         get: {
           operationId: 'kimchiPremium',
-          summary: 'Full Kimchi Premium Index — $0.05 USDC',
+          summary: 'Full Route Spread Index — $0.05 USDC',
           description: 'Real-time price spread between Korean exchange (Bithumb) and global exchanges for 10+ crypto pairs. Includes premium percentage, volume, 24h change for each pair. Payment: $0.05 USDC on Base via x402.',
           tags: ['Paid — x402'],
           responses: {
             '200': {
-              description: 'Full kimchi premium data for all tracked pairs',
+              description: 'Full route spread data for all tracked pairs',
               content: { 'application/json': { schema: { type: 'object', properties: {
                 paid: { type: 'boolean' },
                 service: { type: 'string' },
@@ -1448,8 +1448,8 @@ app.get('/api/openapi.json', (c) => {
       '/api/premium/arbitrage/kimchi/history': {
         get: {
           operationId: 'kimchiPremiumHistory',
-          summary: 'Kimchi Premium History (hourly) — $0.05 USDC',
-          description: 'Historical hourly snapshots of the Kimchi Premium data captured by CrossFin cron. Query by coin and time range. Payment: $0.05 USDC on Base via x402.',
+          summary: 'Route Spread History (hourly) — $0.05 USDC',
+          description: 'Historical hourly snapshots of the Route Spread data captured by CrossFin cron. Query by coin and time range. Payment: $0.05 USDC on Base via x402.',
           tags: ['Paid — x402'],
           parameters: [
             { name: 'coin', in: 'query', description: 'Optional coin filter (e.g. BTC, ETH). Default: all', schema: { type: 'string' } },
@@ -1457,7 +1457,7 @@ app.get('/api/openapi.json', (c) => {
           ],
           responses: {
             '200': {
-              description: 'Hourly kimchi premium snapshots',
+              description: 'Hourly route spread snapshots',
               content: { 'application/json': { schema: { type: 'object', properties: {
                 paid: { type: 'boolean' },
                 service: { type: 'string' },
@@ -1684,7 +1684,7 @@ app.get('/api/openapi.json', (c) => {
         get: {
           operationId: 'crossExchangeComparison',
           summary: 'Cross-Exchange Decision Service (Bithumb vs Upbit vs Coinone vs Binance)',
-          description: 'Compare crypto prices across 4 exchanges with actionable recommendations. Returns per-coin best buy/sell exchange, spread analysis, and action signals (ARBITRAGE/HOLD/MONITOR). Shows kimchi premium per exchange and domestic arbitrage opportunities.',
+          description: 'Compare crypto prices across 4 exchanges with actionable recommendations. Returns per-coin best buy/sell exchange, spread analysis, and action signals (ARBITRAGE/HOLD/MONITOR). Shows route spread per exchange and domestic arbitrage opportunities.',
           parameters: [{ name: 'coins', in: 'query', schema: { type: 'string' }, description: 'Comma-separated coins (default: BTC,ETH,XRP,DOGE,ADA,SOL)' }],
           tags: ['Premium — $0.08 USDC'],
           responses: {
@@ -1706,7 +1706,7 @@ app.get('/api/openapi.json', (c) => {
         get: {
           operationId: 'morningBrief',
           summary: 'Morning Brief bundle — $0.20 USDC',
-          description: 'One-call daily market summary combining kimchi premium, USD/KRW FX rate, KOSPI/KOSDAQ indices, stock momentum, and Korean headlines. Payment: $0.20 USDC on Base via x402.',
+          description: 'One-call daily market summary combining route spread, USD/KRW FX rate, KOSPI/KOSDAQ indices, stock momentum, and Korean headlines. Payment: $0.20 USDC on Base via x402.',
           tags: ['Paid — x402'],
           responses: {
             '200': {
@@ -1750,7 +1750,7 @@ app.get('/api/openapi.json', (c) => {
         get: {
           operationId: 'cryptoSnapshot',
           summary: 'Crypto Snapshot bundle — $0.15 USDC',
-          description: 'One-call crypto market overview combining 4-exchange BTC price comparison (Upbit/Bithumb/Coinone/GoPax), kimchi premium, Bithumb volume analysis, and USD/KRW FX rate. Payment: $0.15 USDC on Base via x402.',
+          description: 'One-call crypto market overview combining 4-exchange BTC price comparison (Upbit/Bithumb/Coinone/GoPax), route spread, Bithumb volume analysis, and USD/KRW FX rate. Payment: $0.15 USDC on Base via x402.',
           tags: ['Paid — x402'],
           responses: {
             '200': {
@@ -1795,8 +1795,8 @@ app.get('/api/openapi.json', (c) => {
       '/api/premium/kimchi/stats': {
         get: {
           operationId: 'kimchiStats',
-          summary: 'Kimchi Stats bundle — $0.15 USDC',
-          description: 'Comprehensive kimchi premium analysis combining current premiums, 24h trend from D1 snapshots, top arbitrage signal (EXECUTE/WAIT/SKIP), and cross-exchange BTC spread across Korean exchanges. Payment: $0.15 USDC on Base via x402.',
+          summary: 'Route Spread Stats bundle — $0.15 USDC',
+          description: 'Comprehensive route spread analysis combining current premiums, 24h trend from D1 snapshots, top arbitrage signal (EXECUTE/WAIT/SKIP), and cross-exchange BTC spread across Korean exchanges. Payment: $0.15 USDC on Base via x402.',
           tags: ['Paid — x402'],
           responses: {
             '200': {
@@ -2348,7 +2348,7 @@ app.use(
             payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
             maxTimeoutSeconds: 300,
           },
-          description: 'Real-time Kimchi Premium Index — price spread between Korean exchanges (Bithumb) and global exchanges (Binance) for top crypto pairs. Unique Korean market data unavailable anywhere else in x402 ecosystem.',
+          description: 'Real-time Route Spread Index — price spread between Korean exchanges (Bithumb) and global exchanges (Binance) for top crypto pairs. Unique Korean market data unavailable anywhere else in x402 ecosystem.',
           mimeType: 'application/json',
           extensions: {
             ...declareDiscoveryExtension({
@@ -2367,7 +2367,7 @@ app.use(
             payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
             maxTimeoutSeconds: 300,
           },
-          description: 'Historical Kimchi Premium snapshots grouped by hour (from CrossFin cron). Query by coin and lookback hours.',
+          description: 'Historical Route Spread snapshots grouped by hour (from CrossFin cron). Query by coin and lookback hours.',
           mimeType: 'application/json',
           extensions: {
             ...declareDiscoveryExtension({
@@ -2890,7 +2890,7 @@ app.use(
         },
         'GET /api/premium/morning/brief': {
           accepts: { scheme: 'exact', price: '$0.20', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Morning Brief — one-call daily market summary combining kimchi premium, FX rate, KOSPI/KOSDAQ indices, stock momentum, and Korean headlines. Replaces 5+ individual API calls.',
+          description: 'Morning Brief — one-call daily market summary combining route spread, FX rate, KOSPI/KOSDAQ indices, stock momentum, and Korean headlines. Replaces 5+ individual API calls.',
           mimeType: 'application/json',
           extensions: {
             ...declareDiscoveryExtension({
@@ -2903,7 +2903,7 @@ app.use(
         },
         'GET /api/premium/crypto/snapshot': {
           accepts: { scheme: 'exact', price: '$0.15', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Crypto Snapshot — one-call crypto market overview combining 4-exchange price comparison (Upbit/Bithumb/Coinone/GoPax), kimchi premium, Bithumb volume analysis, and FX rate. Replaces 4+ individual API calls.',
+          description: 'Crypto Snapshot — one-call crypto market overview combining 4-exchange price comparison (Upbit/Bithumb/Coinone/GoPax), route spread, Bithumb volume analysis, and FX rate. Replaces 4+ individual API calls.',
           mimeType: 'application/json',
           extensions: {
             ...declareDiscoveryExtension({
@@ -2916,7 +2916,7 @@ app.use(
         },
         'GET /api/premium/kimchi/stats': {
           accepts: { scheme: 'exact', price: '$0.15', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Kimchi Stats — comprehensive kimchi premium analysis combining current premiums, 24h trend, top arbitrage opportunity with EXECUTE/WAIT/SKIP signal, and cross-exchange spread. One call replaces 3+ individual endpoints.',
+          description: 'Route Spread Stats — comprehensive route spread analysis combining current premiums, 24h trend, top arbitrage opportunity with EXECUTE/WAIT/SKIP signal, and cross-exchange spread. One call replaces 3+ individual endpoints.',
           mimeType: 'application/json',
           extensions: {
             ...declareDiscoveryExtension({
@@ -3053,9 +3053,9 @@ type CrossfinRuntimeDocs = {
 const CROSSFIN_RUNTIME_DOCS: Record<string, CrossfinRuntimeDocs> = {
   crossfin_kimchi_premium: {
     guide: {
-      whatItDoes: 'Real-time Kimchi Premium index: price spread between Korean exchange (Bithumb) and global exchange (Binance) across 10+ pairs.',
+      whatItDoes: 'Real-time Route Spread index: price spread between Korean exchange (Bithumb) and global exchange (Binance) across 10+ pairs.',
       whenToUse: [
-        'Detect Korea-vs-global mispricing (kimchi premium) in real time',
+        'Detect Korea-vs-global mispricing (route spread) in real time',
         'Build Korea market sentiment signals or arbitrage monitors',
         'Use as an input feature for trading/risk models',
       ],
@@ -3096,9 +3096,9 @@ const CROSSFIN_RUNTIME_DOCS: Record<string, CrossfinRuntimeDocs> = {
   },
   crossfin_kimchi_premium_history: {
     guide: {
-      whatItDoes: 'Hourly historical snapshots of kimchi premium captured by CrossFin cron (up to 7 days lookback).',
+      whatItDoes: 'Hourly historical snapshots of route spread captured by CrossFin cron (up to 7 days lookback).',
       whenToUse: [
-        'Backtest kimchi premium strategies',
+        'Backtest route spread strategies',
         'Compute moving averages/volatility of premium',
         'Compare premium regimes across coins',
       ],
@@ -3134,7 +3134,7 @@ const CROSSFIN_RUNTIME_DOCS: Record<string, CrossfinRuntimeDocs> = {
     guide: {
       whatItDoes: 'AI-ready arbitrage decision service. Analyzes Korean vs global exchange prices, estimates slippage from live orderbooks, checks premium trends, and returns actionable EXECUTE/WAIT/SKIP recommendations with confidence scores.',
       whenToUse: [
-        'Get instant EXECUTE/WAIT/SKIP decisions for kimchi premium arbitrage',
+        'Get instant EXECUTE/WAIT/SKIP decisions for route spread arbitrage',
         'Build autonomous trading agents that act on confidence scores',
         'Monitor market conditions (favorable/neutral/unfavorable) for timing entry',
         'Estimate real execution costs including slippage and transfer time risk',
@@ -7671,7 +7671,7 @@ function calcPremiums(
   return premiums.sort((a, b) => Math.abs(b.premiumPct) - Math.abs(a.premiumPct))
 }
 
-// === Kimchi Premium (paid $0.05) ===
+// === Route Spread (paid $0.05) ===
 
 app.get('/api/premium/arbitrage/kimchi', async (c) => {
   const [bithumbData, binancePrices, krwRate] = await Promise.all([
@@ -9784,7 +9784,7 @@ app.get('/api/premium/market/cross-exchange', async (c) => {
   })
 })
 
-// === Free Demo — delayed kimchi premium (no paywall) ===
+// === Free Demo — delayed route spread (no paywall) ===
 
 async function getArbitrageDemoPayload(db: D1Database): Promise<Record<string, unknown>> {
   const buildPreview = (rows: Array<{ coin: string; premiumPct: number }>) =>
@@ -12253,7 +12253,7 @@ app.all('/api/mcp', async (c) => {
 
   const LOCAL_ONLY = { content: [{ type: 'text' as const, text: 'This tool requires local installation. Run: npx crossfin-mcp (set EVM_PRIVATE_KEY for paid tools). See: https://crossfin.dev/api/docs/guide' }] }
 
-  server.registerTool('get_kimchi_premium', { description: 'Free preview of Kimchi Premium — real-time price spread between Korean and global crypto exchanges (top 3 pairs)', inputSchema: z.object({}) }, async () => proxy('/api/arbitrage/demo'))
+  server.registerTool('get_kimchi_premium', { description: 'Free preview of Route Spread — real-time price spread between Korean and global crypto exchanges (top 3 pairs)', inputSchema: z.object({}) }, async () => proxy('/api/arbitrage/demo'))
   server.registerTool('list_exchange_fees', { description: 'Trading fees, withdrawal fees, and transfer times for all supported exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit)', inputSchema: z.object({}) }, async () => proxy('/api/route/fees'))
   server.registerTool('compare_exchange_prices', { description: 'Compare Bithumb KRW prices vs Binance USD prices for tracked coins with transfer-time estimates', inputSchema: z.object({ coin: z.string().optional().describe('Coin symbol (e.g. BTC, XRP). Omit for all.') }) }, async ({ coin }) => {
     const qs = coin?.trim() ? `?coin=${encodeURIComponent(coin.trim().toUpperCase())}` : ''

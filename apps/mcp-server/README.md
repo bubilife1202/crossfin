@@ -29,7 +29,7 @@ npx -y crossfin-mcp
 ## What your agent can do
 
 - **"빗썸에서 바이낸스로 500만원 USDC 만들려면?"** → `find_optimal_route` evaluates 11 bridge coins, returns cheapest path
-- **"김치 프리미엄 얼마야?"** → `get_kimchi_premium` returns real-time spread across 11 pairs
+- **"한국-글로벌 스프레드 얼마야?"** → `get_kimchi_premium` returns real-time spread across 11 pairs
 - **"거래소별 XRP 가격 비교해줘"** → `compare_exchange_prices` checks 4 Korean exchanges
 - **"한국 시장 브리핑해줘"** → `call_paid_service` calls Morning Brief bundle
 

@@ -15,7 +15,7 @@ Base URL: `https://crossfin.dev` — 9 exchanges: Bithumb, Upbit, Coinone, GoPax
 
 ---
 
-## 2. Arbitrage & Route Spread (Kimchi Index)
+## 2. Arbitrage & Route Spread Index
 
 <ApiTable :endpoints="[
   { method: 'GET', path: '/api/arbitrage/demo', description: 'Top-3 decisions (EXECUTE/WAIT/SKIP)', price: 'Free' },
