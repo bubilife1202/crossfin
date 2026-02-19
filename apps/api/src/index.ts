@@ -736,11 +736,14 @@ app.get('/api/docs/guide', (c) => {
       { path: '/api/stats', description: 'Public-safe summary (sensitive counts redacted)' },
       { path: '/api/openapi.json', description: 'OpenAPI 3.1 specification' },
       { path: '/api/docs/guide', description: 'This guide' },
+      { path: '/.well-known/crossfin.json', description: 'CrossFin discovery metadata for agents' },
+      { path: '/.well-known/x402.json', description: 'x402 discovery metadata (payment/network/endpoints)' },
       { path: '/api/route/exchanges', description: 'List supported exchanges with trading fees and supported coins' },
       { path: '/api/route/fees', description: 'Fee comparison table — trading + withdrawal fees for all exchanges' },
       { path: '/api/route/fees?coin=KAIA', description: 'Fee comparison for a specific coin' },
       { path: '/api/route/pairs', description: 'All supported trading pairs with live Binance prices' },
       { path: '/api/route/status', description: 'Exchange API health check (online/offline per exchange)' },
+      { path: '/api/routing/optimal', description: 'Free live routing endpoint for RouteGraph (orderbook/slippage + real fee table)' },
       { path: '/api/acp/status', description: 'ACP protocol capabilities and supported exchanges' },
       { path: 'POST /api/acp/quote', description: 'Request a free routing quote (ACP-compatible, preview-only)' },
       { path: 'POST /api/acp/execute', description: 'Start tracked execution (step-level orchestration simulation)' },
@@ -837,6 +840,7 @@ app.get('/api/docs/guide', (c) => {
         { path: '/api/route/fees', description: 'Full fee comparison table (add ?coin=KAIA to filter)' },
         { path: '/api/route/pairs', description: 'All trading pairs with live Binance prices' },
         { path: '/api/route/status', description: 'Exchange API health check' },
+        { path: '/api/routing/optimal?from=bithumb:KRW&to=binance:USDC&amount=1000000', description: 'Live optimal route + alternatives + D1 fee table (free, RouteGraph)' },
       ],
       paidEndpoint: { path: '/api/premium/route/find', price: '$0.10', description: 'Full route analysis with step-by-step execution plan' },
       examples: {
@@ -1671,6 +1675,25 @@ app.get('/api/openapi.json', (c) => {
             '200': { description: 'Optimal route', content: { 'application/json': { schema: { type: 'object' } } } },
             '400': { description: 'Invalid query parameters' },
             '402': { description: 'Payment required — $0.10 USDC on Base mainnet' },
+          },
+        },
+      },
+
+      '/api/routing/optimal': {
+        get: {
+          operationId: 'routeFindOptimalFree',
+          summary: 'Free live optimal route for RouteGraph',
+          description: 'Free routing endpoint used by the dashboard RouteGraph. Returns live optimal route, alternatives, route meta, and per-exchange trading/withdrawal fees from D1.',
+          tags: ['Routing'],
+          parameters: [
+            { name: 'from', in: 'query', required: false, description: 'Source (exchange:currency). Default: bithumb:KRW', schema: { type: 'string', default: 'bithumb:KRW' } },
+            { name: 'to', in: 'query', required: false, description: 'Destination (exchange:currency). Default: binance:USDC', schema: { type: 'string', default: 'binance:USDC' } },
+            { name: 'amount', in: 'query', required: false, description: 'Amount in source currency. Default: 1000000', schema: { type: 'number', default: 1000000 } },
+            { name: 'strategy', in: 'query', required: false, description: 'Routing strategy', schema: { type: 'string', enum: ['cheapest', 'fastest', 'balanced'], default: 'cheapest' } },
+          ],
+          responses: {
+            '200': { description: 'Live route + real fee table', content: { 'application/json': { schema: { type: 'object' } } } },
+            '400': { description: 'Invalid query parameters' },
           },
         },
       },
@@ -10156,6 +10179,56 @@ app.get('/api/stats', async (c) => {
 // ============================================================
 // ROUTING ENGINE — API Endpoints (MUST be before app.route('/api', api) to avoid agentAuth)
 // ============================================================
+
+app.get('/api/routing/optimal', async (c) => {
+  const fromRaw = c.req.query('from') ?? 'bithumb:KRW'
+  const toRaw = c.req.query('to') ?? 'binance:USDC'
+  const amountRaw = c.req.query('amount') ?? '1000000'
+  const strategyRaw = c.req.query('strategy') ?? 'cheapest'
+
+  const [fromExchange, fromCurrency] = fromRaw.split(':')
+  const [toExchange, toCurrency] = toRaw.split(':')
+  if (!fromExchange || !fromCurrency || !toExchange || !toCurrency) {
+    throw new HTTPException(400, { message: 'Format: exchange:currency (e.g., bithumb:KRW, binance:USDC)' })
+  }
+
+  const fromEx = fromExchange.toLowerCase()
+  const toEx = toExchange.toLowerCase()
+  const supported = ROUTING_EXCHANGES.join(', ')
+  if (!ROUTING_EXCHANGES.includes(fromEx as RoutingExchange)) {
+    throw new HTTPException(400, { message: `Unsupported from exchange: ${fromEx}. Supported: ${supported}` })
+  }
+  if (!ROUTING_EXCHANGES.includes(toEx as RoutingExchange)) {
+    throw new HTTPException(400, { message: `Unsupported to exchange: ${toEx}. Supported: ${supported}` })
+  }
+
+  const amount = Number(amountRaw)
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new HTTPException(400, { message: 'amount must be a positive number' })
+  }
+
+  const strategy = (['cheapest', 'fastest', 'balanced'].includes(strategyRaw) ? strategyRaw : 'cheapest') as RoutingStrategy
+
+  const [routing, tradingFees, withdrawalFees] = await Promise.all([
+    findOptimalRoute(fromEx, fromCurrency, toEx, toCurrency, amount, strategy, c.env.DB),
+    getExchangeTradingFees(c.env.DB),
+    getExchangeWithdrawalFees(c.env.DB),
+  ])
+
+  return c.json({
+    service: 'crossfin-routing-optimal',
+    source: 'live-orderbook-and-d1-fees',
+    request: { from: `${fromEx}:${fromCurrency.toUpperCase()}`, to: `${toEx}:${toCurrency.toUpperCase()}`, amount, strategy },
+    optimal: routing.optimal,
+    alternatives: routing.alternatives,
+    meta: routing.meta,
+    fees: {
+      trading: tradingFees,
+      withdrawal: withdrawalFees,
+    },
+    at: new Date().toISOString(),
+  })
+})
 
 // GET /api/premium/route/find — Main routing endpoint (paid via x402, $0.10)
 app.get('/api/premium/route/find', async (c) => {

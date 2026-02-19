@@ -1,305 +1,307 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-// ── Types ──
-type Node = {
+type RoutingStrategy = 'cheapest' | 'fastest' | 'balanced'
+
+type RouteStep = {
+  type: 'buy' | 'sell' | 'transfer'
+  from: { exchange: string; currency: string }
+  to: { exchange: string; currency: string }
+  estimatedCost: {
+    feePct: number
+    feeAbsolute: number
+    slippagePct: number
+    timeMinutes: number
+  }
+  amountIn: number
+  amountOut: number
+}
+
+type Route = {
+  bridgeCoin: string
+  steps: RouteStep[]
+  totalCostPct: number
+  totalTimeMinutes: number
+  estimatedInput: number
+  estimatedOutput: number
+  action: 'EXECUTE' | 'WAIT' | 'SKIP'
+  confidence: number
+  reason: string
+}
+
+type RouteMeta = {
+  routesEvaluated: number
+  bridgeCoinsTotal: number
+  evaluatedCoins?: string[]
+  skippedCoins?: string[]
+  priceAge?: {
+    globalPrices?: { ageMs: number; source: string; cacheTtlMs: number }
+    koreanPrices?: { source: string }
+  }
+  feesSource?: 'd1' | 'hardcoded-fallback'
+  dataFreshness?: 'live' | 'cached' | 'stale'
+}
+
+type RoutingResponse = {
+  request: {
+    from: string
+    to: string
+    amount: number
+    strategy: RoutingStrategy
+  }
+  optimal: Route | null
+  alternatives: Route[]
+  meta: RouteMeta
+  fees: {
+    trading: Record<string, number>
+    withdrawal: Record<string, Record<string, number>>
+  }
+  at: string
+}
+
+type GraphNode = {
   id: string
   label: string
   x: number
   y: number
   type: 'source' | 'coin' | 'dest'
-  color: string
 }
 
-type Edge = {
+type GraphEdge = {
   from: string
   to: string
-  cost: number          // total cost in USD
-  label: string         // e.g. "BTC via ETH"
-  breakdown: string     // fee breakdown
-  isOptimal?: boolean
-  explored?: boolean
+  cost: number
+  isOptimal: boolean
 }
 
-type RouteResult = {
-  path: string[]
-  totalCost: number
-  savings: number
-  steps: string[]
-}
+const API_BASE = ((import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || 'https://crossfin.dev').replace(/\/$/, '')
 
-// ── Colors ──
 const C = {
   bg: '#0B0F1E',
   card: '#141B2D',
   accent: '#00C2FF',
   green: '#00E68A',
   gold: '#FFB800',
-  red: '#FF5252',
   white: '#FFFFFF',
   muted: '#7B8794',
   dim: '#384152',
 }
 
-// ── Exchange & Coin Data ──
-const KR_EXCHANGES = ['Upbit', 'Bithumb', 'Coinone', 'Gopax']
-const INTL_EXCHANGES = ['Binance', 'OKX', 'Bybit']
-const COINS = ['BTC', 'ETH', 'XRP', 'USDT', 'SOL']
-
-// ── Simulated Cost Data ──
-function generateRoutes(): Edge[] {
-  const edges: Edge[] = []
-  const random = (min: number, max: number) => Math.random() * (max - min) + min
-
-  KR_EXCHANGES.forEach(kr => {
-    COINS.forEach(coin => {
-      // KR exchange → coin node
-      const tradeFee = random(0.04, 0.25)
-      const withdrawFee = random(0.5, 8)
-      edges.push({
-        from: kr,
-        to: coin,
-        cost: tradeFee + withdrawFee,
-        label: `${tradeFee.toFixed(2)} + ${withdrawFee.toFixed(1)}`,
-        breakdown: `거래 $${tradeFee.toFixed(2)} + 출금 $${withdrawFee.toFixed(1)}`,
-      })
-
-      INTL_EXCHANGES.forEach(intl => {
-        // coin node → intl exchange
-        const networkFee = random(0.1, 5)
-        const slippage = random(0.05, 1.5)
-        const fxSpread = random(0.1, 0.8)
-        edges.push({
-          from: coin,
-          to: intl,
-          cost: networkFee + slippage + fxSpread,
-          label: `${(networkFee + slippage + fxSpread).toFixed(2)}`,
-          breakdown: `네트워크 $${networkFee.toFixed(2)} + 슬리피지 $${slippage.toFixed(2)} + 환율 $${fxSpread.toFixed(2)}`,
-        })
-      })
-    })
-  })
-  return edges
+const EXCHANGE_LABELS: Record<string, string> = {
+  bithumb: 'Bithumb',
+  upbit: 'Upbit',
+  coinone: 'Coinone',
+  gopax: 'GoPax',
+  binance: 'Binance',
+  okx: 'OKX',
+  bybit: 'Bybit',
 }
 
-function findOptimalRoute(edges: Edge[]): RouteResult {
-  let best: { path: string[], cost: number, steps: string[] } | null = null
+const ENDPOINT_OPTIONS = [
+  { value: 'bithumb:KRW', label: 'Bithumb:KRW' },
+  { value: 'upbit:KRW', label: 'Upbit:KRW' },
+  { value: 'coinone:KRW', label: 'Coinone:KRW' },
+  { value: 'gopax:KRW', label: 'GoPax:KRW' },
+  { value: 'binance:USDC', label: 'Binance:USDC' },
+  { value: 'okx:USDC', label: 'OKX:USDC' },
+  { value: 'bybit:USDC', label: 'Bybit:USDC' },
+] as const
 
-  KR_EXCHANGES.forEach(kr => {
-    COINS.forEach(coin => {
-      INTL_EXCHANGES.forEach(intl => {
-        const leg1 = edges.find(e => e.from === kr && e.to === coin)
-        const leg2 = edges.find(e => e.from === coin && e.to === intl)
-        if (leg1 && leg2) {
-          const total = leg1.cost + leg2.cost
-          if (!best || total < best.cost) {
-            best = {
-              path: [kr, coin, intl],
-              cost: total,
-              steps: [leg1.breakdown, leg2.breakdown],
-            }
-          }
+function formatExchange(exchange: string): string {
+  const key = exchange.trim().toLowerCase()
+  return EXCHANGE_LABELS[key] ?? exchange.trim()
+}
+
+function sumStepFees(steps: RouteStep[], type: RouteStep['type']): number {
+  return steps.filter((s) => s.type === type).reduce((sum, s) => sum + (Number.isFinite(s.estimatedCost.feeAbsolute) ? s.estimatedCost.feeAbsolute : 0), 0)
+}
+
+function parseExchange(endpoint: string): string {
+  const [exchange] = endpoint.split(':')
+  return (exchange ?? '').toLowerCase()
+}
+
+function toUsd(value: number): string {
+  return `$${value.toFixed(2)}`
+}
+
+export default function RouteGraph() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [from, setFrom] = useState<string>('bithumb:KRW')
+  const [to, setTo] = useState<string>('binance:USDC')
+  const [amountInput, setAmountInput] = useState<string>('1000000')
+  const [strategy, setStrategy] = useState<RoutingStrategy>('cheapest')
+  const [loading, setLoading] = useState<boolean>(false)
+  const [error, setError] = useState<string | null>(null)
+  const [data, setData] = useState<RoutingResponse | null>(null)
+
+  const loadRoute = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+
+    const amount = Number(amountInput)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError('Amount must be a positive number')
+      setLoading(false)
+      return
+    }
+
+    try {
+      const params = new URLSearchParams({ from, to, amount: String(amount), strategy })
+      const res = await fetch(`${API_BASE}/api/routing/optimal?${params.toString()}`)
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`routing_fetch_failed:${res.status} ${text.slice(0, 120)}`)
+      }
+      const json = await res.json() as RoutingResponse
+      setData(json)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to fetch route data')
+      setData(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [amountInput, from, strategy, to])
+
+  useEffect(() => {
+    void loadRoute()
+  }, [loadRoute])
+
+  const graph = useMemo(() => {
+    const fromEx = parseExchange(data?.request.from ?? from)
+    const toEx = parseExchange(data?.request.to ?? to)
+
+    const routePool = [data?.optimal, ...(data?.alternatives ?? [])].filter((r): r is Route => Boolean(r))
+    const coinSet = new Set(routePool.map((r) => r.bridgeCoin.toUpperCase()))
+    const coins = Array.from(coinSet)
+
+    const coinCount = Math.max(1, coins.length)
+    const gap = coinCount === 1 ? 0 : Math.max(28, Math.min(64, 300 / (coinCount - 1)))
+    const startY = coinCount === 1 ? 205 : 70
+
+    const nodes: GraphNode[] = [
+      { id: fromEx, label: formatExchange(fromEx), x: 90, y: 205, type: 'source' },
+      ...coins.map((coin, idx) => ({
+        id: coin,
+        label: coin,
+        x: 390,
+        y: startY + idx * gap,
+        type: 'coin' as const,
+      })),
+      { id: toEx, label: formatExchange(toEx), x: 690, y: 205, type: 'dest' },
+    ]
+
+    const byKey = new Map<string, GraphEdge>()
+
+    routePool.forEach((route, idx) => {
+      const isOptimal = idx === 0 && Boolean(data?.optimal)
+      const coin = route.bridgeCoin.toUpperCase()
+      const buyFee = sumStepFees(route.steps, 'buy')
+      const transferAndSell = sumStepFees(route.steps, 'transfer') + sumStepFees(route.steps, 'sell')
+
+      const edgeA: GraphEdge = { from: fromEx, to: coin, cost: buyFee, isOptimal }
+      const edgeB: GraphEdge = { from: coin, to: toEx, cost: transferAndSell, isOptimal }
+
+      ;[edgeA, edgeB].forEach((edge) => {
+        const key = `${edge.from}->${edge.to}`
+        const prev = byKey.get(key)
+        if (!prev) {
+          byKey.set(key, edge)
+          return
+        }
+        if (!prev.isOptimal && edge.isOptimal) {
+          byKey.set(key, edge)
+          return
+        }
+        if (prev.isOptimal === edge.isOptimal && edge.cost < prev.cost) {
+          byKey.set(key, edge)
         }
       })
     })
-  })
 
-  // Find worst route for savings comparison
-  let worst = 0
-  KR_EXCHANGES.forEach(kr => {
-    COINS.forEach(coin => {
-      INTL_EXCHANGES.forEach(intl => {
-        const leg1 = edges.find(e => e.from === kr && e.to === coin)
-        const leg2 = edges.find(e => e.from === coin && e.to === intl)
-        if (leg1 && leg2) worst = Math.max(worst, leg1.cost + leg2.cost)
-      })
-    })
-  })
+    return { nodes, edges: Array.from(byKey.values()), fromEx, toEx }
+  }, [data, from, to])
 
-  return {
-    path: best!.path,
-    totalCost: best!.cost,
-    savings: worst - best!.cost,
-    steps: best!.steps,
-  }
-}
-
-// ── Component ──
-export default function RouteGraph() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [edges, setEdges] = useState<Edge[]>([])
-  const [result, setResult] = useState<RouteResult | null>(null)
-  const [phase, setPhase] = useState<'idle' | 'scanning' | 'calculating' | 'done'>('idle')
-  const [exploredCount, setExploredCount] = useState(0)
-  const [hoveredEdge, setHoveredEdge] = useState<Edge | null>(null)
-  const animFrameRef = useRef<number>(0)
-
-  // Build node layout
-  const nodes: Node[] = [
-    ...KR_EXCHANGES.map((ex, i) => ({
-      id: ex, label: ex, x: 80,
-      y: 80 + i * 90,
-      type: 'source' as const, color: C.accent,
-    })),
-    ...COINS.map((coin, i) => ({
-      id: coin, label: coin, x: 380,
-      y: 60 + i * 72,
-      type: 'coin' as const, color: C.gold,
-    })),
-    ...INTL_EXCHANGES.map((ex, i) => ({
-      id: ex, label: ex, x: 680,
-      y: 100 + i * 110,
-      type: 'dest' as const, color: C.green,
-    })),
-  ]
-
-  const getNode = useCallback((id: string) => nodes.find(n => n.id === id)!, [])
-
-  // Draw canvas
-  const draw = useCallback(() => {
+  useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    const width = 800
+    const height = 440
     const dpr = window.devicePixelRatio || 1
-    canvas.width = 800 * dpr
-    canvas.height = 440 * dpr
+    canvas.width = width * dpr
+    canvas.height = height * dpr
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.scale(dpr, dpr)
 
-    // Background
     ctx.fillStyle = C.bg
-    ctx.fillRect(0, 0, 800, 440)
+    ctx.fillRect(0, 0, width, height)
 
-    // Column labels
     ctx.font = 'bold 11px sans-serif'
     ctx.textAlign = 'center'
     ctx.fillStyle = C.muted
-    ctx.fillText('한국 거래소', 80, 30)
-    ctx.fillText('코인 / 체인', 380, 30)
-    ctx.fillText('해외 거래소', 680, 30)
+    ctx.fillText('From Exchange', 90, 28)
+    ctx.fillText('Bridge Coin', 390, 28)
+    ctx.fillText('To Exchange', 690, 28)
 
-    // Draw edges
-    edges.forEach(edge => {
-      const from = getNode(edge.from)
-      const to = getNode(edge.to)
-      if (!from || !to) return
+    const nodeById = new Map(graph.nodes.map((n) => [n.id, n]))
+
+    graph.edges.forEach((edge) => {
+      const n1 = nodeById.get(edge.from)
+      const n2 = nodeById.get(edge.to)
+      if (!n1 || !n2) return
+
+      const x1 = n1.x + (n1.type === 'source' ? 55 : 34)
+      const y1 = n1.y + 18
+      const x2 = n2.x - (n2.type === 'dest' ? 55 : 34)
+      const y2 = n2.y + 18
 
       ctx.beginPath()
-      ctx.moveTo(from.x + 50, from.y + 18)
-      ctx.lineTo(to.x - 50, to.y + 18)
-
-      if (edge.isOptimal) {
-        ctx.strokeStyle = C.green
-        ctx.lineWidth = 3
-        ctx.setLineDash([])
-      } else if (edge.explored) {
-        ctx.strokeStyle = C.dim
-        ctx.lineWidth = 1
-        ctx.setLineDash([4, 4])
-      } else {
-        ctx.strokeStyle = '#1a1f30'
-        ctx.lineWidth = 0.5
-        ctx.setLineDash([2, 6])
-      }
+      ctx.moveTo(x1, y1)
+      ctx.lineTo(x2, y2)
+      ctx.strokeStyle = edge.isOptimal ? C.green : C.dim
+      ctx.lineWidth = edge.isOptimal ? 3 : 1
+      if (!edge.isOptimal) ctx.setLineDash([4, 4])
       ctx.stroke()
       ctx.setLineDash([])
 
-      // Cost label on explored/optimal edges
-      if (edge.explored || edge.isOptimal) {
-        const mx = (from.x + 50 + to.x - 50) / 2
-        const my = (from.y + to.y) / 2 + 18
-        ctx.font = '9px sans-serif'
-        ctx.textAlign = 'center'
-        ctx.fillStyle = edge.isOptimal ? C.green : C.muted
-        ctx.fillText(`$${edge.cost.toFixed(1)}`, mx, my - 2)
-      }
+      const mx = (x1 + x2) / 2
+      const my = (y1 + y2) / 2
+      ctx.font = '10px sans-serif'
+      ctx.fillStyle = edge.isOptimal ? C.green : C.muted
+      ctx.fillText(toUsd(edge.cost), mx, my - 4)
     })
 
-    // Draw nodes
-    nodes.forEach(node => {
-      const isOnPath = result?.path.includes(node.id)
-      const w = node.type === 'coin' ? 60 : 100
+    graph.nodes.forEach((node) => {
+      const w = node.type === 'coin' ? 68 : 110
       const h = 36
+      const isPathNode = (data?.optimal?.bridgeCoin?.toUpperCase() === node.id) ||
+        node.id === graph.fromEx ||
+        node.id === graph.toEx
 
-      // Node box
-      ctx.fillStyle = isOnPath ? node.color + '33' : C.card
-      ctx.strokeStyle = isOnPath ? node.color : C.dim
-      ctx.lineWidth = isOnPath ? 2 : 1
+      const color = node.type === 'source' ? C.accent : node.type === 'coin' ? C.gold : C.green
+
+      ctx.fillStyle = isPathNode ? `${color}33` : C.card
+      ctx.strokeStyle = isPathNode ? color : C.dim
+      ctx.lineWidth = isPathNode ? 2 : 1
       ctx.beginPath()
-      ctx.roundRect(node.x - w / 2, node.y, w, h, 4)
+      ctx.roundRect(node.x - w / 2, node.y, w, h, 6)
       ctx.fill()
       ctx.stroke()
 
-      // Label
-      ctx.font = isOnPath ? 'bold 12px sans-serif' : '11px sans-serif'
+      ctx.font = isPathNode ? 'bold 12px sans-serif' : '11px sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillStyle = isOnPath ? node.color : C.white
+      ctx.fillStyle = isPathNode ? color : C.white
       ctx.fillText(node.label, node.x, node.y + 22)
     })
+  }, [data, graph])
 
-    // Arrow heads on optimal path
-    if (result) {
-      for (let i = 0; i < result.path.length - 1; i++) {
-        const from = getNode(result.path[i])
-        const to = getNode(result.path[i + 1])
-        const toW = to.type === 'coin' ? 60 : 100
-        const ax = to.x - toW / 2 - 8
-        const ay = to.y + 18
-
-        ctx.fillStyle = C.green
-        ctx.beginPath()
-        ctx.moveTo(ax, ay - 5)
-        ctx.lineTo(ax + 8, ay)
-        ctx.lineTo(ax, ay + 5)
-        ctx.fill()
-      }
-    }
-  }, [edges, result, nodes, getNode])
-
-  useEffect(() => { draw() }, [draw, phase, exploredCount])
-
-  // Animation: simulate route scanning
-  const startScan = useCallback(() => {
-    const newEdges = generateRoutes()
-    setEdges(newEdges)
-    setResult(null)
-    setPhase('scanning')
-    setExploredCount(0)
-
-    let idx = 0
-    const scanInterval = setInterval(() => {
-      if (idx < newEdges.length) {
-        newEdges[idx].explored = true
-        setExploredCount(prev => prev + 1)
-        setEdges([...newEdges])
-        idx++
-      } else {
-        clearInterval(scanInterval)
-        setPhase('calculating')
-
-        // Short delay then show result
-        setTimeout(() => {
-          const optimal = findOptimalRoute(newEdges)
-
-          // Mark optimal edges
-          for (let i = 0; i < optimal.path.length - 1; i++) {
-            const edge = newEdges.find(
-              e => e.from === optimal.path[i] && e.to === optimal.path[i + 1]
-            )
-            if (edge) edge.isOptimal = true
-          }
-
-          setEdges([...newEdges])
-          setResult(optimal)
-          setPhase('done')
-        }, 800)
-      }
-    }, 30)
-
-    return () => clearInterval(scanInterval)
-  }, [])
-
-  const totalRoutes = KR_EXCHANGES.length * COINS.length * INTL_EXCHANGES.length
+  const optimal = data?.optimal ?? null
+  const alternatives = data?.alternatives ?? []
+  const tradingFees = data?.fees.trading ?? {}
+  const optimalCoin = optimal?.bridgeCoin?.toUpperCase() ?? null
+  const withdrawalByExchange = data?.fees.withdrawal ?? {}
 
   return (
     <div style={{
@@ -311,114 +313,125 @@ export default function RouteGraph() {
       margin: '0 auto',
       fontFamily: "'Noto Sans KR', sans-serif",
     }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h3 style={{ color: C.white, fontSize: 18, margin: 0 }}>
-            CrossFin Routing Engine
-          </h3>
+          <h3 style={{ color: C.white, fontSize: 18, margin: 0 }}>CrossFin RouteGraph (Live)</h3>
           <p style={{ color: C.muted, fontSize: 12, margin: '4px 0 0' }}>
-            {totalRoutes}개 경로 실시간 비교 · 5가지 비용 합산 · 최적 경로 탐색
+            Real orderbook/slippage route data + D1 fee table
           </p>
         </div>
         <button
-          onClick={startScan}
-          disabled={phase === 'scanning' || phase === 'calculating'}
+          type="button"
+          onClick={() => void loadRoute()}
+          disabled={loading}
           style={{
-            background: phase === 'done' ? C.green : C.accent,
+            background: loading ? C.dim : C.accent,
             color: C.bg,
             border: 'none',
-            padding: '8px 20px',
-            borderRadius: 4,
-            fontWeight: 'bold',
-            fontSize: 13,
-            cursor: phase === 'scanning' || phase === 'calculating' ? 'not-allowed' : 'pointer',
-            opacity: phase === 'scanning' || phase === 'calculating' ? 0.5 : 1,
+            padding: '8px 18px',
+            borderRadius: 6,
+            fontWeight: 700,
+            cursor: loading ? 'not-allowed' : 'pointer',
           }}
         >
-          {phase === 'idle' ? '경로 탐색 시작' :
-           phase === 'scanning' ? `스캔 중... ${exploredCount}/${edges.length}` :
-           phase === 'calculating' ? '최적 경로 계산 중...' :
-           '다시 탐색'}
+          {loading ? 'Loading...' : 'Refresh Live Route'}
         </button>
       </div>
 
-      {/* Status bar */}
-      {phase !== 'idle' && (
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
+        <select value={from} onChange={(e) => setFrom(e.target.value)}>
+          {ENDPOINT_OPTIONS.map((opt) => <option key={`from-${opt.value}`} value={opt.value}>{opt.label}</option>)}
+        </select>
+        <select value={to} onChange={(e) => setTo(e.target.value)}>
+          {ENDPOINT_OPTIONS.map((opt) => <option key={`to-${opt.value}`} value={opt.value}>{opt.label}</option>)}
+        </select>
+        <input value={amountInput} onChange={(e) => setAmountInput(e.target.value)} placeholder="amount" />
+        <select value={strategy} onChange={(e) => setStrategy(e.target.value as RoutingStrategy)}>
+          <option value="cheapest">cheapest</option>
+          <option value="fastest">fastest</option>
+          <option value="balanced">balanced</option>
+        </select>
+      </div>
+
+      {error && (
         <div style={{
-          display: 'flex', gap: 16, marginBottom: 12,
-          padding: '8px 12px', background: C.card, borderRadius: 4,
+          marginBottom: 10,
+          padding: '8px 10px',
+          background: '#2D1010',
+          border: '1px solid #5B1F1F',
+          color: '#FFB4B4',
+          borderRadius: 6,
+          fontSize: 12,
         }}>
-          <span style={{ fontSize: 11, color: C.muted }}>
-            거래소: <b style={{ color: C.accent }}>{KR_EXCHANGES.length + INTL_EXCHANGES.length}</b>
-          </span>
-          <span style={{ fontSize: 11, color: C.muted }}>
-            코인: <b style={{ color: C.gold }}>{COINS.length}</b>
-          </span>
-          <span style={{ fontSize: 11, color: C.muted }}>
-            전체 경로: <b style={{ color: C.white }}>{totalRoutes}</b>
-          </span>
-          <span style={{ fontSize: 11, color: C.muted }}>
-            탐색 완료: <b style={{ color: phase === 'done' ? C.green : C.accent }}>
-              {phase === 'done' ? totalRoutes : Math.floor(exploredCount / 2)}
-            </b>
-          </span>
-          {result && (
-            <>
-              <span style={{ fontSize: 11, color: C.muted }}>
-                최적 비용: <b style={{ color: C.green }}>${result.totalCost.toFixed(2)}</b>
-              </span>
-              <span style={{ fontSize: 11, color: C.muted }}>
-                절약: <b style={{ color: C.gold }}>${result.savings.toFixed(2)}</b>
-              </span>
-            </>
-          )}
+          {error}
         </div>
       )}
 
-      {/* Canvas */}
-      <canvas
-        ref={canvasRef}
-        style={{ width: 800, height: 440, borderRadius: 4 }}
-      />
+      <canvas ref={canvasRef} style={{ width: 800, height: 440, borderRadius: 6 }} />
 
-      {/* Result panel */}
-      {result && phase === 'done' && (
-        <div style={{
-          marginTop: 12,
-          padding: 16,
-          background: C.card,
-          borderRadius: 4,
-          borderLeft: `3px solid ${C.green}`,
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 'bold', color: C.green, marginBottom: 8 }}>
-                최적 경로: {result.path.join(' → ')}
+      <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div style={{ background: C.card, border: `1px solid ${C.dim}`, borderRadius: 6, padding: 12 }}>
+          <div style={{ color: C.white, fontWeight: 700, marginBottom: 8 }}>Optimal</div>
+          {optimal ? (
+            <>
+              <div style={{ color: C.green, fontWeight: 700, marginBottom: 4 }}>
+                {formatExchange(parseExchange(data?.request.from ?? from))}
+                {' -> '}
+                {optimal.bridgeCoin.toUpperCase()}
+                {' -> '}
+                {formatExchange(parseExchange(data?.request.to ?? to))}
               </div>
-              {result.steps.map((step, i) => (
-                <div key={i} style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>
-                  Step {i + 1}: {step}
-                </div>
-              ))}
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 24, fontWeight: 'bold', color: C.green }}>
-                ${result.totalCost.toFixed(2)}
+              <div style={{ color: C.muted, fontSize: 12 }}>Cost: {optimal.totalCostPct.toFixed(2)}% | Time: ~{optimal.totalTimeMinutes}m</div>
+              <div style={{ color: C.muted, fontSize: 12 }}>Action: {optimal.action} ({(optimal.confidence * 100).toFixed(0)}%)</div>
+              <div style={{ color: C.white, fontSize: 12, marginTop: 6 }}>{optimal.reason}</div>
+            </>
+          ) : (
+            <div style={{ color: C.muted, fontSize: 12 }}>No route found</div>
+          )}
+        </div>
+
+        <div style={{ background: C.card, border: `1px solid ${C.dim}`, borderRadius: 6, padding: 12 }}>
+          <div style={{ color: C.white, fontWeight: 700, marginBottom: 8 }}>Route Data Freshness</div>
+          <div style={{ color: C.muted, fontSize: 12 }}>Evaluated routes: {data?.meta.routesEvaluated ?? 0}</div>
+          <div style={{ color: C.muted, fontSize: 12 }}>Global price source: {data?.meta.priceAge?.globalPrices?.source ?? 'n/a'}</div>
+          <div style={{ color: C.muted, fontSize: 12 }}>Price age: {data?.meta.priceAge?.globalPrices?.ageMs ?? 0}ms</div>
+          <div style={{ color: C.muted, fontSize: 12 }}>Data freshness: {data?.meta.dataFreshness ?? 'n/a'}</div>
+          <div style={{ color: C.muted, fontSize: 12 }}>Fees source: {data?.meta.feesSource ?? 'n/a'}</div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 10, background: C.card, border: `1px solid ${C.dim}`, borderRadius: 6, padding: 12 }}>
+        <div style={{ color: C.white, fontWeight: 700, marginBottom: 8 }}>Real Exchange Fees (D1)</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div>
+            <div style={{ color: C.gold, fontSize: 12, marginBottom: 6 }}>Trading Fees</div>
+            {Object.entries(tradingFees).map(([exchange, fee]) => (
+              <div key={`trade-${exchange}`} style={{ color: C.muted, fontSize: 12 }}>
+                {formatExchange(exchange)}: {(fee * 100).toFixed(2)}%
               </div>
-              <div style={{ fontSize: 11, color: C.muted }}>총 비용</div>
-              <div style={{ fontSize: 16, fontWeight: 'bold', color: C.gold, marginTop: 4 }}>
-                -${result.savings.toFixed(2)}
-              </div>
-              <div style={{ fontSize: 11, color: C.muted }}>최악 경로 대비 절약</div>
-            </div>
+            ))}
           </div>
-          <div style={{
-            marginTop: 12, paddingTop: 8, borderTop: `1px solid ${C.dim}`,
-            fontSize: 10, color: C.dim,
-          }}>
-            NOW: {totalRoutes}경로 전수비교 (brute-force) → SCALE: 수천 경로 그래프 알고리즘 라우팅 (Dijkstra + 유동성 가중치)
+          <div>
+            <div style={{ color: C.gold, fontSize: 12, marginBottom: 6 }}>
+              Withdrawal Fees {optimalCoin ? `(${optimalCoin})` : ''}
+            </div>
+            {Object.entries(withdrawalByExchange).map(([exchange, byCoin]) => (
+              <div key={`wd-${exchange}`} style={{ color: C.muted, fontSize: 12 }}>
+                {formatExchange(exchange)}: {optimalCoin && byCoin[optimalCoin] !== undefined ? byCoin[optimalCoin] : '-'}
+              </div>
+            ))}
           </div>
+        </div>
+      </div>
+
+      {alternatives.length > 0 && (
+        <div style={{ marginTop: 10, background: C.card, border: `1px solid ${C.dim}`, borderRadius: 6, padding: 12 }}>
+          <div style={{ color: C.white, fontWeight: 700, marginBottom: 8 }}>Alternatives</div>
+          {alternatives.slice(0, 4).map((alt, idx) => (
+            <div key={`${alt.bridgeCoin}-${idx}`} style={{ color: C.muted, fontSize: 12, marginBottom: 3 }}>
+              {alt.bridgeCoin.toUpperCase()}: {alt.totalCostPct.toFixed(2)}% | ~{alt.totalTimeMinutes}m | {alt.action}
+            </div>
+          ))}
         </div>
       )}
     </div>
