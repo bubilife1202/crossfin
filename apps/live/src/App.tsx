@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import "./App.css";
+import RouteGraph from "./components/RouteGraph";
 
 const API = "https://crossfin.dev";
 const REFRESH_INTERVAL = 15_000;
@@ -801,6 +802,13 @@ export default function App() {
               </div>
             </div>
           )}
+        </section>
+
+        {/* ═══════════════════════════════════════════════
+            SECTION 1.5: RouteGraph Visualization (Live)
+            ═══════════════════════════════════════════════ */}
+        <section className="panel">
+          <RouteGraph />
         </section>
 
         {/* ═══════════════════════════════════════════════
