@@ -8741,11 +8741,11 @@ app.get('/api/agents/:agentId/actions', async (c) => {
 const CROSSFIN_WALLET = '0xe4E79Ce6a1377C58f0Bb99D023908858A4DB5779'
 const USDC_BASE_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
 
-app.post('/api/deposits', async (c) => {
+app.post('/api/deposits', agentAuth, async (c) => {
   requireGuardianEnabled(c)
+  const agentId = c.get('agentId')
   const body = await c.req.json<{
     tx_hash: string
-    agent_id?: string
   }>()
 
   if (!body.tx_hash?.trim()) {
@@ -8756,10 +8756,13 @@ app.post('/api/deposits', async (c) => {
 
   // Check for duplicate
   const existing = await c.env.DB.prepare(
-    'SELECT id, status FROM deposits WHERE tx_hash = ?'
-  ).bind(txHash).first()
+    'SELECT id, status, agent_id FROM deposits WHERE tx_hash = ?'
+  ).bind(txHash).first<{ id: string; status: string; agent_id: string | null }>()
   if (existing) {
-    return c.json({ id: existing.id, status: existing.status, message: 'Deposit already processed' })
+    if (existing.agent_id === agentId) {
+      return c.json({ id: existing.id, status: existing.status, message: 'Deposit already processed' })
+    }
+    throw new HTTPException(409, { message: 'Transaction already claimed by another agent' })
   }
 
   // Verify on Basescan
@@ -8798,34 +8801,33 @@ app.post('/api/deposits', async (c) => {
   const depositId = crypto.randomUUID()
   await c.env.DB.prepare(
     "INSERT INTO deposits (id, agent_id, tx_hash, amount_usd, from_address, status, verified_at) VALUES (?, ?, ?, ?, ?, 'verified', datetime('now'))"
-  ).bind(depositId, body.agent_id ?? null, txHash, amountUsd, fromAddress).run()
+  ).bind(depositId, agentId, txHash, amountUsd, fromAddress).run()
 
-  // Credit agent wallet if agent_id provided
-  if (body.agent_id) {
-    const wallet = await c.env.DB.prepare(
-      'SELECT id, balance_cents FROM wallets WHERE agent_id = ? LIMIT 1'
-    ).bind(body.agent_id).first<{ id: string; balance_cents: number }>()
+  let credited = false
+  const wallet = await c.env.DB.prepare(
+    'SELECT id, balance_cents FROM wallets WHERE agent_id = ? LIMIT 1'
+  ).bind(agentId).first<{ id: string; balance_cents: number }>()
 
-    if (wallet) {
-      const creditCents = Math.round(amountUsd * 100)
-      await c.env.DB.prepare(
-        'UPDATE wallets SET balance_cents = balance_cents + ? WHERE id = ?'
-      ).bind(creditCents, wallet.id).run()
+  if (wallet) {
+    const creditCents = Math.round(amountUsd * 100)
+    await c.env.DB.prepare(
+      'UPDATE wallets SET balance_cents = balance_cents + ? WHERE id = ?'
+    ).bind(creditCents, wallet.id).run()
 
-      await c.env.DB.prepare(
-        "INSERT INTO transactions (id, to_wallet_id, amount_cents, rail, memo, status) VALUES (?, ?, ?, 'usdc_base', ?, 'completed')"
-      ).bind(crypto.randomUUID(), wallet.id, creditCents, `Deposit via ${txHash.slice(0, 10)}...`).run()
-    }
+    await c.env.DB.prepare(
+      "INSERT INTO transactions (id, to_wallet_id, amount_cents, rail, memo, status) VALUES (?, ?, ?, 'x402', ?, 'completed')"
+    ).bind(crypto.randomUUID(), wallet.id, creditCents, `Deposit via ${txHash.slice(0, 10)}...`).run()
+    credited = true
   }
 
-  await logAutonomousAction(c.env.DB, body.agent_id ?? null, 'DEPOSIT_VERIFY', null, 'EXECUTE', 1.0, amountUsd, null, {
+  await logAutonomousAction(c.env.DB, agentId, 'DEPOSIT_VERIFY', null, 'EXECUTE', 1.0, amountUsd, null, {
     txHash,
     amountUsd,
     fromAddress,
     basescan: `https://basescan.org/tx/${txHash}`,
   })
 
-  await audit(c.env.DB, body.agent_id ?? null, 'deposit.verify', 'deposits', depositId, 'success', `$${amountUsd.toFixed(2)} USDC from ${fromAddress.slice(0, 10)}...`)
+  await audit(c.env.DB, agentId, 'deposit.verify', 'deposits', depositId, 'success', `$${amountUsd.toFixed(2)} USDC from ${fromAddress.slice(0, 10)}...`)
 
   return c.json({
     id: depositId,
@@ -8834,7 +8836,7 @@ app.post('/api/deposits', async (c) => {
     fromAddress,
     txHash,
     basescan: `https://basescan.org/tx/${txHash}`,
-    credited: !!body.agent_id,
+    credited,
   }, 201)
 })
 
