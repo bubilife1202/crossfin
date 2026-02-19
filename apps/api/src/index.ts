@@ -115,6 +115,25 @@ function parseTelegramRouteCommand(text: string): {
   return { fromExchange, fromCurrency, toExchange, toCurrency, amount, strategy }
 }
 
+function parseTelegramCoinArgument(text: string): string | null {
+  const args = text.trim().split(/\s+/)
+  if (args.length < 2) return null
+
+  const raw = String(args[1] ?? '').trim().toUpperCase()
+  if (!raw) return null
+
+  const normalized = raw.replace(/[^A-Z0-9]/g, '')
+  return normalized || null
+}
+
+function isTrackedPairCoin(coin: string): boolean {
+  return Object.prototype.hasOwnProperty.call(TRACKED_PAIRS, coin)
+}
+
+function trackedPairCoinsCsv(): string {
+  return Object.keys(TRACKED_PAIRS).join(', ')
+}
+
 async function telegramSendMessage(
   botToken: string,
   chatId: string | number,
@@ -1611,6 +1630,7 @@ app.get('/api/openapi.json', (c) => {
           summary: 'Supported pairs with live prices',
           description: 'Free routing engine endpoint. Lists supported trading pairs with live prices used by the routing engine.',
           tags: ['Routing'],
+          parameters: [{ name: 'coin', in: 'query', required: false, description: 'Optional coin filter (e.g. BTC, XRP)', schema: { type: 'string' } }],
           responses: {
             '200': { description: 'Supported pairs', content: { 'application/json': { schema: { type: 'object' } } } },
           },
@@ -10080,7 +10100,7 @@ async function getRouteFeesPayload(db: D1Database, coinRaw: string | null | unde
   return { service: 'crossfin-route-fees', coin: coin ?? 'all', fees, at: new Date().toISOString() }
 }
 
-async function getRoutePairsPayload(db: D1Database): Promise<Record<string, unknown>> {
+async function getRoutePairsPayload(db: D1Database, coinRaw?: string | null): Promise<Record<string, unknown>> {
   const [bithumbResult, globalResult, krwResult] = await Promise.allSettled([
     fetchBithumbAll(), fetchGlobalPrices(db), fetchKrwRate(),
   ])
@@ -10088,20 +10108,37 @@ async function getRoutePairsPayload(db: D1Database): Promise<Record<string, unkn
   const globalPrices: Record<string, number> = globalResult.status === 'fulfilled' ? globalResult.value : {}
   const krwRate = krwResult.status === 'fulfilled' ? krwResult.value : 1450
 
-  const pairs = Object.entries(TRACKED_PAIRS).map(([coin, binanceSymbol]) => {
-    const bithumb = bithumbAll[coin]
+  const coin = coinRaw ? coinRaw.trim().toUpperCase() : ''
+  if (coin && !isTrackedPairCoin(coin)) {
+    throw new HTTPException(400, {
+      message: `Unsupported coin: ${coin}. Supported: ${trackedPairCoinsCsv()}`,
+    })
+  }
+
+  const pairEntries = coin
+    ? ([[coin, TRACKED_PAIRS[coin] as string]] as Array<[string, string]>)
+    : Object.entries(TRACKED_PAIRS)
+
+  const pairs = pairEntries.map(([coinName, binanceSymbol]) => {
+    const bithumb = bithumbAll[coinName]
     const binancePrice = globalPrices[binanceSymbol]
     return {
-      coin,
+      coin: coinName,
       binanceSymbol,
       bithumbKrw: bithumb?.closing_price ? parseFloat(bithumb.closing_price) : null,
       binanceUsd: binancePrice ?? null,
-      transferTimeMin: getTransferTime(coin),
-      bridgeSupported: BRIDGE_COINS.includes(coin as typeof BRIDGE_COINS[number]),
+      transferTimeMin: getTransferTime(coinName),
+      bridgeSupported: BRIDGE_COINS.includes(coinName as typeof BRIDGE_COINS[number]),
     }
   })
 
-  return { service: 'crossfin-route-pairs', krwUsdRate: krwRate, pairs, at: new Date().toISOString() }
+  return {
+    service: 'crossfin-route-pairs',
+    coin: coin || 'all',
+    krwUsdRate: krwRate,
+    pairs,
+    at: new Date().toISOString(),
+  }
 }
 
 async function checkRouteHttpOk(url: string, timeoutMs: number): Promise<boolean> {
@@ -10173,7 +10210,7 @@ app.get('/api/route/fees', async (c) => {
 
 // GET /api/route/pairs — Supported pairs with live prices (free)
 app.get('/api/route/pairs', async (c) => {
-  return c.json(await getRoutePairsPayload(c.env.DB))
+  return c.json(await getRoutePairsPayload(c.env.DB, c.req.query('coin')))
 })
 
 // GET /api/route/status — Exchange API health check (free)
@@ -10423,10 +10460,10 @@ app.post('/api/telegram/webhook', async (c) => {
   const helpText = [
     'CrossFin Bot commands:',
     '/route fromExchange:FROM_CUR toExchange:TO_CUR amount [cheapest|fastest|balanced]',
-    '/price',
+    '/price [coin]',
     '/status',
-    '/kimchi',
-    '/fees',
+    '/kimchi [coin]',
+    '/fees [coin]',
     '/help',
     '',
     'Example: /route bithumb:KRW binance:USDC 5000000 cheapest',
@@ -10488,7 +10525,17 @@ app.post('/api/telegram/webhook', async (c) => {
       }
 
       if (command === '/price') {
-        const payload = await getRoutePairsPayload(c.env.DB)
+        const coinArg = parseTelegramCoinArgument(text)
+        if (coinArg && !isTrackedPairCoin(coinArg)) {
+          await telegramSendMessage(
+            botToken,
+            chatId,
+            `Unsupported coin: ${coinArg}\nSupported: ${trackedPairCoinsCsv()}`,
+          )
+          return c.json({ ok: true, handled: true, mode: 'slash', error: 'unsupported_coin' })
+        }
+
+        const payload = await getRoutePairsPayload(c.env.DB, coinArg)
         const pairsRaw = (payload as { pairs?: unknown }).pairs
         const pairs = Array.isArray(pairsRaw) ? pairsRaw : []
         const top = pairs.slice(0, 8).map((item) => {
@@ -10499,7 +10546,10 @@ app.post('/api/telegram/webhook', async (c) => {
           return `${coin}: ${krw} | ${usd}`
         })
 
-        const reply = ['Live prices (Bithumb KRW | Binance USD):', ...top].join('\n')
+        const header = coinArg
+          ? `Live prices for ${coinArg} (Bithumb KRW | Binance USD):`
+          : 'Live prices (Bithumb KRW | Binance USD):'
+        const reply = [header, ...(top.length > 0 ? top : ['No data available right now.'])].join('\n')
         await telegramSendMessage(botToken, chatId, reply)
         return c.json({ ok: true, handled: true, mode: 'slash' })
       }
@@ -10521,12 +10571,38 @@ app.post('/api/telegram/webhook', async (c) => {
       }
 
       if (command === '/kimchi') {
+        const coinArg = parseTelegramCoinArgument(text)
+        if (coinArg && !isTrackedPairCoin(coinArg)) {
+          await telegramSendMessage(
+            botToken,
+            chatId,
+            `Unsupported coin: ${coinArg}\nSupported: ${trackedPairCoinsCsv()}`,
+          )
+          return c.json({ ok: true, handled: true, mode: 'slash', error: 'unsupported_coin' })
+        }
+
         const payload = await getArbitrageDemoPayload(c.env.DB)
         const avgPremiumPct = Number((payload as { avgPremiumPct?: unknown }).avgPremiumPct ?? 0)
         const marketCondition = String((payload as { marketCondition?: unknown }).marketCondition ?? 'unknown')
         const previewRaw = (payload as { preview?: unknown }).preview
         const preview = Array.isArray(previewRaw) ? previewRaw : []
-        const lines = preview.map((item) => {
+        const filtered = coinArg
+          ? preview.filter((item) => {
+              const row = isRecord(item) ? item : {}
+              return String(row.coin ?? '').toUpperCase() === coinArg
+            })
+          : preview
+
+        if (coinArg && filtered.length === 0) {
+          await telegramSendMessage(
+            botToken,
+            chatId,
+            `No free demo snapshot for ${coinArg} right now.\nTry /price ${coinArg} or paid endpoint /api/premium/arbitrage/kimchi.`,
+          )
+          return c.json({ ok: true, handled: true, mode: 'slash', coin: coinArg, preview: false })
+        }
+
+        const lines = filtered.map((item) => {
           const row = isRecord(item) ? item : {}
           const coin = String(row.coin ?? '')
           const premiumPct = Number(row.premiumPct ?? 0)
@@ -10536,7 +10612,9 @@ app.post('/api/telegram/webhook', async (c) => {
         })
 
         const reply = [
-          `Kimchi premium (demo): avg ${avgPremiumPct.toFixed(2)}%`,
+          coinArg
+            ? `Kimchi premium (demo, ${coinArg}): avg ${avgPremiumPct.toFixed(2)}%`
+            : `Kimchi premium (demo): avg ${avgPremiumPct.toFixed(2)}%`,
           `Market condition: ${marketCondition}`,
           ...lines,
         ].join('\n')
@@ -10545,7 +10623,17 @@ app.post('/api/telegram/webhook', async (c) => {
       }
 
       if (command === '/fees') {
-        const payload = await getRouteFeesPayload(c.env.DB, null)
+        const coinArg = parseTelegramCoinArgument(text)
+        if (coinArg && !isTrackedPairCoin(coinArg)) {
+          await telegramSendMessage(
+            botToken,
+            chatId,
+            `Unsupported coin: ${coinArg}\nSupported: ${trackedPairCoinsCsv()}`,
+          )
+          return c.json({ ok: true, handled: true, mode: 'slash', error: 'unsupported_coin' })
+        }
+
+        const payload = await getRouteFeesPayload(c.env.DB, coinArg ?? null)
         const feesRaw = (payload as { fees?: unknown }).fees
         const fees = Array.isArray(feesRaw) ? feesRaw : []
         const lines = fees.map((item) => {
@@ -10553,11 +10641,18 @@ app.post('/api/telegram/webhook', async (c) => {
           const exchange = String(row.exchange ?? 'unknown')
           const tradingFeePct = Number(row.tradingFeePct ?? 0)
           const withdrawalFees = isRecord(row.withdrawalFees) ? row.withdrawalFees : {}
+
+          if (coinArg) {
+            const fee = Number(withdrawalFees[coinArg] ?? NaN)
+            const feeText = Number.isFinite(fee) ? String(fee) : 'n/a'
+            return `${exchange.toUpperCase()}: trade ${tradingFeePct.toFixed(2)}%, withdraw ${coinArg} ${feeText}`
+          }
+
           const xrpFee = Number(withdrawalFees.XRP ?? 0)
           const usdtFee = Number(withdrawalFees.USDT ?? 0)
           return `${exchange.toUpperCase()}: trade ${tradingFeePct.toFixed(2)}%, withdraw XRP ${xrpFee}, USDT ${usdtFee}`
         })
-        const reply = ['Exchange fees (quick view):', ...lines].join('\n')
+        const reply = [coinArg ? `Exchange fees for ${coinArg}:` : 'Exchange fees (quick view):', ...lines].join('\n')
         await telegramSendMessage(botToken, chatId, reply)
         return c.json({ ok: true, handled: true, mode: 'slash' })
       }
