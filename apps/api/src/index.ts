@@ -402,6 +402,7 @@ function getPublicRateLimitRouteKey(path: string): string | null {
     return normalized
   }
 
+  if (normalized.startsWith('/api/acp/executions/')) return '/api/acp/executions/:executionId'
   if (normalized.startsWith('/api/registry/')) return '/api/registry/:id'
   if (normalized.startsWith('/api/analytics/services/')) return '/api/analytics/services/:serviceId'
   return null
@@ -425,6 +426,7 @@ function getEndpointTelemetryRouteKey(path: string): string | null {
   if (normalized.startsWith('/api/registry/')) return '/api/registry/:id'
   if (normalized.startsWith('/api/analytics/services/')) return '/api/analytics/services/:serviceId'
   if (normalized.startsWith('/api/proxy/')) return '/api/proxy/:serviceId'
+  if (normalized.startsWith('/api/acp/executions/')) return '/api/acp/executions/:executionId'
   return normalized
 }
 
@@ -671,7 +673,8 @@ app.get('/api/docs/guide', (c) => {
       { path: '/api/route/status', description: 'Exchange API health check (online/offline per exchange)' },
       { path: '/api/acp/status', description: 'ACP protocol capabilities and supported exchanges' },
       { path: 'POST /api/acp/quote', description: 'Request a free routing quote (ACP-compatible, preview-only)' },
-      { path: 'POST /api/acp/execute', description: 'Execute a route (simulation mode)' },
+      { path: 'POST /api/acp/execute', description: 'Start tracked execution (step-level orchestration simulation)' },
+      { path: 'GET /api/acp/executions/{execution_id}', description: 'Get execution progress and step-by-step state' },
       { path: 'POST /api/telegram/webhook', description: 'Telegram bot webhook endpoint for /route command integration' },
     ],
     notes: [
@@ -774,10 +777,11 @@ app.get('/api/docs/guide', (c) => {
       },
     },
     acpProtocol: {
-      overview: 'Agentic Commerce Protocol (ACP) — standardized quote/execute flow for agent-to-agent commerce. CrossFin ACP lets agents request routing quotes and simulate execution without x402 payment.',
+      overview: 'Agentic Commerce Protocol (ACP) — standardized quote/execute flow for agent-to-agent commerce. CrossFin ACP lets agents request routing quotes and run tracked step-level execution orchestration without x402 payment.',
       endpoints: [
         { method: 'POST', path: '/api/acp/quote', price: 'Free', description: 'Request a routing quote. Returns preview of optimal route (no step-by-step details). For full analysis, upgrade to /api/premium/route/find ($0.10).' },
-        { method: 'POST', path: '/api/acp/execute', price: 'Free', description: 'Execute a route (simulation mode). Actual execution requires exchange API credentials (coming soon).' },
+        { method: 'POST', path: '/api/acp/execute', price: 'Free', description: 'Start execution orchestration from quote_id. Returns execution_id and real-time step state.' },
+        { method: 'GET', path: '/api/acp/executions/{execution_id}', price: 'Free', description: 'Get execution progress, ETA, and per-step status.' },
         { method: 'GET', path: '/api/acp/status', price: 'Free', description: 'ACP protocol capabilities, supported exchanges, bridge coins, and execution mode.' },
       ],
       quoteRequestExample: {
@@ -786,8 +790,8 @@ app.get('/api/docs/guide', (c) => {
         body: { from_exchange: 'bithumb', from_currency: 'KRW', to_exchange: 'binance', to_currency: 'USDC', amount: 1000000, strategy: 'cheapest' },
       },
       compatibleWith: ['locus', 'x402', 'openai-acp'],
-      executionMode: 'simulation',
-      liveExecution: 'coming_soon — requires exchange API key integration',
+      executionMode: 'tracked_orchestration',
+      liveExecution: 'requires_exchange_api_key_integration',
     },
     useCases: [
       {
@@ -1687,8 +1691,8 @@ app.get('/api/openapi.json', (c) => {
       '/api/acp/execute': {
         post: {
           operationId: 'acpExecute',
-          summary: 'Execute route (simulation)',
-          description: 'ACP endpoint. Executes a previously quoted route in simulation mode.',
+          summary: 'Start tracked route execution',
+          description: 'ACP endpoint. Starts execution orchestration for a previously quoted route and returns an execution_id for progress tracking.',
           tags: ['ACP'],
           requestBody: {
             required: true,
@@ -1705,8 +1709,25 @@ app.get('/api/openapi.json', (c) => {
             },
           },
           responses: {
-            '200': { description: 'Execution result (simulation)', content: { 'application/json': { schema: { type: 'object' } } } },
+            '200': { description: 'Execution started', content: { 'application/json': { schema: { type: 'object' } } } },
             '400': { description: 'Invalid request body' },
+            '404': { description: 'Quote not found' },
+            '410': { description: 'Quote expired' },
+          },
+        },
+      },
+      '/api/acp/executions/{executionId}': {
+        get: {
+          operationId: 'acpExecutionStatus',
+          summary: 'Get ACP execution progress',
+          description: 'ACP endpoint. Returns step-level execution progress and ETA for an execution_id.',
+          tags: ['ACP'],
+          parameters: [
+            { name: 'executionId', in: 'path', required: true, schema: { type: 'string' } },
+          ],
+          responses: {
+            '200': { description: 'Execution status', content: { 'application/json': { schema: { type: 'object' } } } },
+            '404': { description: 'Execution not found' },
           },
         },
       },
@@ -10287,6 +10308,236 @@ function parseRoutingStrategyInput(value: unknown): RoutingStrategy {
   throw new HTTPException(400, { message: 'strategy must be one of: cheapest, fastest, balanced' })
 }
 
+type AcpExecutionStatus = 'queued' | 'running' | 'completed' | 'failed' | 'expired'
+type AcpExecutionStepStatus = 'pending' | 'in_progress' | 'completed'
+
+type AcpQuoteRequest = {
+  from_exchange: string
+  from_currency: string
+  to_exchange: string
+  to_currency: string
+  amount: number
+  strategy: RoutingStrategy
+}
+
+type AcpRouteSnapshot = {
+  bridgeCoin: Route['bridgeCoin']
+  totalCostPct: number
+  totalTimeMinutes: number
+  estimatedInput: number
+  estimatedOutput: number
+  action: Route['action']
+  confidence: number
+  reason: string
+  summary: Route['summary'] | null
+}
+
+type AcpStepTemplate = {
+  step: number
+  type: RouteStep['type']
+  from: RouteStep['from']
+  to: RouteStep['to']
+  amountIn: number
+  amountOut: number
+  estimatedCost: RouteStep['estimatedCost']
+  durationMs: number
+}
+
+let acpTablesReady: Promise<void> | null = null
+
+async function ensureAcpTables(db: D1Database): Promise<void> {
+  if (!acpTablesReady) {
+    acpTablesReady = db.batch([
+      db.prepare(
+        `CREATE TABLE IF NOT EXISTS acp_quotes (
+           id TEXT PRIMARY KEY,
+           from_exchange TEXT NOT NULL,
+           from_currency TEXT NOT NULL,
+           to_exchange TEXT NOT NULL,
+           to_currency TEXT NOT NULL,
+           amount REAL NOT NULL CHECK (amount > 0),
+           strategy TEXT NOT NULL CHECK (strategy IN ('cheapest', 'fastest', 'balanced')),
+           optimal_route_json TEXT,
+           alternatives_json TEXT NOT NULL DEFAULT '[]',
+           meta_json TEXT NOT NULL DEFAULT '{}',
+           status TEXT NOT NULL DEFAULT 'quoted' CHECK (status IN ('quoted', 'executed', 'expired')),
+           expires_at TEXT NOT NULL,
+           created_at TEXT NOT NULL DEFAULT (datetime('now')),
+           updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+         )`
+      ),
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_acp_quotes_created ON acp_quotes(created_at DESC)'),
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_acp_quotes_expires ON acp_quotes(expires_at)'),
+      db.prepare(
+        `CREATE TABLE IF NOT EXISTS acp_executions (
+           id TEXT PRIMARY KEY,
+           quote_id TEXT NOT NULL REFERENCES acp_quotes(id),
+           status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed', 'expired')),
+           simulated INTEGER NOT NULL DEFAULT 1,
+           route_json TEXT NOT NULL,
+           steps_json TEXT NOT NULL,
+           current_step INTEGER NOT NULL DEFAULT 0,
+           total_steps INTEGER NOT NULL DEFAULT 0,
+           started_at TEXT,
+           completed_at TEXT,
+           created_at TEXT NOT NULL DEFAULT (datetime('now')),
+           updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+         )`
+      ),
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_acp_executions_quote_created ON acp_executions(quote_id, created_at DESC)'),
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_acp_executions_status_created ON acp_executions(status, created_at DESC)'),
+    ]).then(() => undefined).catch((err) => {
+      acpTablesReady = null
+      throw err
+    })
+  }
+
+  await acpTablesReady
+}
+
+function parseAcpJson<T>(value: string | null, fallback: T): T {
+  if (!value) return fallback
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    return fallback
+  }
+}
+
+function toAcpRouteSnapshot(route: Route): AcpRouteSnapshot {
+  return {
+    bridgeCoin: route.bridgeCoin,
+    totalCostPct: route.totalCostPct,
+    totalTimeMinutes: route.totalTimeMinutes,
+    estimatedInput: route.estimatedInput,
+    estimatedOutput: route.estimatedOutput,
+    action: route.action,
+    confidence: route.confidence,
+    reason: route.reason,
+    summary: route.summary ?? null,
+  }
+}
+
+function normalizeAcpStepDurationMs(step: RouteStep): number {
+  const fromEstimate = Number.isFinite(step.estimatedCost.timeMinutes)
+    ? Math.round(step.estimatedCost.timeMinutes * 1000)
+    : 0
+  const minDurationMs = step.type === 'transfer' ? 4_000 : 2_000
+  const maxDurationMs = step.type === 'transfer' ? 30_000 : 10_000
+  return Math.min(maxDurationMs, Math.max(minDurationMs, fromEstimate || minDurationMs))
+}
+
+function toAcpStepTemplates(route: Route): AcpStepTemplate[] {
+  return route.steps.map((step, index) => ({
+    step: index + 1,
+    type: step.type,
+    from: step.from,
+    to: step.to,
+    amountIn: step.amountIn,
+    amountOut: step.amountOut,
+    estimatedCost: step.estimatedCost,
+    durationMs: normalizeAcpStepDurationMs(step),
+  }))
+}
+
+function buildAcpExecutionResponse(
+  executionId: string,
+  quoteId: string,
+  request: AcpQuoteRequest,
+  route: AcpRouteSnapshot,
+  stepTemplates: AcpStepTemplate[],
+  startedAtIso: string | null,
+  createdAtIso: string,
+  nowMs = Date.now(),
+) {
+  const startedAtMs = startedAtIso ? Date.parse(startedAtIso) : Number.NaN
+  const createdAtMs = Date.parse(createdAtIso)
+  const baseMs = Number.isFinite(startedAtMs) ? startedAtMs : (Number.isFinite(createdAtMs) ? createdAtMs : nowMs)
+  const hasStarted = Number.isFinite(startedAtMs)
+
+  const totalDurationMs = stepTemplates.reduce((sum, step) => sum + step.durationMs, 0)
+  const elapsedMs = hasStarted ? Math.max(0, nowMs - baseMs) : 0
+  const clampedElapsedMs = Math.min(elapsedMs, totalDurationMs)
+
+  let stepCursor = baseMs
+  let inProgressFound = false
+  let completedSteps = 0
+  let currentStep: number | null = null
+
+  const steps = stepTemplates.map((step) => {
+    const stepStartMs = stepCursor
+    const stepEndMs = stepCursor + step.durationMs
+    stepCursor = stepEndMs
+
+    let status: AcpExecutionStepStatus = 'pending'
+    if (hasStarted && nowMs >= stepEndMs) {
+      status = 'completed'
+      completedSteps += 1
+    } else if (hasStarted && !inProgressFound && nowMs >= stepStartMs) {
+      status = 'in_progress'
+      inProgressFound = true
+      currentStep = step.step
+    }
+
+    if (status === 'pending' && !currentStep && hasStarted && completedSteps < stepTemplates.length) {
+      currentStep = step.step
+    }
+
+    return {
+      step: step.step,
+      type: step.type,
+      status,
+      from: step.from,
+      to: step.to,
+      amount_in: step.amountIn,
+      amount_out: step.amountOut,
+      estimated_duration_seconds: Math.round(step.durationMs / 100) / 10,
+      estimated_cost: {
+        fee_pct: step.estimatedCost.feePct,
+        fee_absolute: step.estimatedCost.feeAbsolute,
+        slippage_pct: step.estimatedCost.slippagePct,
+      },
+      started_at: status === 'pending' ? null : new Date(stepStartMs).toISOString(),
+      completed_at: status === 'completed' ? new Date(stepEndMs).toISOString() : null,
+      expected_completion_at: status === 'completed' ? null : new Date(stepEndMs).toISOString(),
+    }
+  })
+
+  const completed = completedSteps >= stepTemplates.length
+  const status: AcpExecutionStatus = !hasStarted ? 'queued' : completed ? 'completed' : 'running'
+  const percent = totalDurationMs > 0 ? Math.min(100, Math.round((clampedElapsedMs / totalDurationMs) * 100)) : 100
+  const etaSeconds = status === 'completed' ? 0 : Math.max(0, Math.ceil((totalDurationMs - clampedElapsedMs) / 1000))
+  const completedAt = status === 'completed' && hasStarted ? new Date(baseMs + totalDurationMs).toISOString() : null
+
+  return {
+    protocol: 'acp',
+    version: '1.0',
+    type: 'execution',
+    provider: 'crossfin',
+    quote_id: quoteId,
+    execution_id: executionId,
+    status,
+    simulated: true,
+    mode: 'tracked_orchestration',
+    request,
+    route,
+    progress: {
+      total_steps: stepTemplates.length,
+      completed_steps: completedSteps,
+      current_step: status === 'completed' ? null : currentStep,
+      percent,
+      eta_seconds: etaSeconds,
+    },
+    steps,
+    started_at: hasStarted ? new Date(baseMs).toISOString() : null,
+    completed_at: completedAt,
+    updated_at: new Date(nowMs).toISOString(),
+    actions: {
+      status: { method: 'GET', url: `/api/acp/executions/${executionId}` },
+    },
+  }
+}
+
 // ============================================================
 // ACP (Agentic Commerce Protocol) — Compatibility Layer (MUST be before app.route('/api', api))
 // ============================================================
@@ -10317,6 +10568,10 @@ app.post('/api/acp/quote', async (c) => {
   const { optimal, alternatives, meta } = await findOptimalRoute(
     fromExchange, fromCurrency, toExchange, toCurrency, amount, strategy, c.env.DB,
   )
+
+  await ensureAcpTables(c.env.DB)
+  const quoteId = `cfq_${crypto.randomUUID().slice(0, 12)}`
+  const expiresAt = new Date(Date.now() + 60_000).toISOString()
 
   // Strip optimal route to preview (no steps, limited fields)
   const optimalPreview = optimal ? {
@@ -10353,12 +10608,31 @@ app.post('/api/acp/quote', async (c) => {
     dataFreshness: meta.dataFreshness,
   }
 
+  await c.env.DB.prepare(
+    `INSERT INTO acp_quotes
+      (id, from_exchange, from_currency, to_exchange, to_currency, amount, strategy, optimal_route_json, alternatives_json, meta_json, status, expires_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'quoted', ?, ?)`
+  ).bind(
+    quoteId,
+    fromExchange,
+    fromCurrency,
+    toExchange,
+    toCurrency,
+    amount,
+    strategy,
+    JSON.stringify(optimal),
+    JSON.stringify(alternatives),
+    JSON.stringify(meta),
+    expiresAt,
+    new Date().toISOString(),
+  ).run()
+
   return c.json({
     protocol: 'acp',
     version: '1.0',
     type: 'quote',
     provider: 'crossfin',
-    quote_id: `cfq_${crypto.randomUUID().slice(0, 8)}`,
+    quote_id: quoteId,
     status: 'quoted',
     summary: optimal?.summary ?? null,
     request: { from_exchange: fromExchange, from_currency: fromCurrency, to_exchange: toExchange, to_currency: toCurrency, amount, strategy },
@@ -10371,14 +10645,15 @@ app.post('/api/acp/quote', async (c) => {
       includes: 'Full step-by-step execution route, all alternatives, detailed price data',
       example: `/api/premium/route/find?from=${fromExchange}:${fromCurrency}&to=${toExchange}:${toCurrency}&amount=${amount}&strategy=${strategy}`,
     },
-    expires_at: new Date(Date.now() + 60_000).toISOString(), // 60s quote validity
+    expires_at: expiresAt, // 60s quote validity
     actions: {
-      execute: { method: 'POST', url: '/api/acp/execute', note: 'Execution simulation — actual execution requires exchange API keys (coming soon)' },
+      execute: { method: 'POST', url: '/api/acp/execute', note: 'Start tracked execution orchestration from this quote_id' },
+      execution_status: { method: 'GET', url: '/api/acp/executions/{execution_id}' },
     },
   })
 })
 
-// POST /api/acp/execute — Execute a route (simulation mode, free)
+// POST /api/acp/execute — Start tracked execution orchestration (free)
 app.post('/api/acp/execute', async (c) => {
   let body: Record<string, unknown>
   try {
@@ -10390,22 +10665,193 @@ app.post('/api/acp/execute', async (c) => {
   const quoteId = String(body.quote_id ?? '')
   if (!quoteId) throw new HTTPException(400, { message: 'quote_id is required' })
 
-  return c.json({
-    protocol: 'acp',
-    version: '1.0',
-    type: 'execution',
-    provider: 'crossfin',
-    quote_id: quoteId,
-    execution_id: `cfx_${crypto.randomUUID().slice(0, 8)}`,
-    status: 'simulated',
-    message: 'Route execution is in simulation mode. Actual execution requires exchange API credentials. Contact team@crossfin.dev to enable live execution.',
-    simulated: true,
-    next_steps: [
-      'Connect exchange API keys for live execution',
-      'Set spending limits and policies (Locus-compatible)',
-      'Enable automated route execution for your agents',
-    ],
-  })
+  await ensureAcpTables(c.env.DB)
+
+  const quote = await c.env.DB.prepare(
+    `SELECT id, from_exchange, from_currency, to_exchange, to_currency, amount, strategy, optimal_route_json, expires_at, created_at
+     FROM acp_quotes
+     WHERE id = ?
+     LIMIT 1`
+  ).bind(quoteId).first<{
+    id: string
+    from_exchange: string
+    from_currency: string
+    to_exchange: string
+    to_currency: string
+    amount: number | string
+    strategy: string
+    optimal_route_json: string | null
+    expires_at: string
+    created_at: string
+  }>()
+
+  if (!quote) {
+    throw new HTTPException(404, { message: `quote not found: ${quoteId}` })
+  }
+
+  const expiresAtMs = Date.parse(quote.expires_at)
+  if (Number.isFinite(expiresAtMs) && Date.now() > expiresAtMs) {
+    await c.env.DB.prepare(
+      "UPDATE acp_quotes SET status = 'expired', updated_at = ? WHERE id = ?"
+    ).bind(new Date().toISOString(), quoteId).run()
+    throw new HTTPException(410, { message: `quote expired: ${quoteId}. Request a new quote.` })
+  }
+
+  const parsedRoute = parseAcpJson<unknown>(quote.optimal_route_json, null)
+  if (!isRecord(parsedRoute) || !Array.isArray(parsedRoute.steps)) {
+    throw new HTTPException(409, { message: `quote ${quoteId} has no executable route` })
+  }
+
+  const route = parsedRoute as unknown as Route
+  const stepTemplates = toAcpStepTemplates(route)
+  if (stepTemplates.length === 0) {
+    throw new HTTPException(409, { message: `quote ${quoteId} has no executable steps` })
+  }
+
+  const executionId = `cfx_${crypto.randomUUID().slice(0, 12)}`
+  const nowIso = new Date().toISOString()
+
+  await c.env.DB.prepare(
+    `INSERT INTO acp_executions
+      (id, quote_id, status, simulated, route_json, steps_json, current_step, total_steps, started_at, completed_at, created_at, updated_at)
+     VALUES (?, ?, 'running', 1, ?, ?, ?, ?, ?, NULL, ?, ?)`
+  ).bind(
+    executionId,
+    quoteId,
+    JSON.stringify(route),
+    JSON.stringify(stepTemplates),
+    1,
+    stepTemplates.length,
+    nowIso,
+    nowIso,
+    nowIso,
+  ).run()
+
+  await c.env.DB.prepare(
+    "UPDATE acp_quotes SET status = 'executed', updated_at = ? WHERE id = ?"
+  ).bind(nowIso, quoteId).run()
+
+  const strategyRaw = quote.strategy.trim().toLowerCase()
+  const strategy: RoutingStrategy = strategyRaw === 'fastest' || strategyRaw === 'balanced' ? strategyRaw : 'cheapest'
+  const request: AcpQuoteRequest = {
+    from_exchange: quote.from_exchange,
+    from_currency: quote.from_currency,
+    to_exchange: quote.to_exchange,
+    to_currency: quote.to_currency,
+    amount: Number(quote.amount),
+    strategy,
+  }
+
+  const response = buildAcpExecutionResponse(
+    executionId,
+    quoteId,
+    request,
+    toAcpRouteSnapshot(route),
+    stepTemplates,
+    nowIso,
+    quote.created_at,
+  )
+
+  await c.env.DB.prepare(
+    'UPDATE acp_executions SET status = ?, current_step = ?, completed_at = ?, updated_at = ? WHERE id = ?'
+  ).bind(
+    response.status,
+    Number(response.progress.current_step ?? 0),
+    response.completed_at,
+    response.updated_at,
+    executionId,
+  ).run()
+
+  return c.json(response)
+})
+
+// GET /api/acp/executions/:executionId — ACP execution progress (free)
+app.get('/api/acp/executions/:executionId', async (c) => {
+  const executionId = String(c.req.param('executionId') ?? '').trim()
+  if (!executionId) throw new HTTPException(400, { message: 'executionId is required' })
+
+  await ensureAcpTables(c.env.DB)
+
+  const row = await c.env.DB.prepare(
+    `SELECT
+       e.id,
+       e.quote_id,
+       e.route_json,
+       e.steps_json,
+       e.started_at,
+       e.created_at,
+       e.completed_at,
+       q.from_exchange,
+       q.from_currency,
+       q.to_exchange,
+       q.to_currency,
+       q.amount,
+       q.strategy
+     FROM acp_executions e
+     JOIN acp_quotes q ON q.id = e.quote_id
+     WHERE e.id = ?
+     LIMIT 1`
+  ).bind(executionId).first<{
+    id: string
+    quote_id: string
+    route_json: string
+    steps_json: string
+    started_at: string | null
+    created_at: string
+    completed_at: string | null
+    from_exchange: string
+    from_currency: string
+    to_exchange: string
+    to_currency: string
+    amount: number | string
+    strategy: string
+  }>()
+
+  if (!row) {
+    throw new HTTPException(404, { message: `execution not found: ${executionId}` })
+  }
+
+  const parsedRoute = parseAcpJson<unknown>(row.route_json, null)
+  if (!isRecord(parsedRoute) || !Array.isArray(parsedRoute.steps)) {
+    throw new HTTPException(500, { message: `execution ${executionId} is missing route state` })
+  }
+  const route = parsedRoute as unknown as Route
+
+  const storedTemplates = parseAcpJson<AcpStepTemplate[]>(row.steps_json, [])
+  const stepTemplates = storedTemplates.length > 0 ? storedTemplates : toAcpStepTemplates(route)
+
+  const strategyRaw = row.strategy.trim().toLowerCase()
+  const strategy: RoutingStrategy = strategyRaw === 'fastest' || strategyRaw === 'balanced' ? strategyRaw : 'cheapest'
+  const request: AcpQuoteRequest = {
+    from_exchange: row.from_exchange,
+    from_currency: row.from_currency,
+    to_exchange: row.to_exchange,
+    to_currency: row.to_currency,
+    amount: Number(row.amount),
+    strategy,
+  }
+
+  const response = buildAcpExecutionResponse(
+    executionId,
+    row.quote_id,
+    request,
+    toAcpRouteSnapshot(route),
+    stepTemplates,
+    row.started_at,
+    row.created_at,
+  )
+
+  await c.env.DB.prepare(
+    'UPDATE acp_executions SET status = ?, current_step = ?, completed_at = ?, updated_at = ? WHERE id = ?'
+  ).bind(
+    response.status,
+    Number(response.progress.current_step ?? 0),
+    response.completed_at,
+    response.updated_at,
+    executionId,
+  ).run()
+
+  return c.json(response)
 })
 
 // GET /api/acp/status — ACP protocol status (free)
@@ -10414,12 +10860,16 @@ app.get('/api/acp/status', (c) => {
     protocol: 'acp',
     version: '1.0',
     provider: 'crossfin',
-    capabilities: ['quote', 'simulate'],
+    capabilities: ['quote', 'execute', 'execution_status'],
     supported_exchanges: [...ROUTING_EXCHANGES],
     supported_currencies: { source: ['KRW'], destination: ['USDC', 'USDT', 'KRW'] },
     bridge_coins: [...BRIDGE_COINS],
-    execution_mode: 'simulation',
-    live_execution: 'coming_soon',
+    execution_mode: 'tracked_orchestration',
+    tracking: {
+      step_level: true,
+      endpoint: '/api/acp/executions/{execution_id}',
+    },
+    live_execution: 'requires_exchange_api_credentials',
     compatible_with: ['locus', 'x402', 'openai-acp'],
     at: new Date().toISOString(),
   })
