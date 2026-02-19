@@ -52,7 +52,7 @@ export default function LiveSignals() {
     return (
       <div className="livePanel">
         <div className="livePanelHeader">
-          <div className="livePanelTitle">Live Route Spread</div>
+          <div className="livePanelTitle">Live Asia Premium</div>
           <div className="livePulse">
             <span className="pulseOrb" />
             Loading...
@@ -69,7 +69,7 @@ export default function LiveSignals() {
     return (
       <div className="livePanel">
         <div className="livePanelHeader">
-          <div className="livePanelTitle">Live Route Spread</div>
+          <div className="livePanelTitle">Live Asia Premium</div>
         </div>
         <div className="liveError">{state.message}</div>
         <button type="button" className="liveRetry" onClick={() => window.location.reload()}>
@@ -85,7 +85,7 @@ export default function LiveSignals() {
   return (
     <div className="livePanel">
       <div className="livePanelHeader">
-        <div className="livePanelTitle">Live Route Spread</div>
+        <div className="livePanelTitle">Live Asia Premium</div>
         <div className="livePulse">
           <span className="pulseOrb" />
           Updated {formatTime(data.at)}
@@ -93,7 +93,7 @@ export default function LiveSignals() {
       </div>
 
       <div className="liveAvg">
-        <div className="liveAvgLabel">Average Spread</div>
+        <div className="liveAvgLabel">Average Premium</div>
         <div className={`liveAvgValue ${avgPositive ? 'positive' : 'negative'}`}>
           {avgPositive ? '+' : ''}{data.avgPremiumPct.toFixed(2)}%
         </div>

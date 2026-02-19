@@ -390,12 +390,12 @@ function App() {
             <div className="featureCard">
               <div className="featureIcon">&#x21C4;</div>
               <h3>Routing Engine</h3>
-              <p>Find the cheapest path across Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, and Bybit. Compares 11 bridge coins factoring fees, slippage, and transfer time.</p>
+              <p>Find the cheapest path across Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit, bitFlyer, and WazirX. Compares 11 bridge coins factoring fees, slippage, and transfer time.</p>
             </div>
             <div className="featureCard">
               <div className="featureIcon">&#x25B2;</div>
-              <h3>Route Spread Intelligence</h3>
-              <p>Real-time regional-vs-global spread signals for 11 bridge coins. Decision output includes EXECUTE/WAIT/SKIP with confidence scoring.</p>
+              <h3>Asia Premium Monitor</h3>
+              <p>Real-time price spreads across Korean, Japanese, and Indian exchanges vs. global markets. 11 crypto pairs with EXECUTE/WAIT/SKIP signals.</p>
             </div>
             <div className="featureCard">
               <div className="featureIcon">&#x26A1;</div>
@@ -587,12 +587,12 @@ function App() {
               <span style={{ fontSize: 11, fontWeight: 'bold', color: '#FFB800', letterSpacing: 1 }}>COMING SOON</span>
             </div>
             <div style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6 }}>
-              <strong>Graph-based routing algorithm</strong> — Currently scanning 99 routes via brute-force (9 exchanges × 11 coins).
+              <strong>Graph-based routing algorithm</strong> — Currently scanning 90+ routes via brute-force (9 exchanges × 11 coins).
               Next update: Dijkstra shortest-path with liquidity-weighted edges for 1,000+ routes across 20+ exchanges,
               DEX aggregators, and cross-chain bridges. Real-time pruning + predictive timing recommendations.
             </div>
             <div style={{ fontSize: 11, color: '#7B8794', marginTop: 8 }}>
-              ETA: March 2025 · Phase 2 of CrossFin Intelligence Layer
+              Phase 2 of CrossFin Intelligence Layer
             </div>
           </div>
         </section>
