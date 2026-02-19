@@ -63,6 +63,8 @@ interface TopServiceRaw {
 
 interface AnalyticsRaw {
   totalCalls: number;
+  totalCallsAll?: number;
+  totalCallsExternal?: number;
   topServices: TopServiceRaw[];
   recentCalls: RecentCallRaw[];
 }
@@ -81,6 +83,7 @@ interface TopService {
 
 interface AnalyticsOverview {
   totalCalls: number;
+  totalCallsExternal: number;
   topServices: TopService[];
   recentCalls: RecentCall[];
 }
@@ -98,7 +101,22 @@ interface SurvivalData {
     totalCalls: number;
     callsToday: number;
     callsThisWeek: number;
+    externalTotalCalls?: number;
+    externalCallsToday?: number;
+    externalCallsThisWeek?: number;
     activeServices: number;
+  };
+  traffic?: {
+    all?: {
+      totalCalls: number;
+      callsToday: number;
+      callsThisWeek: number;
+    };
+    external?: {
+      totalCalls: number;
+      callsToday: number;
+      callsThisWeek: number;
+    };
   };
   at: string;
 }
@@ -357,8 +375,11 @@ export default function App() {
     }
     if (statsRaw) setStats(statsRaw.services);
     if (analyticsRaw) {
+      const totalCallsAll = analyticsRaw.totalCallsAll ?? analyticsRaw.totalCalls ?? 0;
+      const totalCallsExternal = analyticsRaw.totalCallsExternal ?? analyticsRaw.totalCalls ?? 0;
       setAnalytics({
-        totalCalls: analyticsRaw.totalCalls,
+        totalCalls: totalCallsAll,
+        totalCallsExternal,
         topServices: (analyticsRaw.topServices ?? []).map((s) => ({
           name: s.serviceName,
           calls: s.calls,
@@ -420,8 +441,11 @@ export default function App() {
   const fxRate = arb?.krwUsdRate;
   const totalServices = stats?.total ?? 0;
   const totalCalls = analytics?.totalCalls ?? 0;
+  const externalCalls = analytics?.totalCallsExternal ?? 0;
   const topServices = analytics?.topServices ?? [];
   const recentCalls = analytics?.recentCalls ?? [];
+  const survivalExternalToday = survival?.metrics.externalCallsToday ?? survival?.traffic?.external?.callsToday ?? 0;
+  const survivalExternalWeek = survival?.metrics.externalCallsThisWeek ?? survival?.traffic?.external?.callsThisWeek ?? 0;
   const pairs = arb?.pairs ?? [];
   const routeExchangeRows = routeStatus?.exchanges ?? [];
   const onlineExchanges = routeExchangeRows.filter((e) => e.status === "online").length;
@@ -1037,7 +1061,13 @@ export default function App() {
             label="API Calls"
             value={totalCalls.toLocaleString()}
             tone="neutral"
-            sub="Total requests"
+            sub="All traffic"
+          />
+          <MetricCard
+            label="External Calls"
+            value={externalCalls.toLocaleString()}
+            tone="neutral"
+            sub="3rd-party traffic"
           />
           <MetricCard
             label="On-Chain"
@@ -1322,15 +1352,27 @@ export default function App() {
             </div>
             <div className="survivalMetrics">
               <div className="survivalMiniCard">
-                <span className="metricLabel">Last 24h</span>
+                <span className="metricLabel">Last 24h (All)</span>
                 <span className="metricValue neutral">
                   {survival.metrics.callsToday.toLocaleString()}
                 </span>
               </div>
               <div className="survivalMiniCard">
-                <span className="metricLabel">Last 7d</span>
+                <span className="metricLabel">Last 24h (External)</span>
+                <span className="metricValue neutral">
+                  {survivalExternalToday.toLocaleString()}
+                </span>
+              </div>
+              <div className="survivalMiniCard">
+                <span className="metricLabel">Last 7d (All)</span>
                 <span className="metricValue neutral">
                   {survival.metrics.callsThisWeek.toLocaleString()}
+                </span>
+              </div>
+              <div className="survivalMiniCard">
+                <span className="metricLabel">Last 7d (External)</span>
+                <span className="metricValue neutral">
+                  {survivalExternalWeek.toLocaleString()}
                 </span>
               </div>
               <div className="survivalMiniCard">

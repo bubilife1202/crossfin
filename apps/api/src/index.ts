@@ -503,7 +503,7 @@ const publicRateLimit: MiddlewareHandler<Env> = async (c, next) => {
 
 app.use('*', cors({
   origin: ['http://localhost:5173', 'https://crossfin.pages.dev', 'https://crossfin.dev', 'https://www.crossfin.dev', 'https://live.crossfin.dev', 'https://crossfin-live.pages.dev'],
-  allowHeaders: ['Content-Type', 'Authorization', 'X-Agent-Key', 'X-CrossFin-Admin-Token', 'PAYMENT-SIGNATURE'],
+  allowHeaders: ['Content-Type', 'Authorization', 'X-Agent-Key', 'X-CrossFin-Admin-Token', 'X-CrossFin-Internal', 'PAYMENT-SIGNATURE'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   exposeHeaders: ['PAYMENT-REQUIRED', 'PAYMENT-RESPONSE'],
 }))
@@ -512,6 +512,7 @@ app.use('/api/*', publicRateLimit)
 
 let endpointCallsTableReady: Promise<void> | null = null
 let agentRegistrationAttemptsTableReady: Promise<void> | null = null
+type EndpointTrafficSource = 'external' | 'internal' | 'dashboard'
 
 async function ensureEndpointCallsTable(db: D1Database): Promise<void> {
   if (!endpointCallsTableReady) {
@@ -528,6 +529,21 @@ async function ensureEndpointCallsTable(db: D1Database): Promise<void> {
       ),
       db.prepare('CREATE INDEX IF NOT EXISTS idx_endpoint_calls_path_created ON endpoint_calls(path, created_at)'),
       db.prepare('CREATE INDEX IF NOT EXISTS idx_endpoint_calls_created ON endpoint_calls(created_at)'),
+      db.prepare(
+        `CREATE TABLE IF NOT EXISTS endpoint_calls_v2 (
+           id TEXT PRIMARY KEY,
+           method TEXT NOT NULL,
+           path TEXT NOT NULL,
+           status TEXT NOT NULL,
+           response_time_ms INTEGER,
+           traffic_source TEXT NOT NULL DEFAULT 'external' CHECK (traffic_source IN ('external', 'internal', 'dashboard')),
+           user_agent TEXT,
+           created_at TEXT NOT NULL DEFAULT (datetime('now'))
+         )`
+      ),
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_endpoint_calls_v2_path_created ON endpoint_calls_v2(path, created_at)'),
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_endpoint_calls_v2_created ON endpoint_calls_v2(created_at)'),
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_endpoint_calls_v2_source_created ON endpoint_calls_v2(traffic_source, created_at)'),
     ]).then(() => undefined).catch((err) => {
       endpointCallsTableReady = null
       throw err
@@ -624,9 +640,40 @@ function isSelfDashboardCall(c: Context<Env>): boolean {
   } catch { return false }
 }
 
+const INTERNAL_CALL_USER_AGENT_PATTERNS = [
+  'undici',
+  'node',
+  'curl/',
+  'postmanruntime',
+  'insomnia',
+  'python-requests',
+  'go-http-client',
+  'wrangler',
+  'github-actions',
+  'smoke-prod',
+  'contract-guard',
+]
+
+function getEndpointTrafficSource(c: Context<Env>): EndpointTrafficSource {
+  if (isSelfDashboardCall(c)) return 'dashboard'
+
+  const taggedInternal = (c.req.header('X-CrossFin-Internal') ?? '').trim().toLowerCase()
+  if (taggedInternal === '1' || taggedInternal === 'true' || taggedInternal === 'yes') {
+    return 'internal'
+  }
+
+  const userAgent = (c.req.header('User-Agent') ?? '').trim().toLowerCase()
+  if (userAgent && INTERNAL_CALL_USER_AGENT_PATTERNS.some((p) => userAgent.includes(p))) {
+    return 'internal'
+  }
+
+  return 'external'
+}
+
 const endpointTelemetry: MiddlewareHandler<Env> = async (c, next) => {
   const routeKey = getEndpointTelemetryRouteKey(c.req.path)
-  if (!routeKey || c.req.method === 'OPTIONS' || isSelfDashboardCall(c)) {
+  const source = getEndpointTrafficSource(c)
+  if (!routeKey || c.req.method === 'OPTIONS' || source === 'dashboard') {
     await next()
     return
   }
@@ -646,15 +693,28 @@ const endpointTelemetry: MiddlewareHandler<Env> = async (c, next) => {
 
     try {
       await ensureEndpointCallsTable(c.env.DB)
-      await c.env.DB.prepare(
-        'INSERT INTO endpoint_calls (id, method, path, status, response_time_ms) VALUES (?, ?, ?, ?, ?)'
-      ).bind(
-        `endpoint_call_${crypto.randomUUID()}`,
-        c.req.method,
-        routeKey,
-        status,
-        responseTimeMs,
-      ).run()
+      await c.env.DB.batch([
+        c.env.DB.prepare(
+          'INSERT INTO endpoint_calls (id, method, path, status, response_time_ms) VALUES (?, ?, ?, ?, ?)'
+        ).bind(
+          `endpoint_call_${crypto.randomUUID()}`,
+          c.req.method,
+          routeKey,
+          status,
+          responseTimeMs,
+        ),
+        c.env.DB.prepare(
+          'INSERT INTO endpoint_calls_v2 (id, method, path, status, response_time_ms, traffic_source, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).bind(
+          `endpoint_call_v2_${crypto.randomUUID()}`,
+          c.req.method,
+          routeKey,
+          status,
+          responseTimeMs,
+          source,
+          (c.req.header('User-Agent') ?? '').slice(0, 180),
+        ),
+      ])
     } catch (err) {
       console.error('Failed to log endpoint call', err)
     }
@@ -5311,38 +5371,59 @@ app.get('/api/analytics/overview', async (c) => {
   await ensureRegistrySeeded(c.env.DB, c.env.PAYMENT_RECEIVER_ADDRESS)
   await ensureEndpointCallsTable(c.env.DB)
 
-  const [callsCountRes, servicesCountRes, crossfinCountRes] = await c.env.DB.batch([
+  const [callsAllRes, callsExternalRes, servicesCountRes, crossfinCountRes] = await c.env.DB.batch([
     c.env.DB.prepare('SELECT COUNT(*) as count FROM endpoint_calls'),
+    c.env.DB.prepare("SELECT COUNT(*) as count FROM endpoint_calls_v2 WHERE traffic_source = 'external'"),
     c.env.DB.prepare("SELECT COUNT(*) as count FROM services WHERE status = 'active'"),
     c.env.DB.prepare("SELECT COUNT(*) as count FROM services WHERE status = 'active' AND is_crossfin = 1"),
   ])
 
-  const totalCalls = Number((callsCountRes?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
+  const totalCallsAll = Number((callsAllRes?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
+  const totalCallsExternal = Number((callsExternalRes?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
   const totalServices = Number((servicesCountRes?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
   const crossfinServices = Number((crossfinCountRes?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
 
-  const top = await c.env.DB.prepare(
-    `SELECT method, path, COUNT(*) as calls
-     FROM endpoint_calls
-     GROUP BY method, path
-     ORDER BY calls DESC
-     LIMIT 10`
-  ).all<{ method: string; path: string; calls: number | string }>()
+  const [topAll, topExternal] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT method, path, COUNT(*) as calls
+       FROM endpoint_calls
+       GROUP BY method, path
+       ORDER BY calls DESC
+       LIMIT 10`
+    ).all<{ method: string; path: string; calls: number | string }>(),
+    c.env.DB.prepare(
+      `SELECT method, path, COUNT(*) as calls
+       FROM endpoint_calls_v2
+       WHERE traffic_source = 'external'
+       GROUP BY method, path
+       ORDER BY calls DESC
+       LIMIT 10`
+    ).all<{ method: string; path: string; calls: number | string }>(),
+  ])
 
-  const recent = await c.env.DB.prepare(
-    `SELECT method, path, status, response_time_ms as responseTimeMs, created_at as createdAt
-     FROM endpoint_calls
-     ORDER BY datetime(created_at) DESC
-     LIMIT 20`
-  ).all<{ method: string; path: string; status: string; responseTimeMs: number | string | null; createdAt: string }>()
+  const [recentAll, recentExternal] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT method, path, status, response_time_ms as responseTimeMs, created_at as createdAt
+       FROM endpoint_calls
+       ORDER BY datetime(created_at) DESC
+       LIMIT 20`
+    ).all<{ method: string; path: string; status: string; responseTimeMs: number | string | null; createdAt: string }>(),
+    c.env.DB.prepare(
+      `SELECT method, path, status, response_time_ms as responseTimeMs, created_at as createdAt
+       FROM endpoint_calls_v2
+       WHERE traffic_source = 'external'
+       ORDER BY datetime(created_at) DESC
+       LIMIT 20`
+    ).all<{ method: string; path: string; status: string; responseTimeMs: number | string | null; createdAt: string }>(),
+  ])
 
-  const topServices = (top.results ?? []).map((r) => ({
+  const toTopServices = (rows: Array<{ method: string; path: string; calls: number | string }>) => rows.map((r) => ({
     serviceId: `${String(r.method ?? '').toUpperCase()} ${String(r.path ?? '')}`,
     serviceName: `${String(r.method ?? '').toUpperCase()} ${String(r.path ?? '')}`,
     calls: Number(r.calls ?? 0),
   }))
 
-  const recentCalls = (recent.results ?? []).map((r) => ({
+  const toRecentCalls = (rows: Array<{ method: string; path: string; status: string; responseTimeMs: number | string | null; createdAt: string }>) => rows.map((r) => ({
     serviceId: `${String(r.method ?? '').toUpperCase()} ${String(r.path ?? '')}`,
     serviceName: `${String(r.method ?? '').toUpperCase()} ${String(r.path ?? '')}`,
     status: String(r.status ?? 'unknown'),
@@ -5350,12 +5431,23 @@ app.get('/api/analytics/overview', async (c) => {
     createdAt: String(r.createdAt ?? ''),
   }))
 
+  const topServicesAll = toTopServices(topAll.results ?? [])
+  const topServicesExternal = toTopServices(topExternal.results ?? [])
+  const recentCallsAll = toRecentCalls(recentAll.results ?? [])
+  const recentCallsExternal = toRecentCalls(recentExternal.results ?? [])
+
   return c.json({
-    totalCalls,
+    totalCalls: totalCallsAll,
+    totalCallsAll,
+    totalCallsExternal,
     totalServices,
     crossfinServices,
-    topServices,
-    recentCalls,
+    topServices: topServicesAll,
+    topServicesAll,
+    topServicesExternal,
+    recentCalls: recentCallsAll,
+    recentCallsAll,
+    recentCallsExternal,
     at: new Date().toISOString(),
   })
 })
@@ -9910,7 +10002,7 @@ api.get('/survival/status', async (c) => {
   const now = new Date()
   await ensureEndpointCallsTable(c.env.DB)
 
-  const [totalCalls, todayCalls, weekCalls] = await Promise.all([
+  const [allTotalCalls, allTodayCalls, allWeekCalls, externalTotalCalls, externalTodayCalls, externalWeekCalls] = await Promise.all([
     c.env.DB.prepare('SELECT COUNT(*) as cnt FROM endpoint_calls').first<{ cnt: number }>(),
     c.env.DB.prepare(
       "SELECT COUNT(*) as cnt FROM endpoint_calls WHERE created_at >= datetime('now', '-1 day')"
@@ -9918,14 +10010,25 @@ api.get('/survival/status', async (c) => {
     c.env.DB.prepare(
       "SELECT COUNT(*) as cnt FROM endpoint_calls WHERE created_at >= datetime('now', '-7 day')"
     ).first<{ cnt: number }>(),
+    c.env.DB.prepare("SELECT COUNT(*) as cnt FROM endpoint_calls_v2 WHERE traffic_source = 'external'").first<{ cnt: number }>(),
+    c.env.DB.prepare(
+      "SELECT COUNT(*) as cnt FROM endpoint_calls_v2 WHERE traffic_source = 'external' AND created_at >= datetime('now', '-1 day')"
+    ).first<{ cnt: number }>(),
+    c.env.DB.prepare(
+      "SELECT COUNT(*) as cnt FROM endpoint_calls_v2 WHERE traffic_source = 'external' AND created_at >= datetime('now', '-7 day')"
+    ).first<{ cnt: number }>(),
   ])
 
   const activeServices = await c.env.DB.prepare(
     "SELECT COUNT(*) as cnt FROM services WHERE status = 'active'"
   ).first<{ cnt: number }>()
 
-  const callsToday = todayCalls?.cnt ?? 0
-  const callsWeek = weekCalls?.cnt ?? 0
+  const totalCallsAll = allTotalCalls?.cnt ?? 0
+  const callsTodayAll = allTodayCalls?.cnt ?? 0
+  const callsWeekAll = allWeekCalls?.cnt ?? 0
+  const totalCallsExternal = externalTotalCalls?.cnt ?? 0
+  const callsTodayExternal = externalTodayCalls?.cnt ?? 0
+  const callsWeekExternal = externalWeekCalls?.cnt ?? 0
   const alive = true
 
   return c.json({
@@ -9933,10 +10036,25 @@ api.get('/survival/status', async (c) => {
     state: alive ? 'ALIVE' : 'STOPPED',
     version: CROSSFIN_API_VERSION,
     metrics: {
-      totalCalls: totalCalls?.cnt ?? 0,
-      callsToday,
-      callsThisWeek: callsWeek,
+      totalCalls: totalCallsAll,
+      callsToday: callsTodayAll,
+      callsThisWeek: callsWeekAll,
+      externalTotalCalls: totalCallsExternal,
+      externalCallsToday: callsTodayExternal,
+      externalCallsThisWeek: callsWeekExternal,
       activeServices: activeServices?.cnt ?? 0,
+    },
+    traffic: {
+      all: {
+        totalCalls: totalCallsAll,
+        callsToday: callsTodayAll,
+        callsThisWeek: callsWeekAll,
+      },
+      external: {
+        totalCalls: totalCallsExternal,
+        callsToday: callsTodayExternal,
+        callsThisWeek: callsWeekExternal,
+      },
     },
     at: now.toISOString(),
   })

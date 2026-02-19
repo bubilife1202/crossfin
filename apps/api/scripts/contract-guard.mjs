@@ -28,13 +28,23 @@ async function expectStatus(res, expected, label) {
 async function postJson(path, payload) {
   return fetch(`${baseUrl}${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      'x-crossfin-internal': '1',
+      'user-agent': 'crossfin-contract-guard/1.0',
+    },
     body: JSON.stringify(payload),
   })
 }
 
 async function getJson(path) {
-  return fetch(`${baseUrl}${path}`, { method: 'GET' })
+  return fetch(`${baseUrl}${path}`, {
+    method: 'GET',
+    headers: {
+      'x-crossfin-internal': '1',
+      'user-agent': 'crossfin-contract-guard/1.0',
+    },
+  })
 }
 
 async function run() {

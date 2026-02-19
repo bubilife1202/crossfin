@@ -61,7 +61,12 @@ async function fetchWithTimeout(url, init, timeoutMs) {
     const ctrl = new AbortController()
     const t = setTimeout(() => ctrl.abort(), timeoutMs)
     try {
-      return await fetch(url, { ...init, signal: ctrl.signal })
+      const headers = new Headers(init?.headers ?? {})
+      headers.set('X-CrossFin-Internal', '1')
+      if (!headers.has('User-Agent')) {
+        headers.set('User-Agent', 'crossfin-smoke-prod/1.0')
+      }
+      return await fetch(url, { ...init, headers, signal: ctrl.signal })
     } catch (err) {
       lastErr = err
       if (attempt < 2) {
