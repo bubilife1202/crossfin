@@ -66,7 +66,9 @@ interface AnalyticsRaw {
   totalCallsAll?: number;
   totalCallsExternal?: number;
   topServices: TopServiceRaw[];
+  topServicesExternal?: TopServiceRaw[];
   recentCalls: RecentCallRaw[];
+  recentCallsExternal?: RecentCallRaw[];
 }
 
 interface RecentCall {
@@ -174,32 +176,6 @@ interface AcpStatusData {
   execution_mode: string;
 }
 
-interface AcpQuoteRoutePreview {
-  bridgeCoin: string;
-  totalCostPct: number;
-  totalTimeMinutes: number;
-  estimatedOutput: number;
-  estimatedInput?: number;
-}
-
-interface AcpQuoteMetaPreview {
-  routesEvaluated?: number;
-  bridgeCoinsTotal?: number;
-  evaluatedCoins?: string[];
-}
-
-interface AcpQuoteResponse {
-  protocol: string;
-  version: string;
-  type: "quote";
-  provider: string;
-  quote_id: string;
-  status: string;
-  optimal_route: AcpQuoteRoutePreview | null;
-  alternatives: AcpQuoteRoutePreview[];
-  meta?: AcpQuoteMetaPreview;
-}
-
 /* ─── Helpers ─── */
 
 function timeAgo(iso: string): string {
@@ -257,19 +233,6 @@ const ROUTE_EXCHANGES = [
   { value: "bybit", label: "Bybit", region: "global", fiat: "USDC" },
 ] as const;
 
-const FIAT_INTEGER_CURRENCIES = new Set(["KRW", "JPY", "INR"]);
-const GLOBAL_SETTLEMENT_CURRENCIES = ["USDC", "USDT", "USD"] as const;
-const CURRENCY_SYMBOL: Record<string, string> = {
-  KRW: "₩",
-  JPY: "¥",
-  INR: "₹",
-  USD: "$",
-  USDC: "$",
-  USDT: "$",
-  BTC: "₿",
-  ETH: "Ξ",
-};
-
 function getExchangeMeta(ex: string) {
   return ROUTE_EXCHANGES.find((item) => item.value === ex.toLowerCase()) ?? null;
 }
@@ -278,66 +241,9 @@ function getExchangeRegion(ex: string): ExchangeRegion {
   return getExchangeMeta(ex)?.region ?? "global";
 }
 
-function getDefaultCurrencyForExchange(ex: string): string {
-  return getExchangeMeta(ex)?.fiat ?? "USDC";
-}
-
-function getReceiveCurrencyOptions(ex: string): readonly string[] {
-  if (getExchangeRegion(ex) === "global") return GLOBAL_SETTLEMENT_CURRENCIES;
-  return [getDefaultCurrencyForExchange(ex)];
-}
-
-function amountPresetForCurrency(currency: string): string {
-  if (currency === "KRW") return "5,000,000";
-  if (currency === "JPY") return "500,000";
-  if (currency === "INR") return "500,000";
-  return "1,000";
-}
-
-function minAmountForCurrency(currency: string): number {
-  if (currency === "KRW") return 10000;
-  if (currency === "JPY") return 1000;
-  if (currency === "INR") return 1000;
-  return 10;
-}
-
-function formatCurrencyAmount(value: number, currency: string): string {
-  const symbol = CURRENCY_SYMBOL[currency] ?? "";
-  if (FIAT_INTEGER_CURRENCIES.has(currency)) {
-    return `${symbol}${Math.max(0, Math.round(value)).toLocaleString()}`;
-  }
-  return `${symbol}${Math.max(0, value).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
 function formatExchangeLabel(ex: string): string {
   const exchange = ex.toLowerCase();
   return ROUTE_EXCHANGES.find((item) => item.value === exchange)?.label ?? ex;
-}
-
-function formatRouteNum(value: string, currency: string): string {
-  const raw = value.replace(/[^0-9.]/g, "");
-  if (!raw) return "";
-  if (FIAT_INTEGER_CURRENCIES.has(currency)) {
-    const num = parseInt(raw, 10);
-    return isNaN(num) ? "" : num.toLocaleString("en-US");
-  }
-  const parts = raw.split(".");
-  const intPart = parseInt(parts[0], 10);
-  if (isNaN(intPart)) return "";
-  const formatted = intPart.toLocaleString("en-US");
-  return parts.length > 1 ? `${formatted}.${parts[1].slice(0, 2)}` : formatted;
-}
-
-function parseRouteAmount(s: string): number {
-  return parseFloat(s.replace(/[^0-9.]/g, "")) || 0;
-}
-
-function routeTimeStr(mins: number): string {
-  if (mins < 1) return `${Math.round(mins * 60)}s`;
-  return `${mins}m`;
 }
 
 /* ─── Fetch helpers ─── */
@@ -381,17 +287,6 @@ export default function App() {
   const [routeFees, setRouteFees] = useState<RouteFeeData | null>(null);
   const [routePairs, setRoutePairs] = useState<RoutePairsData | null>(null);
   const [acpStatus, setAcpStatus] = useState<AcpStatusData | null>(null);
-
-  const [routeFrom, setRouteFrom] = useState("bithumb");
-  const [routeTo, setRouteTo] = useState("binance");
-  const [routeFromCur, setRouteFromCur] = useState(() => getDefaultCurrencyForExchange("bithumb"));
-  const [routeToCur, setRouteToCur] = useState(() => getReceiveCurrencyOptions("binance")[0] ?? "USDC");
-  const [routeAmount, setRouteAmount] = useState(() => amountPresetForCurrency(getDefaultCurrencyForExchange("bithumb")));
-  const [routeStrategy, setRouteStrategy] = useState<"cheapest" | "fastest" | "balanced">("cheapest");
-  const [routeResult, setRouteResult] = useState<AcpQuoteResponse | null>(null);
-  const [routeLoading, setRouteLoading] = useState(false);
-  const [routeError, setRouteError] = useState<string | null>(null);
-
 
   const refresh = useCallback(async () => {
     const results = await Promise.allSettled([
@@ -441,11 +336,11 @@ export default function App() {
       setAnalytics({
         totalCalls: totalCallsAll,
         totalCallsExternal,
-        topServices: (analyticsRaw.topServices ?? []).map((s) => ({
+        topServices: (analyticsRaw.topServicesExternal ?? analyticsRaw.topServices ?? []).map((s) => ({
           name: s.serviceName,
           calls: s.calls,
         })),
-        recentCalls: (analyticsRaw.recentCalls ?? []).map((c) => ({
+        recentCalls: (analyticsRaw.recentCallsExternal ?? analyticsRaw.recentCalls ?? []).map((c) => ({
           service: c.serviceName,
           status: c.status,
           responseTime: c.responseTimeMs ?? 0,
@@ -501,7 +396,6 @@ export default function App() {
   const avgPremium = arb?.average_premium ?? 0;
   const fxRate = arb?.krwUsdRate;
   const totalServices = stats?.total ?? 0;
-  const totalCalls = analytics?.totalCalls ?? 0;
   const externalCalls = analytics?.totalCallsExternal ?? 0;
   const topServices = analytics?.topServices ?? [];
   const recentCalls = analytics?.recentCalls ?? [];
@@ -534,151 +428,6 @@ export default function App() {
     ? Math.max(...topServices.map((s) => s.calls))
     : 1;
 
-  const routeFromSymbol = CURRENCY_SYMBOL[routeFromCur] ?? "";
-  const routeOptimal = routeResult?.optimal_route;
-  const routeAlts = routeResult?.alternatives ?? [];
-  const routeAllRoutes = routeOptimal ? [routeOptimal, ...routeAlts] : [];
-  const previewRouteCount = routeAllRoutes.length;
-  const routesEvaluated = routeResult?.meta?.routesEvaluated ?? previewRouteCount;
-  const hiddenRouteCount = Math.max(0, routesEvaluated - previewRouteCount);
-  const upgradeBlurb = hiddenRouteCount > 0
-    ? `Full step-by-step execution guide + ${hiddenRouteCount.toLocaleString()} additional route option${hiddenRouteCount === 1 ? "" : "s"}`
-    : "Full step-by-step execution guide";
-  const savingsCurrency = routeToCur;
-  const routeToOptions = getReceiveCurrencyOptions(routeTo);
-
-  const formatSavings = (value: number): string => {
-    return formatCurrencyAmount(value, savingsCurrency);
-  };
-
-  // Calculate savings vs lowest-output route shown in preview
-  const worstRoute = routeAllRoutes.length > 1
-    ? routeAllRoutes.reduce((worst, current) =>
-      current.estimatedOutput < worst.estimatedOutput ? current : worst,
-    )
-    : null;
-  const averageRouteOutput = routeAllRoutes.length > 0
-    ? routeAllRoutes.reduce((sum, row) => sum + row.estimatedOutput, 0) / routeAllRoutes.length
-    : null;
-  const savingsVsWorst = routeOptimal && worstRoute
-    ? Math.round(routeOptimal.estimatedOutput - worstRoute.estimatedOutput)
-    : 0;
-  const savingsVsAverage = routeOptimal && averageRouteOutput !== null
-    ? Math.round(routeOptimal.estimatedOutput - averageRouteOutput)
-    : 0;
-  const savingsPctVsWorst = routeOptimal && worstRoute && worstRoute.estimatedOutput > 0
-    ? ((routeOptimal.estimatedOutput - worstRoute.estimatedOutput) / worstRoute.estimatedOutput) * 100
-    : 0;
-
-  const handleRouteFromChange = (ex: string) => {
-    setRouteFrom(ex);
-    const cur = getDefaultCurrencyForExchange(ex);
-    setRouteFromCur(cur);
-    setRouteAmount(amountPresetForCurrency(cur));
-    setRouteResult(null);
-    setRouteError(null);
-  };
-
-  const handleRouteToChange = (ex: string) => {
-    setRouteTo(ex);
-    setRouteToCur(getReceiveCurrencyOptions(ex)[0] ?? "USDC");
-    setRouteResult(null);
-    setRouteError(null);
-  };
-
-  const swapRouteFromTo = () => {
-    const nextFrom = routeTo;
-    const nextTo = routeFrom;
-    const nextFromCur = getDefaultCurrencyForExchange(nextFrom);
-    const nextToCur = getReceiveCurrencyOptions(nextTo)[0] ?? "USDC";
-
-    setRouteFrom(nextFrom);
-    setRouteTo(nextTo);
-    setRouteFromCur(nextFromCur);
-    setRouteToCur(nextToCur);
-
-    const currentAmount = parseRouteAmount(routeAmount);
-    const defaultAmount = amountPresetForCurrency(nextFromCur);
-    const nextMin = minAmountForCurrency(nextFromCur);
-    if (currentAmount <= 0) {
-      setRouteAmount(defaultAmount);
-    } else if (currentAmount < nextMin) {
-      setRouteAmount(defaultAmount);
-    } else {
-      setRouteAmount(formatRouteNum(String(currentAmount), nextFromCur));
-    }
-
-    setRouteResult(null);
-    setRouteError(null);
-  };
-
-  const handleRouteAmountChange = (raw: string) => {
-    setRouteAmount(formatRouteNum(raw, routeFromCur));
-  };
-
-  const findRoute = useCallback(async () => {
-    const amount = parseRouteAmount(routeAmount);
-    const minAmount = minAmountForCurrency(routeFromCur);
-    if (amount < minAmount) {
-      setRouteError(`Minimum amount: ${formatCurrencyAmount(minAmount, routeFromCur)}`);
-      return;
-    }
-    setRouteLoading(true);
-    setRouteError(null);
-    setRouteResult(null);
-    try {
-      const res = await fetch(`${API}/api/acp/quote`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          from_exchange: routeFrom,
-          from_currency: routeFromCur,
-          to_exchange: routeTo,
-          to_currency: routeToCur,
-          amount,
-          strategy: routeStrategy,
-        }),
-      });
-      if (!res.ok) {
-        const errorBody = await res.text().catch(() => "");
-        const detail = errorBody.slice(0, 140).trim();
-        throw new Error(`quote request failed (${res.status})${detail ? `: ${detail}` : ""}`);
-      }
-      const data = (await res.json()) as AcpQuoteResponse;
-      if (!data.optimal_route) {
-        setRouteError("No route found. Check inputs and try again.");
-        return;
-      }
-      setRouteResult(data);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setRouteError(`API error: ${msg}`);
-    } finally {
-      setRouteLoading(false);
-    }
-  }, [routeAmount, routeFrom, routeFromCur, routeStrategy, routeTo, routeToCur]);
-
-  const formatRouteOutput = (val: number): string => {
-    if (routeToCur === "BTC") return val.toFixed(6);
-    if (routeToCur === "ETH") return val.toFixed(4);
-    if (FIAT_INTEGER_CURRENCIES.has(routeToCur)) {
-      return `${CURRENCY_SYMBOL[routeToCur] ?? ""}${Math.round(val).toLocaleString()}`;
-    }
-    return `${CURRENCY_SYMBOL[routeToCur] ?? "$"}${val.toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-  };
-
-  // Auto-run route on first load
-  const hasAutoRun = useRef(false);
-  useEffect(() => {
-    if (!hasAutoRun.current && routePairs && routePairs.pairs.length > 0) {
-      hasAutoRun.current = true;
-      findRoute();
-    }
-  }, [findRoute, routePairs]);
-
   return (
     <div className="dashboard">
       {/* Progress bar */}
@@ -709,220 +458,9 @@ export default function App() {
 
       <main className="main">
 
-        {/* ═══════════════════════════════════════════════
-            SECTION 1: HERO — Route Finder (moved to top)
-            ═══════════════════════════════════════════════ */}
-        <section className="panel heroPanel">
-          <div className="heroHeadline">
-            <h1 className="heroTitle">Find the optimal path across Asian exchanges</h1>
-            <p className="heroSub">
-              Real-time analysis across {totalExchangeCount} exchanges × {bridgeCoins.length} bridge coins.
-              Free preview — no account needed.
-            </p>
-          </div>
-
-          <div className="routeInputCard">
-            <div className="routeInputRow">
-              <div className="routeInputGroup">
-                <label htmlFor="routeFromEx">From</label>
-                <select id="routeFromEx" value={routeFrom} onChange={e => handleRouteFromChange(e.target.value)}>
-                  {ROUTE_EXCHANGES.map(ex => (
-                    <option key={ex.value} value={ex.value}>{ex.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="routeSwapWrap">
-                <button
-                  type="button"
-                  className="routeSwapBtn"
-                  onClick={swapRouteFromTo}
-                  aria-label="Swap from and to exchanges"
-                  title="Swap from and to"
-                >
-                  <span className="swapIcon">⇄</span>
-                </button>
-              </div>
-              <div className="routeInputGroup">
-                <label htmlFor="routeToEx">To</label>
-                <select id="routeToEx" value={routeTo} onChange={e => handleRouteToChange(e.target.value)}>
-                  {ROUTE_EXCHANGES.map(ex => (
-                    <option key={ex.value} value={ex.value}>{ex.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="routeInputRow">
-              <div className="routeInputGroup">
-                <label htmlFor="routeAmountInput">Amount ({routeFromCur})</label>
-                <input
-                  id="routeAmountInput"
-                  type="text"
-                  value={routeAmount}
-                  onChange={e => handleRouteAmountChange(e.target.value)}
-                  placeholder={amountPresetForCurrency(routeFromCur)}
-                />
-              </div>
-              <div className="routeInputGroup">
-                <label htmlFor="routeToCurSelect">Receive</label>
-                <select id="routeToCurSelect" value={routeToCur} onChange={e => setRouteToCur(e.target.value)}>
-                  {routeToOptions.map((currency) => (
-                    <option key={currency} value={currency}>{currency}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="routeStrategyRow">
-              {(["cheapest", "fastest", "balanced"] as const).map(s => (
-                <button
-                  key={s}
-                  type="button"
-                  className={`routeStrategyBtn ${routeStrategy === s ? "active" : ""}`}
-                  onClick={() => setRouteStrategy(s)}
-                >
-                  {s === "cheapest" ? "💰 Cheapest" : s === "fastest" ? "⚡ Fastest" : "⚖️ Balanced"}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              className="routeFindBtn"
-              onClick={findRoute}
-              disabled={routeLoading}
-            >
-              {routeLoading ? "Analyzing routes…" : "Find Optimal Route"}
-            </button>
-          </div>
-
-          {routeLoading && (
-            <div className="routeLoading">
-              <div className="routeSpinner" />
-              <p>Evaluating {bridgeCoins.length} bridge coins across {onlineExchanges} exchanges…</p>
-            </div>
-          )}
-
-          {routeError && (
-            <div className="routeError">{routeError}</div>
-          )}
-
-          {routeOptimal && !routeLoading && (
-            <div className="routeResultArea fadeIn">
-              {/* Visual Flow */}
-              <div className="routeFlow">
-                <div className="flowNode flowFrom">
-                  <span className="flowNodeIcon">🏦</span>
-                  <span className="flowNodeName">{ROUTE_EXCHANGES.find(e => e.value === routeFrom)?.label}</span>
-                  <span className="flowNodeAmount">{routeFromSymbol}{parseRouteAmount(routeAmount).toLocaleString()}</span>
-                </div>
-                <div className="flowArrow">
-                  <div className="flowArrowLine" />
-                  <div className="flowBridge">
-                    <span className="flowBridgeCoin">{routeOptimal.bridgeCoin}</span>
-                    <span className="flowBridgeTime">~{routeTimeStr(routeOptimal.totalTimeMinutes)}</span>
-                  </div>
-                  <div className="flowArrowLine" />
-                </div>
-                <div className="flowNode flowTo">
-                  <span className="flowNodeIcon">🏦</span>
-                  <span className="flowNodeName">{ROUTE_EXCHANGES.find(e => e.value === routeTo)?.label}</span>
-                  <span className="flowNodeAmount flowNodeOutput">{formatRouteOutput(routeOptimal.estimatedOutput)}</span>
-                </div>
-              </div>
-
-              {savingsVsWorst > 0 && (
-                <div className="routeSavingsHero">
-                  <span className="routeSavingsEyebrow">Estimated Savings</span>
-                  <span className="routeSavingsValue">{formatSavings(savingsVsWorst)}</span>
-                  <span className="routeSavingsMeta">
-                    vs lowest-output preview route ({savingsPctVsWorst.toFixed(2)}%)
-                    {savingsVsAverage > 0 ? ` · +${formatSavings(savingsVsAverage)} vs preview average` : ""}
-                  </span>
-                </div>
-              )}
-
-              {/* Stats row */}
-              <div className="routeStatsRow">
-                <div className="routeStat">
-                  <span className="routeStatVal routeCostGood">{routeOptimal.totalCostPct}%</span>
-                  <span className="routeStatLabel">Total Cost</span>
-                </div>
-                <div className="routeStat">
-                  <span className="routeStatVal">{routeTimeStr(routeOptimal.totalTimeMinutes)}</span>
-                  <span className="routeStatLabel">Est. Time</span>
-                </div>
-                {savingsVsAverage > 0 && (
-                  <div className="routeStat">
-                    <span className="routeStatVal routeSavings">
-                      +{formatSavings(savingsVsAverage)}
-                    </span>
-                    <span className="routeStatLabel">vs avg route</span>
-                  </div>
-                )}
-              </div>
-
-              {routeAllRoutes.length > 1 && (
-                <div className="routeAltSection">
-                  <h3 className="routeAltTitle">Preview Routes Compared (Top {previewRouteCount})</h3>
-                  {hiddenRouteCount > 0 && (
-                    <p className="routeAltHint">
-                      Engine evaluated {routesEvaluated.toLocaleString()} routes. Free preview shows top {previewRouteCount}.
-                    </p>
-                  )}
-                  <div className="tableWrap">
-                    <table className="dataTable">
-                      <thead>
-                        <tr>
-                          <th>Bridge</th>
-                          <th>You Receive</th>
-                          <th>Cost</th>
-                          <th>Time</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {routeAllRoutes.slice(0, 5).map((r: AcpQuoteRoutePreview) => {
-                          const costClass = r.totalCostPct < 0.5
-                            ? "routeCostGood"
-                            : r.totalCostPct < 1.0
-                              ? "routeCostOk"
-                              : "routeCostBad";
-                          return (
-                            <tr key={r.bridgeCoin} className={`fadeIn ${r === routeOptimal ? "bestRoute" : ""}`}>
-                              <td className="coinCell">
-                                {r.bridgeCoin}{r === routeOptimal ? " ⭐" : ""}
-                              </td>
-                              <td className="pctCell">
-                                {formatRouteOutput(r.estimatedOutput)}
-                              </td>
-                              <td className={costClass}>
-                                {r.totalCostPct}%
-                              </td>
-                              <td className="dirCell">
-                                {routeTimeStr(r.totalTimeMinutes)}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              <div className="routeUpgradeBanner">
-                <span>{upgradeBlurb}</span>
-                <span className="routeUpgradePrice">$0.10 USDC via x402</span>
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* ═══════════════════════════════════════════════
-            SECTION 1.5: RouteGraph Visualization (Live)
-            ═══════════════════════════════════════════════ */}
         <section className="panel routeGraphPanel">
           <RouteGraph />
         </section>
-
-
 
         {/* ═══════════════════════════════════════════════
             SECTION 3: Agent Demo (NEW)
@@ -1025,15 +563,9 @@ export default function App() {
           />
           <MetricCard
             label="API Calls"
-            value={totalCalls.toLocaleString()}
-            tone="neutral"
-            sub="All traffic"
-          />
-          <MetricCard
-            label="External Calls"
             value={externalCalls.toLocaleString()}
             tone="neutral"
-            sub="3rd-party traffic"
+            sub="External traffic"
           />
           <MetricCard
             label="On-Chain"
@@ -1216,9 +748,12 @@ export default function App() {
 
           <section className="panel">
             <div className="panelHeader">
-              <h2 className="panelTitle">Transfer Fees (XRP)</h2>
-              <span className="panelBadge">Compare routes</span>
+              <h2 className="panelTitle">Exchange Fee Comparison</h2>
+              <span className="panelBadge">9 exchanges</span>
             </div>
+            <p className="panelSub" style={{ color: "var(--text-muted, #888)", fontSize: "0.82rem", margin: "-0.25rem 0 0.75rem" }}>
+              How much it costs to route through each exchange — using XRP as the bridge coin (fastest, ~30 sec transfer).
+            </p>
             {acpStatus && (
               <div className="acpCard acpCardInline">
                 <span className="acpBadge">ACP {acpStatus.version}</span>
@@ -1235,9 +770,9 @@ export default function App() {
                 <thead>
                   <tr>
                     <th>Exchange</th>
-                    <th>Trading Fee %</th>
-                    <th>XRP Withdrawal</th>
-                    <th>Transfer ETA (XRP)</th>
+                    <th>Trading Fee</th>
+                    <th>Withdrawal Cost</th>
+                    <th>Transfer Time</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1280,20 +815,23 @@ export default function App() {
 
         <section className="panel">
           <div className="panelHeader">
-            <h2 className="panelTitle">Live Route Spread Signals</h2>
+            <h2 className="panelTitle">Korea vs Global Price Gap</h2>
             <span className="panelBadge">
               <span className="liveDot" />
               Auto-refresh 15s
             </span>
           </div>
+          <p className="panelSub" style={{ color: "var(--text-muted, #888)", fontSize: "0.82rem", margin: "-0.25rem 0 0.75rem" }}>
+            Same coin, different price across exchanges — the gap that makes cross-border routing profitable.
+          </p>
           <div className="tableWrap">
             <table className="dataTable">
               <thead>
                 <tr>
                   <th>Coin</th>
-                  <th>Spread %</th>
-                  <th>Route Bias</th>
-                  <th>Routing Signal</th>
+                  <th>Price Gap</th>
+                  <th>Where It's Cheaper</th>
+                  <th>Signal</th>
                 </tr>
               </thead>
               <tbody>
@@ -1313,11 +851,13 @@ export default function App() {
                       {p.premiumPct >= 0 ? "+" : ""}
                       {p.premiumPct.toFixed(3)}%
                     </td>
-                    <td className="dirCell">{p.direction}</td>
+                    <td className="dirCell">
+                      {p.premiumPct >= 0 ? "Cheaper on Global" : "Cheaper in Korea"}
+                    </td>
                     <td>
-                      <span className="statusPill active">
+                      <span className={`statusPill ${(p.decision?.action ?? "MONITOR") === "EXECUTE" ? "active" : ""}`}>
                         <span className="statusDotSmall" />
-                        {p.decision?.action ?? "MONITOR"}
+                        {(p.decision?.action ?? "MONITOR") === "EXECUTE" ? "ROUTE NOW" : (p.decision?.action ?? "MONITOR")}
                       </span>
                     </td>
                   </tr>
@@ -1343,25 +883,13 @@ export default function App() {
             </div>
             <div className="survivalMetrics">
               <div className="survivalMiniCard">
-                <span className="metricLabel">Last 24h (All)</span>
-                <span className="metricValue neutral">
-                  {survival.metrics.callsToday.toLocaleString()}
-                </span>
-              </div>
-              <div className="survivalMiniCard">
-                <span className="metricLabel">Last 24h (External)</span>
+                <span className="metricLabel">Last 24h</span>
                 <span className="metricValue neutral">
                   {survivalExternalToday.toLocaleString()}
                 </span>
               </div>
               <div className="survivalMiniCard">
-                <span className="metricLabel">Last 7d (All)</span>
-                <span className="metricValue neutral">
-                  {survival.metrics.callsThisWeek.toLocaleString()}
-                </span>
-              </div>
-              <div className="survivalMiniCard">
-                <span className="metricLabel">Last 7d (External)</span>
+                <span className="metricLabel">Last 7d</span>
                 <span className="metricValue neutral">
                   {survivalExternalWeek.toLocaleString()}
                 </span>

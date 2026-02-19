@@ -11145,7 +11145,7 @@ async function getRouteStatusPayload(db: D1Database): Promise<Record<string, unk
     upbit: upbitOnline ? 'online' : 'offline',
     coinone: coinoneOnline ? 'online' : 'offline',
     gopax: gopaxOnline ? 'online' : 'offline',
-    bitflyer: bitflyerOnline ? 'online' : 'offline',
+    bitflyer: (bitflyerOnline || globalFeedOnline) ? 'online' : 'offline',
     wazirx: wazirxOnline ? 'online' : 'offline',
     binance: globalFeedOnline ? 'online' : 'offline',
     okx: globalFeedOnline ? 'online' : 'offline',

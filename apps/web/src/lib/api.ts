@@ -302,19 +302,23 @@ export async function fetchAnalytics(signal?: AbortSignal): Promise<AnalyticsOve
   if (!res.ok) throw new Error(`analytics_failed:${res.status}`)
   const data: unknown = await res.json()
   if (!isRecord(data)) throw new Error('analytics_invalid')
+  const topRaw = Array.isArray(data.topServicesExternal) ? data.topServicesExternal
+    : Array.isArray(data.topServices) ? data.topServices : []
+  const recentRaw = Array.isArray(data.recentCallsExternal) ? data.recentCallsExternal
+    : Array.isArray(data.recentCalls) ? data.recentCalls : []
   return {
-    totalCalls: Number(data.totalCalls ?? 0),
+    totalCalls: Number(data.totalCallsExternal ?? data.totalCalls ?? 0),
     totalServices: Number(data.totalServices ?? 0),
     crossfinServices: Number(data.crossfinServices ?? 0),
-    topServices: Array.isArray(data.topServices) ? data.topServices.map((s: unknown) => {
+    topServices: topRaw.map((s: unknown) => {
       const svc = s as Record<string, unknown>
       return {
         serviceId: String(svc.serviceId ?? ''),
         serviceName: String(svc.serviceName ?? ''),
         calls: Number(svc.calls ?? 0),
       }
-    }) : [],
-    recentCalls: Array.isArray(data.recentCalls) ? data.recentCalls.map((c: unknown) => {
+    }),
+    recentCalls: recentRaw.map((c: unknown) => {
       const call = c as Record<string, unknown>
       return {
         serviceId: String(call.serviceId ?? ''),
@@ -323,7 +327,7 @@ export async function fetchAnalytics(signal?: AbortSignal): Promise<AnalyticsOve
         responseTimeMs: Number(call.responseTimeMs ?? 0),
         createdAt: String(call.createdAt ?? ''),
       }
-    }) : [],
+    }),
   }
 }
 
