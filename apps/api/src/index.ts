@@ -177,16 +177,32 @@ function startTelegramTypingLoop(
   intervalMs: number = 4000,
 ): () => void {
   let stopped = false
-  void telegramSendTypingSafe(botToken, chatId)
-  const timer = setInterval(() => {
-    if (stopped) return
-    void telegramSendTypingSafe(botToken, chatId)
-  }, intervalMs)
+  let timer: ReturnType<typeof setTimeout> | null = null
 
-  return () => {
+  const stop = () => {
     stopped = true
-    clearInterval(timer)
+    if (timer !== null) {
+      clearTimeout(timer)
+      timer = null
+    }
   }
+
+  try {
+    void telegramSendTypingSafe(botToken, chatId)
+    const tick = () => {
+      if (stopped) return
+      timer = setTimeout(() => {
+        if (stopped) return
+        void telegramSendTypingSafe(botToken, chatId)
+        tick()
+      }, intervalMs)
+    }
+    tick()
+  } catch (err) {
+    console.warn('[telegram] typing loop init failed', err)
+  }
+
+  return stop
 }
 
 interface GlmMessage {
