@@ -1,0 +1,55 @@
+{
+  "x402Version": 2,
+  "provider": {
+    "name": "CrossFin",
+    "description": "Cross-border crypto routing engine for AI agents. Routes capital across 7 Korean/global exchanges (Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit). Real-time kimchi premium, 11 bridge coins, arbitrage signals.",
+    "url": "https://crossfin.dev",
+    "docs": "https://docs.crossfin.dev",
+    "github": "https://github.com/bubilife1202/crossfin",
+    "categories": ["crypto-routing", "korean-market-data", "arbitrage", "exchange-data", "defi"],
+    "tags": ["kimchi-premium", "cross-exchange", "korean-crypto", "bithumb", "upbit", "binance", "okx", "bybit", "mcp", "ai-agent"]
+  },
+  "payment": {
+    "network": "eip155:8453",
+    "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "currency": "USDC",
+    "payTo": "0xe4E79Ce6a1377C58f0Bb99D023908858A4DB5779",
+    "facilitator": "https://facilitator.payai.network",
+    "scheme": "exact",
+    "maxTimeoutSeconds": 300
+  },
+  "endpoints": [
+    { "resource": "https://crossfin.dev/api/premium/arbitrage/kimchi", "method": "GET", "price": "$0.05", "description": "Real-time Kimchi Premium Index — Korean vs global exchange price spread for 11 crypto pairs" },
+    { "resource": "https://crossfin.dev/api/premium/arbitrage/opportunities", "method": "GET", "price": "$0.10", "description": "AI-ready arbitrage decisions: EXECUTE/WAIT/SKIP with confidence scores" },
+    { "resource": "https://crossfin.dev/api/premium/route/find", "method": "GET", "price": "$0.10", "description": "Optimal crypto transfer route across 7 exchanges using 11 bridge coins" },
+    { "resource": "https://crossfin.dev/api/premium/bithumb/orderbook", "method": "GET", "price": "$0.02", "description": "Live Bithumb orderbook depth (30 levels)" },
+    { "resource": "https://crossfin.dev/api/premium/market/upbit/ticker", "method": "GET", "price": "$0.02", "description": "Upbit real-time ticker" },
+    { "resource": "https://crossfin.dev/api/premium/market/upbit/orderbook", "method": "GET", "price": "$0.02", "description": "Upbit orderbook depth" },
+    { "resource": "https://crossfin.dev/api/premium/market/coinone/ticker", "method": "GET", "price": "$0.02", "description": "Coinone real-time ticker" },
+    { "resource": "https://crossfin.dev/api/premium/market/fx/usdkrw", "method": "GET", "price": "$0.01", "description": "USD/KRW exchange rate" },
+    { "resource": "https://crossfin.dev/api/premium/market/korea", "method": "GET", "price": "$0.03", "description": "Korean market sentiment overview" },
+    { "resource": "https://crossfin.dev/api/premium/crypto/korea/5exchange", "method": "GET", "price": "$0.08", "description": "4-exchange Korean crypto price comparison" },
+    { "resource": "https://crossfin.dev/api/premium/morning/brief", "method": "GET", "price": "$0.20", "description": "Morning Brief bundle: kimchi premium + FX + KOSPI/KOSDAQ + headlines" },
+    { "resource": "https://crossfin.dev/api/premium/crypto/snapshot", "method": "GET", "price": "$0.15", "description": "Crypto Snapshot: 5-exchange prices + kimchi + volume + FX" },
+    { "resource": "https://crossfin.dev/api/premium/market/korea/indices", "method": "GET", "price": "$0.03", "description": "KOSPI & KOSDAQ real-time indices" },
+    { "resource": "https://crossfin.dev/api/premium/market/korea/investor-flow", "method": "GET", "price": "$0.05", "description": "Stock investor flow: foreign/institutional/individual" },
+    { "resource": "https://crossfin.dev/api/premium/market/korea/stocks/momentum", "method": "GET", "price": "$0.05", "description": "Top gainers/losers/market cap" }
+  ],
+  "free": [
+    { "resource": "https://crossfin.dev/api/arbitrage/demo", "method": "GET", "description": "Free kimchi premium preview (top 3 pairs)" },
+    { "resource": "https://crossfin.dev/api/route/exchanges", "method": "GET", "description": "Supported exchanges and coins" },
+    { "resource": "https://crossfin.dev/api/route/fees", "method": "GET", "description": "Fee comparison table" },
+    { "resource": "https://crossfin.dev/api/route/pairs", "method": "GET", "description": "Trading pairs with live prices" },
+    { "resource": "https://crossfin.dev/api/route/status", "method": "GET", "description": "Exchange health check" },
+    { "resource": "https://crossfin.dev/api/registry", "method": "GET", "description": "Full service registry (184 services)" },
+    { "resource": "https://crossfin.dev/api/docs/guide", "method": "GET", "description": "Structured agent onboarding guide" },
+    { "resource": "https://crossfin.dev/api/openapi.json", "method": "GET", "description": "OpenAPI 3.1 spec" }
+  ],
+  "mcp": {
+    "package": "crossfin-mcp",
+    "install": "npx -y crossfin-mcp",
+    "tools": 16,
+    "repo": "https://github.com/bubilife1202/crossfin/tree/main/apps/mcp-server"
+  },
+  "updatedAt": "2026-02-19T00:00:00.000Z"
+}
