@@ -9908,13 +9908,16 @@ const api = new Hono<Env>()
 
 api.get('/survival/status', async (c) => {
   const now = new Date()
-  const day = now.toISOString().slice(0, 10)
-  const weekAgo = new Date(now.getTime() - 7 * 86400000).toISOString()
+  await ensureEndpointCallsTable(c.env.DB)
 
   const [totalCalls, todayCalls, weekCalls] = await Promise.all([
-    c.env.DB.prepare('SELECT COUNT(*) as cnt FROM service_calls').first<{ cnt: number }>(),
-    c.env.DB.prepare('SELECT COUNT(*) as cnt FROM service_calls WHERE created_at >= ?').bind(day).first<{ cnt: number }>(),
-    c.env.DB.prepare('SELECT COUNT(*) as cnt FROM service_calls WHERE created_at >= ?').bind(weekAgo).first<{ cnt: number }>(),
+    c.env.DB.prepare('SELECT COUNT(*) as cnt FROM endpoint_calls').first<{ cnt: number }>(),
+    c.env.DB.prepare(
+      "SELECT COUNT(*) as cnt FROM endpoint_calls WHERE created_at >= datetime('now', '-1 day')"
+    ).first<{ cnt: number }>(),
+    c.env.DB.prepare(
+      "SELECT COUNT(*) as cnt FROM endpoint_calls WHERE created_at >= datetime('now', '-7 day')"
+    ).first<{ cnt: number }>(),
   ])
 
   const activeServices = await c.env.DB.prepare(

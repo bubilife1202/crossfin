@@ -178,7 +178,12 @@ interface AcpQuoteResponse {
 /* ─── Helpers ─── */
 
 function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
+  const normalized = iso.includes("T") ? iso : iso.replace(" ", "T");
+  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(normalized);
+  const parsed = new Date(hasTimezone ? normalized : `${normalized}Z`);
+  const parsedMs = parsed.getTime();
+  if (!Number.isFinite(parsedMs)) return "—";
+  const diff = Date.now() - parsedMs;
   if (diff < 0) return "just now";
   const secs = Math.floor(diff / 1000);
   if (secs < 60) return `${secs}s ago`;
@@ -1317,13 +1322,13 @@ export default function App() {
             </div>
             <div className="survivalMetrics">
               <div className="survivalMiniCard">
-                <span className="metricLabel">Calls Today</span>
+                <span className="metricLabel">Last 24h</span>
                 <span className="metricValue neutral">
                   {survival.metrics.callsToday.toLocaleString()}
                 </span>
               </div>
               <div className="survivalMiniCard">
-                <span className="metricLabel">This Week</span>
+                <span className="metricLabel">Last 7d</span>
                 <span className="metricValue neutral">
                   {survival.metrics.callsThisWeek.toLocaleString()}
                 </span>
