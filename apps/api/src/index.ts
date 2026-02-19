@@ -293,7 +293,7 @@ async function executeTelegramTool(name: string, args: Record<string, unknown>, 
       return JSON.stringify(data)
     }
     case 'get_fees': {
-      const data = getRouteFeesPayload(null)
+      const data = await getRouteFeesPayload(db, null)
       return JSON.stringify(data)
     }
     default:
@@ -4642,6 +4642,91 @@ app.get('/api/registry/reseed', async (c) => {
   })
 })
 
+app.put('/api/admin/fees', async (c) => {
+  requireAdmin(c)
+
+  let body: unknown
+  try {
+    body = await c.req.json()
+  } catch {
+    throw new HTTPException(400, { message: 'Invalid JSON body' })
+  }
+
+  if (!isRecord(body)) {
+    throw new HTTPException(400, { message: 'JSON object body is required' })
+  }
+
+  const exchange = typeof body.exchange === 'string' ? body.exchange.trim().toLowerCase() : ''
+  if (!ROUTING_EXCHANGES.includes(exchange as RoutingExchange)) {
+    throw new HTTPException(400, { message: `exchange must be one of: ${ROUTING_EXCHANGES.join(', ')}` })
+  }
+
+  const hasTradingFee = body.tradingFee !== undefined
+  const hasWithdrawalFee = body.withdrawalFee !== undefined
+  if (!hasTradingFee && !hasWithdrawalFee) {
+    throw new HTTPException(400, { message: 'Provide tradingFee or withdrawalFee' })
+  }
+
+  await ensureFeeTables(c.env.DB)
+
+  let updatedTradingFee: number | null = null
+  let updatedWithdrawalFee: { coin: string; fee: number } | null = null
+
+  if (hasTradingFee) {
+    const tradingFee = Number(body.tradingFee)
+    if (!Number.isFinite(tradingFee) || tradingFee < 0) {
+      throw new HTTPException(400, { message: 'tradingFee must be a non-negative number' })
+    }
+
+    await c.env.DB.prepare(
+      `INSERT INTO exchange_trading_fees (exchange, fee_pct, updated_at)
+       VALUES (?, ?, datetime('now'))
+       ON CONFLICT(exchange) DO UPDATE SET fee_pct = excluded.fee_pct, updated_at = datetime('now')`
+    ).bind(exchange, tradingFee).run()
+    updatedTradingFee = tradingFee
+  }
+
+  if (hasWithdrawalFee) {
+    const coin = typeof body.coin === 'string' ? body.coin.trim().toUpperCase() : ''
+    if (!coin) {
+      throw new HTTPException(400, { message: 'coin is required when updating withdrawalFee' })
+    }
+
+    const withdrawalFee = Number(body.withdrawalFee)
+    if (!Number.isFinite(withdrawalFee) || withdrawalFee < 0) {
+      throw new HTTPException(400, { message: 'withdrawalFee must be a non-negative number' })
+    }
+
+    await c.env.DB.prepare(
+      `INSERT INTO exchange_withdrawal_fees (exchange, coin, fee, updated_at)
+       VALUES (?, ?, ?, datetime('now'))
+       ON CONFLICT(exchange, coin) DO UPDATE SET fee = excluded.fee, updated_at = datetime('now')`
+    ).bind(exchange, coin, withdrawalFee).run()
+
+    updatedWithdrawalFee = { coin, fee: withdrawalFee }
+  }
+
+  invalidateFeeCaches()
+
+  await audit(
+    c.env.DB,
+    null,
+    'admin.fees.update',
+    'exchange_fees',
+    exchange,
+    'success',
+    `tradingFee=${updatedTradingFee ?? 'unchanged'} withdrawal=${updatedWithdrawalFee ? `${updatedWithdrawalFee.coin}:${updatedWithdrawalFee.fee}` : 'unchanged'}`,
+  )
+
+  return c.json({
+    ok: true,
+    exchange,
+    tradingFee: updatedTradingFee,
+    withdrawalFee: updatedWithdrawalFee,
+    at: new Date().toISOString(),
+  })
+})
+
 app.get('/api/registry/:id', async (c) => {
   await ensureRegistrySeeded(c.env.DB, c.env.PAYMENT_RECEIVER_ADDRESS)
 
@@ -5148,8 +5233,323 @@ const WITHDRAWAL_FEES: Record<string, Record<string, number>> = {
   bybit: { BTC: 0.0002, ETH: 0.0016, XRP: 0.25, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.3, AVAX: 0.01, TRX: 1.0, USDT: 1.0, USDC: 1.0, KAIA: 0.005 },
 }
 
-function getWithdrawalFee(exchange: string, coin: string): number {
-  return WITHDRAWAL_FEES[exchange.toLowerCase()]?.[coin.toUpperCase()] ?? 0
+const FEE_CACHE_TTL_MS = 5 * 60_000
+const BITHUMB_WITHDRAWAL_STATUS_CACHE_TTL_MS = 60_000
+
+let feeTablesReady: Promise<void> | null = null
+
+function cloneDefaultTradingFees(): Record<string, number> {
+  return { ...EXCHANGE_FEES }
+}
+
+function cloneDefaultWithdrawalFees(): Record<string, Record<string, number>> {
+  const entries = Object.entries(WITHDRAWAL_FEES).map(([exchange, fees]) => [exchange, { ...fees }])
+  return Object.fromEntries(entries)
+}
+
+function getWithdrawalFee(
+  exchange: string,
+  coin: string,
+  withdrawalFees: Record<string, Record<string, number>> = WITHDRAWAL_FEES,
+): number {
+  return withdrawalFees[exchange.toLowerCase()]?.[coin.toUpperCase()] ?? 0
+}
+
+function invalidateFeeCaches(): void {
+  const globalAny = globalThis as unknown as {
+    __crossfinTradingFeesCache?: { value: Record<string, number>; expiresAt: number }
+    __crossfinTradingFeesInFlight?: Promise<Record<string, number>> | null
+    __crossfinWithdrawalFeesCache?: { value: Record<string, Record<string, number>>; expiresAt: number }
+    __crossfinWithdrawalFeesInFlight?: Promise<Record<string, Record<string, number>>> | null
+    __crossfinWithdrawalSuspensionsCache?: { value: Record<string, Set<string>>; expiresAt: number }
+    __crossfinWithdrawalSuspensionsInFlight?: Promise<Record<string, Set<string>>> | null
+  }
+
+  globalAny.__crossfinTradingFeesCache = undefined
+  globalAny.__crossfinTradingFeesInFlight = null
+  globalAny.__crossfinWithdrawalFeesCache = undefined
+  globalAny.__crossfinWithdrawalFeesInFlight = null
+  globalAny.__crossfinWithdrawalSuspensionsCache = undefined
+  globalAny.__crossfinWithdrawalSuspensionsInFlight = null
+}
+
+async function ensureFeeTables(db: D1Database): Promise<void> {
+  if (!feeTablesReady) {
+    feeTablesReady = (async () => {
+      await db.batch([
+        db.prepare(
+          `CREATE TABLE IF NOT EXISTS exchange_trading_fees (
+             exchange TEXT NOT NULL,
+             fee_pct REAL NOT NULL,
+             updated_at TEXT DEFAULT (datetime('now')),
+             PRIMARY KEY (exchange)
+           )`
+        ),
+        db.prepare(
+          `CREATE TABLE IF NOT EXISTS exchange_withdrawal_fees (
+             exchange TEXT NOT NULL,
+             coin TEXT NOT NULL,
+             fee REAL NOT NULL,
+             suspended INTEGER DEFAULT 0,
+             updated_at TEXT DEFAULT (datetime('now')),
+             PRIMARY KEY (exchange, coin)
+           )`
+        ),
+      ])
+
+      const [tradingCountRow, withdrawalCountRow] = await Promise.all([
+        db.prepare('SELECT COUNT(*) AS count FROM exchange_trading_fees').first<{ count: number | string }>(),
+        db.prepare('SELECT COUNT(*) AS count FROM exchange_withdrawal_fees').first<{ count: number | string }>(),
+      ])
+
+      const tradingCount = Number(tradingCountRow?.count ?? 0)
+      if (tradingCount === 0) {
+        const tradingStatements = Object.entries(EXCHANGE_FEES).map(([exchange, feePct]) =>
+          db.prepare('INSERT INTO exchange_trading_fees (exchange, fee_pct) VALUES (?, ?)').bind(exchange, feePct)
+        )
+        if (tradingStatements.length > 0) {
+          await db.batch(tradingStatements)
+        }
+      }
+
+      const withdrawalCount = Number(withdrawalCountRow?.count ?? 0)
+      if (withdrawalCount === 0) {
+        const withdrawalStatements: D1PreparedStatement[] = []
+        for (const [exchange, feesByCoin] of Object.entries(WITHDRAWAL_FEES)) {
+          for (const [coin, fee] of Object.entries(feesByCoin)) {
+            withdrawalStatements.push(
+              db.prepare('INSERT INTO exchange_withdrawal_fees (exchange, coin, fee, suspended) VALUES (?, ?, ?, 0)')
+                .bind(exchange, coin, fee)
+            )
+          }
+        }
+        if (withdrawalStatements.length > 0) {
+          await db.batch(withdrawalStatements)
+        }
+      }
+    })().catch((err) => {
+      feeTablesReady = null
+      throw err
+    })
+  }
+
+  await feeTablesReady
+}
+
+async function fetchBithumbWithdrawalStatuses(): Promise<Record<string, boolean>> {
+  const globalAny = globalThis as unknown as {
+    __crossfinBithumbWithdrawalStatusCache?: { value: Record<string, boolean>; expiresAt: number }
+    __crossfinBithumbWithdrawalStatusInFlight?: Promise<Record<string, boolean>> | null
+  }
+
+  const now = Date.now()
+  const cached = globalAny.__crossfinBithumbWithdrawalStatusCache
+  if (cached && now < cached.expiresAt) return cached.value
+  if (globalAny.__crossfinBithumbWithdrawalStatusInFlight) return globalAny.__crossfinBithumbWithdrawalStatusInFlight
+
+  const fallback = cached?.value ?? {}
+
+  const promise = (async () => {
+    try {
+      const res = await fetch('https://api.bithumb.com/public/assetsstatus/ALL')
+      if (!res.ok) throw new Error(`Bithumb asset status unavailable (${res.status})`)
+      const data: unknown = await res.json()
+      if (!isRecord(data) || data.status !== '0000' || !isRecord(data.data)) {
+        throw new Error('Bithumb asset status invalid response')
+      }
+
+      const parsed: Record<string, boolean> = {}
+      for (const [coinRaw, row] of Object.entries(data.data)) {
+        if (!isRecord(row)) continue
+        const coin = coinRaw.trim().toUpperCase()
+        if (!coin) continue
+        const withdrawalStatusRaw = row.withdrawal_status
+        const withdrawalStatus = typeof withdrawalStatusRaw === 'string'
+          ? Number(withdrawalStatusRaw)
+          : Number(withdrawalStatusRaw)
+        parsed[coin] = Number.isFinite(withdrawalStatus) && withdrawalStatus === 1
+      }
+
+      globalAny.__crossfinBithumbWithdrawalStatusCache = {
+        value: parsed,
+        expiresAt: now + BITHUMB_WITHDRAWAL_STATUS_CACHE_TTL_MS,
+      }
+      return parsed
+    } catch {
+      globalAny.__crossfinBithumbWithdrawalStatusCache = {
+        value: fallback,
+        expiresAt: now + BITHUMB_WITHDRAWAL_STATUS_CACHE_TTL_MS,
+      }
+      return fallback
+    } finally {
+      globalAny.__crossfinBithumbWithdrawalStatusInFlight = null
+    }
+  })()
+
+  globalAny.__crossfinBithumbWithdrawalStatusInFlight = promise
+  return promise
+}
+
+async function syncBithumbWithdrawalSuspensions(db: D1Database): Promise<boolean> {
+  try {
+    await ensureFeeTables(db)
+    const statuses = await fetchBithumbWithdrawalStatuses()
+    const rowsResult = await db.prepare(
+      "SELECT coin, suspended FROM exchange_withdrawal_fees WHERE exchange = 'bithumb'"
+    ).all<{ coin: string; suspended: number | string }>()
+
+    const updates: D1PreparedStatement[] = []
+    for (const row of rowsResult.results ?? []) {
+      const coin = row.coin.toUpperCase()
+      const enabled = statuses[coin]
+      const nextSuspended = enabled ? 0 : 1
+      const currentSuspended = Number(row.suspended ?? 0) === 1 ? 1 : 0
+      if (currentSuspended === nextSuspended) continue
+      updates.push(
+        db.prepare(
+          "UPDATE exchange_withdrawal_fees SET suspended = ?, updated_at = datetime('now') WHERE exchange = 'bithumb' AND coin = ?"
+        ).bind(nextSuspended, coin)
+      )
+    }
+
+    if (updates.length === 0) return false
+    await db.batch(updates)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function getExchangeTradingFees(db: D1Database): Promise<Record<string, number>> {
+  const globalAny = globalThis as unknown as {
+    __crossfinTradingFeesCache?: { value: Record<string, number>; expiresAt: number }
+    __crossfinTradingFeesInFlight?: Promise<Record<string, number>> | null
+  }
+
+  const now = Date.now()
+  const cached = globalAny.__crossfinTradingFeesCache
+  if (cached && now < cached.expiresAt) return cached.value
+  if (globalAny.__crossfinTradingFeesInFlight) return globalAny.__crossfinTradingFeesInFlight
+
+  const fallback = cached?.value ?? cloneDefaultTradingFees()
+
+  const promise = (async () => {
+    try {
+      await ensureFeeTables(db)
+      const res = await db.prepare('SELECT exchange, fee_pct FROM exchange_trading_fees').all<{ exchange: string; fee_pct: number | string }>()
+      const fees = cloneDefaultTradingFees()
+      for (const row of res.results ?? []) {
+        const exchange = row.exchange.trim().toLowerCase()
+        const fee = Number(row.fee_pct)
+        if (!exchange || !Number.isFinite(fee) || fee < 0) continue
+        fees[exchange] = fee
+      }
+      globalAny.__crossfinTradingFeesCache = { value: fees, expiresAt: now + FEE_CACHE_TTL_MS }
+      return fees
+    } catch {
+      globalAny.__crossfinTradingFeesCache = { value: fallback, expiresAt: now + FEE_CACHE_TTL_MS }
+      return fallback
+    } finally {
+      globalAny.__crossfinTradingFeesInFlight = null
+    }
+  })()
+
+  globalAny.__crossfinTradingFeesInFlight = promise
+  return promise
+}
+
+async function getExchangeWithdrawalFees(db: D1Database): Promise<Record<string, Record<string, number>>> {
+  const globalAny = globalThis as unknown as {
+    __crossfinWithdrawalFeesCache?: { value: Record<string, Record<string, number>>; expiresAt: number }
+    __crossfinWithdrawalFeesInFlight?: Promise<Record<string, Record<string, number>>> | null
+  }
+
+  const now = Date.now()
+  const cached = globalAny.__crossfinWithdrawalFeesCache
+  if (cached && now < cached.expiresAt) return cached.value
+  if (globalAny.__crossfinWithdrawalFeesInFlight) return globalAny.__crossfinWithdrawalFeesInFlight
+
+  const fallback = cached?.value ?? cloneDefaultWithdrawalFees()
+
+  const promise = (async () => {
+    try {
+      await ensureFeeTables(db)
+      const res = await db.prepare('SELECT exchange, coin, fee FROM exchange_withdrawal_fees').all<{
+        exchange: string
+        coin: string
+        fee: number | string
+      }>()
+
+      const fees = cloneDefaultWithdrawalFees()
+      for (const row of res.results ?? []) {
+        const exchange = row.exchange.trim().toLowerCase()
+        const coin = row.coin.trim().toUpperCase()
+        const fee = Number(row.fee)
+        if (!exchange || !coin || !Number.isFinite(fee) || fee < 0) continue
+        if (!fees[exchange]) fees[exchange] = {}
+        fees[exchange]![coin] = fee
+      }
+
+      globalAny.__crossfinWithdrawalFeesCache = { value: fees, expiresAt: now + FEE_CACHE_TTL_MS }
+      return fees
+    } catch {
+      globalAny.__crossfinWithdrawalFeesCache = { value: fallback, expiresAt: now + FEE_CACHE_TTL_MS }
+      return fallback
+    } finally {
+      globalAny.__crossfinWithdrawalFeesInFlight = null
+    }
+  })()
+
+  globalAny.__crossfinWithdrawalFeesInFlight = promise
+  return promise
+}
+
+async function getWithdrawalSuspensions(db: D1Database): Promise<Record<string, Set<string>>> {
+  const globalAny = globalThis as unknown as {
+    __crossfinWithdrawalSuspensionsCache?: { value: Record<string, Set<string>>; expiresAt: number }
+    __crossfinWithdrawalSuspensionsInFlight?: Promise<Record<string, Set<string>>> | null
+  }
+
+  const now = Date.now()
+  const cached = globalAny.__crossfinWithdrawalSuspensionsCache
+  if (cached && now < cached.expiresAt) {
+    const changed = await syncBithumbWithdrawalSuspensions(db)
+    if (!changed) return cached.value
+  }
+  if (globalAny.__crossfinWithdrawalSuspensionsInFlight) return globalAny.__crossfinWithdrawalSuspensionsInFlight
+
+  const fallback = cached?.value ?? {}
+
+  const promise = (async () => {
+    try {
+      await ensureFeeTables(db)
+      await syncBithumbWithdrawalSuspensions(db)
+      const res = await db.prepare('SELECT exchange, coin FROM exchange_withdrawal_fees WHERE suspended = 1').all<{
+        exchange: string
+        coin: string
+      }>()
+
+      const byExchange: Record<string, Set<string>> = {}
+      for (const row of res.results ?? []) {
+        const exchange = row.exchange.trim().toLowerCase()
+        const coin = row.coin.trim().toUpperCase()
+        if (!exchange || !coin) continue
+        if (!byExchange[exchange]) byExchange[exchange] = new Set<string>()
+        byExchange[exchange]!.add(coin)
+      }
+
+      globalAny.__crossfinWithdrawalSuspensionsCache = { value: byExchange, expiresAt: now + FEE_CACHE_TTL_MS }
+      return byExchange
+    } catch {
+      globalAny.__crossfinWithdrawalSuspensionsCache = { value: fallback, expiresAt: now + FEE_CACHE_TTL_MS }
+      return fallback
+    } finally {
+      globalAny.__crossfinWithdrawalSuspensionsInFlight = null
+    }
+  })()
+
+  globalAny.__crossfinWithdrawalSuspensionsInFlight = promise
+  return promise
 }
 
 // --- Routing Engine: Supported exchanges ---
@@ -5350,6 +5750,7 @@ interface RouteMeta {
   bridgeCoinsTotal: number
   evaluatedCoins: Array<(typeof BRIDGE_COINS)[number]>
   skippedCoins?: Array<(typeof BRIDGE_COINS)[number]>
+  skippedReasons?: Record<string, string>
   analysisTimestamp: string
   disclaimer: string
 }
@@ -5440,17 +5841,31 @@ async function findOptimalRoute(
   const fromCur = fromCurrency.toUpperCase()
   const toCur = toCurrency.toUpperCase()
 
-  const [krwRateResult, bithumbAllResult, globalPricesResult] = await Promise.allSettled([
+  const [
+    tradingFeesResult,
+    withdrawalFeesResult,
+    withdrawalSuspensionsResult,
+    krwRateResult,
+    bithumbAllResult,
+    globalPricesResult,
+  ] = await Promise.allSettled([
+    getExchangeTradingFees(db),
+    getExchangeWithdrawalFees(db),
+    getWithdrawalSuspensions(db),
     fetchKrwRate(),
     fetchBithumbAll(),
     fetchGlobalPrices(db),
   ])
+  const tradingFees = tradingFeesResult.status === 'fulfilled' ? tradingFeesResult.value : cloneDefaultTradingFees()
+  const withdrawalFees = withdrawalFeesResult.status === 'fulfilled' ? withdrawalFeesResult.value : cloneDefaultWithdrawalFees()
+  const withdrawalSuspensions = withdrawalSuspensionsResult.status === 'fulfilled' ? withdrawalSuspensionsResult.value : {}
   const krwRate = krwRateResult.status === 'fulfilled' ? krwRateResult.value : 1450
   const bithumbAll = bithumbAllResult.status === 'fulfilled' ? bithumbAllResult.value : {}
   const globalPrices: Record<string, number> = globalPricesResult.status === 'fulfilled' ? globalPricesResult.value : {}
 
   const pricesUsed: Record<string, Record<string, number>> = {}
   const routes: Route[] = []
+  const skippedReasons: Partial<Record<(typeof BRIDGE_COINS)[number], string>> = {}
 
   const getGlobalPriceUsd = (exchange: string, coin: string): number | null => {
     const symbol = TRACKED_PAIRS[coin]
@@ -5469,17 +5884,23 @@ async function findOptimalRoute(
     const isKoreaToGlobal = !isGlobalRoutingExchange(fromEx) && isGlobalRoutingExchange(toEx)
 
     // Check if bridge coin is supported on both exchanges
-    const fromFee = EXCHANGE_FEES[fromEx]
-    const toFee = EXCHANGE_FEES[toEx]
-    const withdrawFee = getWithdrawalFee(fromEx, bridgeCoin)
+    const fromFee = tradingFees[fromEx] ?? EXCHANGE_FEES[fromEx]
+    const toFee = tradingFees[toEx] ?? EXCHANGE_FEES[toEx]
+    const fromWithdrawals = withdrawalFees[fromEx] ?? WITHDRAWAL_FEES[fromEx]
+    if (!fromWithdrawals || !Object.prototype.hasOwnProperty.call(fromWithdrawals, bridgeCoin)) {
+      skippedReasons[bridgeCoin] = `${bridgeCoin} withdrawal not supported on ${fromEx}`
+      continue
+    }
+    if (withdrawalSuspensions[fromEx]?.has(bridgeCoin)) {
+      skippedReasons[bridgeCoin] = `${bridgeCoin} withdrawal suspended on ${fromEx}`
+      continue
+    }
+
+    const withdrawFee = getWithdrawalFee(fromEx, bridgeCoin, withdrawalFees)
     if (fromFee === undefined || toFee === undefined) continue
 
     const fromFeePct = fromFee
     const toFeePct = toFee
-
-    // Check withdrawal support
-    const fromWithdrawals = WITHDRAWAL_FEES[fromEx]
-    if (!fromWithdrawals?.[bridgeCoin] && fromWithdrawals !== undefined) continue
 
     try {
       const isUsdLike = (cur: string): boolean => cur === 'USDC' || cur === 'USDT' || cur === 'USD'
@@ -5508,7 +5929,7 @@ async function findOptimalRoute(
         const amountAfterBuyFee = amount * (1 - buyFeePct / 100)
         coinsBought = amountAfterBuyFee / effectiveBuyPriceUsd
 
-        const withdrawFeeFromSource = getWithdrawalFee(fromEx, bridgeCoin)
+        const withdrawFeeFromSource = withdrawFee
         coinsAfterWithdraw = coinsBought - withdrawFeeFromSource
         if (coinsAfterWithdraw <= 0) continue
         transferTime = getTransferTime(bridgeCoin)
@@ -5710,6 +6131,9 @@ async function findOptimalRoute(
       bridgeCoinsTotal: BRIDGE_COINS.length,
       evaluatedCoins,
       skippedCoins: skippedCoins.length > 0 ? skippedCoins : undefined,
+      skippedReasons: Object.keys(skippedReasons).length > 0
+        ? skippedReasons as Record<string, string>
+        : undefined,
       analysisTimestamp: new Date().toISOString(),
       disclaimer: 'Estimates based on current orderbook depth and market prices. Actual costs may vary due to price movements during execution.',
     },
@@ -9525,32 +9949,42 @@ app.get('/api/premium/route/find', async (c) => {
 })
 
 // GET /api/route/exchanges — List supported exchanges (free)
-app.get('/api/route/exchanges', (c) => {
+app.get('/api/route/exchanges', async (c) => {
+  const [tradingFees, withdrawalFees] = await Promise.all([
+    getExchangeTradingFees(c.env.DB),
+    getExchangeWithdrawalFees(c.env.DB),
+  ])
+
   const exchanges = ROUTING_EXCHANGES.map((ex) => ({
     id: ex,
     name: EXCHANGE_DISPLAY_NAME[ex],
     country: isGlobalRoutingExchange(ex) ? 'Global' : 'South Korea',
-    tradingFeePct: EXCHANGE_FEES[ex],
-    supportedCoins: Object.keys(WITHDRAWAL_FEES[ex] ?? {}),
+    tradingFeePct: tradingFees[ex] ?? EXCHANGE_FEES[ex],
+    supportedCoins: Object.keys(withdrawalFees[ex] ?? WITHDRAWAL_FEES[ex] ?? {}),
     type: isGlobalRoutingExchange(ex) ? 'global' : 'korean',
   }))
   return c.json({ service: 'crossfin-route-exchanges', exchanges, at: new Date().toISOString() })
 })
 
-function getRouteFeesPayload(coinRaw: string | null | undefined): Record<string, unknown> {
+async function getRouteFeesPayload(db: D1Database, coinRaw: string | null | undefined): Promise<Record<string, unknown>> {
+  const [tradingFees, withdrawalFees] = await Promise.all([
+    getExchangeTradingFees(db),
+    getExchangeWithdrawalFees(db),
+  ])
+
   const coin = coinRaw ? coinRaw.toUpperCase() : null
 
   const fees = ROUTING_EXCHANGES.map((ex) => {
     const withdrawals = coin
-      ? { [coin]: getWithdrawalFee(ex, coin) }
-      : WITHDRAWAL_FEES[ex] ?? {}
+      ? { [coin]: getWithdrawalFee(ex, coin, withdrawalFees) }
+      : withdrawalFees[ex] ?? WITHDRAWAL_FEES[ex] ?? {}
     return {
       exchange: ex,
-      tradingFeePct: EXCHANGE_FEES[ex],
+      tradingFeePct: tradingFees[ex] ?? EXCHANGE_FEES[ex],
       withdrawalFees: withdrawals,
       transferTimes: coin
         ? { [coin]: getTransferTime(coin) }
-        : Object.fromEntries(Object.keys(WITHDRAWAL_FEES[ex] ?? {}).map((c) => [c, getTransferTime(c)])),
+        : Object.fromEntries(Object.keys(withdrawals).map((c) => [c, getTransferTime(c)])),
     }
   })
 
@@ -9644,8 +10078,8 @@ async function getRouteStatusPayload(db: D1Database): Promise<Record<string, unk
 }
 
 // GET /api/route/fees — Fee comparison table (free)
-app.get('/api/route/fees', (c) => {
-  return c.json(getRouteFeesPayload(c.req.query('coin')))
+app.get('/api/route/fees', async (c) => {
+  return c.json(await getRouteFeesPayload(c.env.DB, c.req.query('coin')))
 })
 
 // GET /api/route/pairs — Supported pairs with live prices (free)
@@ -9948,7 +10382,7 @@ app.post('/api/telegram/webhook', async (c) => {
       }
 
       if (command === '/fees') {
-        const payload = getRouteFeesPayload(null)
+        const payload = await getRouteFeesPayload(c.env.DB, null)
         const feesRaw = (payload as { fees?: unknown }).fees
         const fees = Array.isArray(feesRaw) ? feesRaw : []
         const lines = fees.map((item) => {
