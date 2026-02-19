@@ -71,6 +71,13 @@ function requireGuardianEnabled(c: Context<Env>): void {
   }
 }
 
+const TELEGRAM_ROUTE_USAGE = [
+  '라우팅 명령 형식:',
+  '/route bithumb:KRW binance:USDC 5000000 cheapest',
+  '/route bithumb binance 5000000',
+  '전략: cheapest | fastest | balanced (생략 시 cheapest)',
+].join('\n')
+
 function parseTelegramRouteCommand(text: string): {
   fromExchange: string
   fromCurrency: string
@@ -82,10 +89,7 @@ function parseTelegramRouteCommand(text: string): {
   const trimmed = text.trim()
   if (!/^\/route(?:@[a-zA-Z0-9_]+)?\b/i.test(trimmed)) return null
 
-  const usage =
-    'Usage: /route fromExchange:FROM_CUR toExchange:TO_CUR amount [cheapest|fastest|balanced]\n' +
-    'Example: /route bithumb:KRW binance:USDC 5000000 cheapest\n' +
-    'Simple: /route bithumb binance 5000000'
+  const usage = `입력 형식이 올바르지 않습니다.\n${TELEGRAM_ROUTE_USAGE}`
 
   const content = trimmed.replace(/^\/route(?:@[a-zA-Z0-9_]+)?\s*/i, '').trim()
   if (!content) {
@@ -168,7 +172,7 @@ function parseTelegramRouteCommand(text: string): {
       }
     }
     if (amountIndex < 0) {
-      throw new HTTPException(400, { message: `${usage}\namount must be a positive number` })
+      throw new HTTPException(400, { message: `${usage}\n금액은 0보다 큰 숫자로 입력해주세요.` })
     }
 
     amountToken = tokens[amountIndex] ?? ''
@@ -195,12 +199,12 @@ function parseTelegramRouteCommand(text: string): {
 
   if (!ROUTING_EXCHANGES.includes(fromExchange as RoutingExchange)) {
     throw new HTTPException(400, {
-      message: `Invalid from exchange: ${fromExchange || '(empty)'}\nSupported: ${ROUTING_EXCHANGES.join(', ')}`,
+      message: `출발 거래소가 잘못되었습니다: ${fromExchange || '(empty)'}\n지원 거래소: ${ROUTING_EXCHANGES.join(', ')}`,
     })
   }
   if (!ROUTING_EXCHANGES.includes(toExchange as RoutingExchange)) {
     throw new HTTPException(400, {
-      message: `Invalid to exchange: ${toExchange || '(empty)'}\nSupported: ${ROUTING_EXCHANGES.join(', ')}`,
+      message: `도착 거래소가 잘못되었습니다: ${toExchange || '(empty)'}\n지원 거래소: ${ROUTING_EXCHANGES.join(', ')}`,
     })
   }
 
@@ -214,14 +218,14 @@ function parseTelegramRouteCommand(text: string): {
 
   if (!fromCurrency || !toCurrency) {
     throw new HTTPException(400, {
-      message: 'Cannot infer currency. Use /route exchange:currency exchange:currency amount (e.g. /route bithumb:KRW binance:USDC 5000000)',
+      message: `통화를 자동 추론할 수 없습니다.\n${TELEGRAM_ROUTE_USAGE}`,
     })
   }
 
   assertRoutingCurrencySupported(fromExchange, fromCurrency, 'from')
   assertRoutingCurrencySupported(toExchange, toCurrency, 'to')
   if (!Number.isFinite(amount) || amount <= 0) {
-    throw new HTTPException(400, { message: 'amount must be a positive number' })
+    throw new HTTPException(400, { message: '금액은 0보다 큰 숫자로 입력해주세요.' })
   }
 
   const strategyToken = String(strategyRaw).trim().toLowerCase().replace(/[^a-z]/g, '')
@@ -11859,17 +11863,21 @@ app.post('/api/telegram/webhook', async (c) => {
   }
 
   const helpText = [
-    'CrossFin Bot commands:',
-    '/route fromExchange:FROM_CUR toExchange:TO_CUR amount [cheapest|fastest|balanced]',
-    '/route fromExchange toExchange amount [cheapest|fastest|balanced] (auto currency)',
-    '/price [coin]',
+    'CrossFin 라우팅 봇 가이드',
+    '',
+    '추천 입력(자연어):',
+    '빗썸에서 바이낸스로 500만원 보내줘',
+    '빗썸에서 바이낸스로 리플(XRP)로 보내고 싶어',
+    '',
+    TELEGRAM_ROUTE_USAGE,
+    '',
+    '다른 명령어:',
     '/status',
-    '/kimchi [coin]',
-    '/fees [coin]',
+    '/price BTC',
+    '/fees XRP',
     '/help',
     '',
-    'Example: /route bithumb:KRW binance:USDC 5000000 cheapest',
-    'Simple: /route bithumb binance 5000000 cheapest',
+    `지원 거래소: ${ROUTING_EXCHANGES.join(', ')}`,
   ].join('\n')
 
   if (text.startsWith('/')) {
@@ -11904,7 +11912,7 @@ app.post('/api/telegram/webhook', async (c) => {
           await telegramSendMessage(
             botToken,
             chatId,
-            'No valid route found. Try another exchange pair or lower amount.',
+            '유효한 경로를 찾지 못했습니다.\n거래소 조합을 바꾸거나 금액을 낮춰 다시 시도해주세요.',
           )
           return c.json({ ok: true, handled: true, routeFound: false, mode: 'slash' })
         }
@@ -12064,10 +12072,10 @@ app.post('/api/telegram/webhook', async (c) => {
       await telegramSendMessage(botToken, chatId, helpText)
       return c.json({ ok: true, handled: true, mode: 'slash', fallback: 'help' })
     } catch (err) {
-      const message = err instanceof HTTPException ? err.message : (err instanceof Error ? err.message : 'Failed to process command')
-      const prefix = command === '/route' ? 'Route error' : 'Command error'
+      const message = err instanceof HTTPException ? err.message : (err instanceof Error ? err.message : '명령 처리 중 오류가 발생했습니다.')
+      const prefix = command === '/route' ? '라우팅 입력 오류' : '명령 처리 오류'
       const suffix = command === '/route'
-        ? '\n\nTry:\n/route bithumb:KRW binance:USDC 5000000 cheapest\n/route bithumb binance 5000000'
+        ? `\n\n${TELEGRAM_ROUTE_USAGE}`
         : ''
       await telegramSendMessage(botToken, chatId, `${prefix}: ${message}${suffix}`)
       return c.json({ ok: true, handled: true, error: message, mode: 'slash' })
@@ -12080,7 +12088,7 @@ app.post('/api/telegram/webhook', async (c) => {
   try {
     const zaiApiKey = (c.env.ZAI_API_KEY ?? '').trim()
     if (!zaiApiKey) {
-      await telegramSendMessage(botToken, chatId, 'AI mode is not configured yet (missing ZAI_API_KEY). Use /help to see slash commands.')
+      await telegramSendMessage(botToken, chatId, 'AI 모드가 아직 설정되지 않았습니다(ZAI_API_KEY 누락).\n/help 로 명령어 가이드를 확인해주세요.')
       return c.json({ ok: true, handled: true, mode: 'ai', configured: false })
     }
 
