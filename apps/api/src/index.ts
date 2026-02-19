@@ -210,10 +210,10 @@ const CROSSFIN_TELEGRAM_TOOLS: GlmTool[] = [
   },
 ]
 
-const CROSSFIN_TELEGRAM_SYSTEM_PROMPT = 'You are CrossFin Bot — an AI assistant for cross-border crypto routing. You help users find the cheapest way to transfer crypto between Korean exchanges (Bithumb, Upbit, Coinone, GoPax) and global exchanges (Binance, OKX, Bybit). You can check live prices, exchange status, kimchi premium, and fees. Respond concisely in the same language the user uses. If the user writes in Korean, respond in Korean. If in English, respond in English.'
+const CROSSFIN_TELEGRAM_SYSTEM_PROMPT = 'You are CrossFin Bot — an AI assistant for cross-border crypto routing across 7 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit). You find the cheapest transfer paths, check live prices, exchange status, kimchi premium, and fees. Rules: 1) Never use emojis. 2) Be concise — short sentences, no filler. 3) Match the user\'s language (Korean or English). 4) When you have enough info, call tools immediately instead of asking more questions. 5) If info is missing, ask in one short sentence, not a numbered list. 6) Only answer questions related to CrossFin, crypto routing, exchange prices, fees, kimchi premium, and Korean/global crypto markets. For unrelated topics, politely decline and redirect to what you can help with.'
 
 async function glmChatCompletion(apiKey: string, messages: GlmMessage[], tools: GlmTool[]): Promise<GlmMessage> {
-  const res = await fetch('https://api.z.ai/api/paas/v4/chat/completions', {
+  const res = await fetch('https://api.z.ai/api/coding/paas/v4/chat/completions', {
     method: 'POST',
     headers: { 'content-type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
@@ -9717,9 +9717,29 @@ app.post('/api/telegram/webhook', async (c) => {
       return c.json({ ok: true, handled: true, mode: 'ai', configured: false })
     }
 
+    const chatIdStr = String(chatId)
+    const MAX_HISTORY = 10
+
+    await c.env.DB.prepare(
+      `INSERT INTO telegram_messages (chat_id, role, content) VALUES (?, 'user', ?)`
+    ).bind(chatIdStr, text).run()
+
+    const historyRows = await c.env.DB.prepare(
+      `SELECT role, content, tool_calls, tool_call_id FROM telegram_messages WHERE chat_id = ? ORDER BY created_at DESC LIMIT ?`
+    ).bind(chatIdStr, MAX_HISTORY).all<{ role: string; content: string | null; tool_calls: string | null; tool_call_id: string | null }>()
+
+    const history: GlmMessage[] = (historyRows.results ?? []).reverse().map((row) => {
+      const msg: GlmMessage = { role: row.role, content: row.content ?? undefined }
+      if (row.tool_calls) {
+        try { msg.tool_calls = JSON.parse(row.tool_calls) as GlmMessage['tool_calls'] } catch {}
+      }
+      if (row.tool_call_id) msg.tool_call_id = row.tool_call_id
+      return msg
+    })
+
     const messages: GlmMessage[] = [
       { role: 'system', content: CROSSFIN_TELEGRAM_SYSTEM_PROMPT },
-      { role: 'user', content: text },
+      ...history,
     ]
     const maxToolLoops = 3
     let finalReply = ''
@@ -9774,6 +9794,13 @@ app.post('/api/telegram/webhook', async (c) => {
       const lastToolMessage = [...messages].reverse().find((msg) => msg.role === 'tool' && typeof msg.content === 'string')
       finalReply = lastToolMessage?.content?.trim() || 'I gathered partial data, but could not complete the response in time. Please try again.'
     }
+
+    await c.env.DB.prepare(
+      `INSERT INTO telegram_messages (chat_id, role, content) VALUES (?, 'assistant', ?)`
+    ).bind(chatIdStr, finalReply).run()
+
+    const deleteOld = `DELETE FROM telegram_messages WHERE chat_id = ? AND id NOT IN (SELECT id FROM telegram_messages WHERE chat_id = ? ORDER BY created_at DESC LIMIT 20)`
+    await c.env.DB.prepare(deleteOld).bind(chatIdStr, chatIdStr).run()
 
     await telegramSendMessage(botToken, chatId, finalReply)
     return c.json({ ok: true, handled: true, mode: 'ai' })
