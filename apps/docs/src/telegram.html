@@ -26,29 +26,57 @@
 
     <section class="card">
       <h2>Open the Bot</h2>
-      <p><a href="https://t.me/crossfinn_bot" target="_blank" rel="noopener" style="color:var(--cyan)">t.me/crossfinn_bot</a> &mdash; tap to start chatting.</p>
+      <p><a href="https://t.me/crossfinn_bot" target="_blank" rel="noopener">t.me/crossfinn_bot</a> &mdash; tap to start chatting.</p>
     </section>
 
     <section class="card">
       <h2>Slash Commands</h2>
-      <ul>
-        <li><code>/route &lt;from&gt; &lt;to&gt; &lt;amount&gt;</code> &mdash; find the cheapest transfer path across 7 exchanges</li>
-        <li><code>/price &lt;coin&gt;</code> &mdash; live price comparison across Korean exchanges</li>
-        <li><code>/kimchi [coin]</code> &mdash; kimchi premium (Korean vs global spread)</li>
-        <li><code>/fees [coin]</code> &mdash; trading + withdrawal fee comparison</li>
-        <li><code>/status</code> &mdash; exchange network health (7 exchanges)</li>
-        <li><code>/help</code> &mdash; list all commands</li>
-      </ul>
+      <div class="endpoint-table-wrap">
+        <table class="endpoint-table">
+          <thead>
+            <tr>
+              <th>Command</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>/route &lt;from&gt; &lt;to&gt; &lt;amount&gt;</code></td>
+              <td>Find the cheapest transfer path across 7 exchanges</td>
+            </tr>
+            <tr>
+              <td><code>/price &lt;coin&gt;</code></td>
+              <td>Live price comparison across Korean exchanges</td>
+            </tr>
+            <tr>
+              <td><code>/kimchi [coin]</code></td>
+              <td>Kimchi premium (Korean vs global spread)</td>
+            </tr>
+            <tr>
+              <td><code>/fees [coin]</code></td>
+              <td>Trading + withdrawal fee comparison</td>
+            </tr>
+            <tr>
+              <td><code>/status</code></td>
+              <td>Exchange network health (7 exchanges)</td>
+            </tr>
+            <tr>
+              <td><code>/help</code></td>
+              <td>List all commands</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section class="card">
       <h2>Natural Language</h2>
       <p>No need to memorize commands. Ask in plain Korean or English:</p>
-      <ul>
-        <li>"빗썸에서 바이낸스로 500만원 보내는 가장 싼 방법 알려줘"</li>
-        <li>"지금 김치 프리미엄 얼마야?"</li>
-        <li>"XRP 거래소별 가격 비교해줘"</li>
-        <li>"업비트 출금 수수료가 얼마야?"</li>
+      <ul class="prompt-list">
+        <li>빗썸에서 바이낸스로 500만원 보내는 가장 싼 방법 알려줘</li>
+        <li>지금 김치 프리미엄 얼마야?</li>
+        <li>XRP 거래소별 가격 비교해줘</li>
+        <li>업비트 출금 수수료가 얼마야?</li>
       </ul>
       <p>The bot understands context and maintains conversation history (last 10 messages).</p>
     </section>
@@ -62,23 +90,24 @@
 /status</code></pre>
     </section>
 
-    <section class="card">
-      <h2>How It Works</h2>
-      <ul>
-        <li>Powered by GLM-5 with tool calling &mdash; the bot reads your message and decides which CrossFin API to call</li>
-        <li>Multi-turn memory &mdash; remembers your last 10 messages per chat</li>
-        <li>Read-only &mdash; the bot finds routes and shows data but never executes trades</li>
-        <li>Data from 7 exchanges: Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit</li>
-      </ul>
-    </section>
-
-    <section class="card">
-      <h2>Limitations</h2>
-      <ul>
-        <li>Route finding is read-only. No actual trades are executed.</li>
-        <li>Prices are real-time snapshots, not guaranteed quotes.</li>
-        <li>CrossFin topics only &mdash; the bot won't answer unrelated questions.</li>
-      </ul>
+    <section class="grid">
+      <article class="card">
+        <h2>How It Works</h2>
+        <ul>
+          <li>Powered by GLM-5 with tool calling &mdash; reads your message and decides which CrossFin API to call</li>
+          <li>Multi-turn memory &mdash; remembers your last 10 messages per chat</li>
+          <li>Read-only &mdash; finds routes and shows data but never executes trades</li>
+          <li>Data from 7 exchanges: Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit</li>
+        </ul>
+      </article>
+      <article class="card">
+        <h2>Limitations</h2>
+        <ul>
+          <li>Route finding is read-only. No actual trades are executed.</li>
+          <li>Prices are real-time snapshots, not guaranteed quotes.</li>
+          <li>CrossFin topics only &mdash; the bot won't answer unrelated questions.</li>
+        </ul>
+      </article>
     </section>
   </main>
 </body>
