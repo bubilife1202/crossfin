@@ -896,7 +896,7 @@
 
 .exchangeHubGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -909,6 +909,10 @@
 
 .exchangeHubCard.korea {
   border-left: 3px solid var(--cyan);
+}
+
+.exchangeHubCard.regional {
+  border-left: 3px solid var(--amber);
 }
 
 .exchangeHubCard.global {

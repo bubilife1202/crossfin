@@ -80,12 +80,12 @@ const EXCHANGE_LABELS: Record<string, string> = {
   upbit: 'Upbit',
   coinone: 'Coinone',
   gopax: 'GoPax',
+  bitflyer: 'bitFlyer',
+  wazirx: 'WazirX',
   binance: 'Binance',
   okx: 'OKX',
   bybit: 'Bybit',
 }
-
-
 
 function formatExchange(exchange: string): string {
   const key = exchange.trim().toLowerCase()

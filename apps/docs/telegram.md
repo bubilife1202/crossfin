@@ -1,6 +1,6 @@
 # Telegram Bot
 
-CrossFin AI agent on Telegram. Korean crypto market data, routing, and kimchi premium — all from a chat window.
+CrossFin AI agent on Telegram. Korean/Asia crypto market data, routing, and route spread signals — all from a chat window.
 
 ## Open the Bot
 
@@ -10,11 +10,11 @@ CrossFin AI agent on Telegram. Korean crypto market data, routing, and kimchi pr
 
 | Command | Description |
 |---------|-------------|
-| `/route <from> <to> <amount>` | Find the cheapest transfer path across 7 exchanges |
+| `/route <from> <to> <amount>` | Find the cheapest transfer path across 9 exchanges |
 | `/price <coin>` | Live price comparison across Korean exchanges |
-| `/kimchi [coin]` | Kimchi premium (Korean vs global spread) |
+| `/kimchi [coin]` | Route spread index (legacy kimchi metric) |
 | `/fees [coin]` | Trading + withdrawal fee comparison |
-| `/status` | Exchange network health (7 exchanges) |
+| `/status` | Exchange network health (9 exchanges) |
 | `/help` | List all commands |
 
 ## Natural Language
@@ -46,7 +46,7 @@ The bot understands context and maintains conversation history (last 10 messages
 - Powered by GLM-5 with tool calling — reads your message and decides which CrossFin API to call
 - Multi-turn memory — remembers your last 10 messages per chat
 - Read-only — finds routes and shows data but never executes trades
-- Data from 7 exchanges: Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit
+- Data from 9 exchanges: Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit
 
 ## Limitations
 

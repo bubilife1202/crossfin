@@ -377,7 +377,7 @@ function App() {
           </div>
 
           <div className="heroPills">
-            <span className="pill">7 Exchanges</span>
+            <span className="pill">9 Exchanges</span>
             <span className="pill">11 Bridge Coins</span>
             <span className="pill">x402 Native</span>
             <span className="pill">MCP + ACP</span>
@@ -390,12 +390,12 @@ function App() {
             <div className="featureCard">
               <div className="featureIcon">&#x21C4;</div>
               <h3>Routing Engine</h3>
-              <p>Find the cheapest path across Bithumb, Upbit, Coinone, GoPax, Binance, OKX, and Bybit. Compares 11 bridge coins factoring fees, slippage, and transfer time.</p>
+              <p>Find the cheapest path across Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, and Bybit. Compares 11 bridge coins factoring fees, slippage, and transfer time.</p>
             </div>
             <div className="featureCard">
               <div className="featureIcon">&#x25B2;</div>
-              <h3>Kimchi Premium</h3>
-              <p>Real-time Korean vs. global price spread for 11 crypto pairs. Arbitrage decisions with EXECUTE/WAIT/SKIP signals and confidence scores.</p>
+              <h3>Route Spread Intelligence</h3>
+              <p>Real-time regional-vs-global spread signals for 11 bridge coins. Decision output includes EXECUTE/WAIT/SKIP with confidence scoring.</p>
             </div>
             <div className="featureCard">
               <div className="featureIcon">&#x26A1;</div>
@@ -587,7 +587,7 @@ function App() {
               <span style={{ fontSize: 11, fontWeight: 'bold', color: '#FFB800', letterSpacing: 1 }}>COMING SOON</span>
             </div>
             <div style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6 }}>
-              <strong>Graph-based routing algorithm</strong> — Currently scanning 77 routes via brute-force (7 exchanges × 11 coins).
+              <strong>Graph-based routing algorithm</strong> — Currently scanning 99 routes via brute-force (9 exchanges × 11 coins).
               Next update: Dijkstra shortest-path with liquidity-weighted edges for 1,000+ routes across 20+ exchanges,
               DEX aggregators, and cross-chain bridges. Real-time pruning + predictive timing recommendations.
             </div>
