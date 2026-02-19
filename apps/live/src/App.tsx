@@ -631,7 +631,7 @@ export default function App() {
             ═══════════════════════════════════════════════ */}
         <section className="panel heroPanel">
           <div className="heroHeadline">
-            <h1 className="heroTitle">Find the cheapest path across Asian exchanges</h1>
+            <h1 className="heroTitle">Find the optimal path across Asian exchanges</h1>
             <p className="heroSub">
               Real-time analysis across {totalExchangeCount} exchanges × {bridgeCoins.length} bridge coins.
               Free preview — no account needed.

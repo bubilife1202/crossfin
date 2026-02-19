@@ -85,15 +85,7 @@ const EXCHANGE_LABELS: Record<string, string> = {
   bybit: 'Bybit',
 }
 
-const ENDPOINT_OPTIONS = [
-  { value: 'bithumb:KRW', label: 'Bithumb:KRW' },
-  { value: 'upbit:KRW', label: 'Upbit:KRW' },
-  { value: 'coinone:KRW', label: 'Coinone:KRW' },
-  { value: 'gopax:KRW', label: 'GoPax:KRW' },
-  { value: 'binance:USDC', label: 'Binance:USDC' },
-  { value: 'okx:USDC', label: 'OKX:USDC' },
-  { value: 'bybit:USDC', label: 'Bybit:USDC' },
-] as const
+
 
 function formatExchange(exchange: string): string {
   const key = exchange.trim().toLowerCase()
@@ -115,8 +107,8 @@ function toUsd(value: number): string {
 
 /* ── SVG layout helpers ──────────────────────────── */
 
-const NW: Record<GraphNode['type'], number> = { source: 136, coin: 96, dest: 136 }
-const NH: Record<GraphNode['type'], number> = { source: 52, coin: 38, dest: 52 }
+const NW: Record<GraphNode['type'], number> = { source: 120, coin: 80, dest: 120 }
+const NH: Record<GraphNode['type'], number> = { source: 44, coin: 30, dest: 44 }
 
 function bezierPath(x1: number, y1: number, x2: number, y2: number): string {
   const cp = (x2 - x1) * 0.4
@@ -129,7 +121,7 @@ const CSS = `
 @keyframes rgFadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @keyframes rgDash{to{stroke-dashoffset:-24}}
 @keyframes rgPulse{0%,100%{opacity:1}50%{opacity:.55}}
-@keyframes rgDraw{from{stroke-dashoffset:700}to{stroke-dashoffset:0}}
+@keyframes rgDraw{from{stroke-dashoffset:400}to{stroke-dashoffset:0}}
 @keyframes rgGlowIn{from{opacity:0}to{opacity:1}}
 
 .rg-wrap{animation:rgFadeIn .45s ease both}
@@ -168,8 +160,8 @@ const CSS = `
 .rg-svg text{font-family:var(--sans)}
 
 .rg-dash{animation:rgDash 1s linear infinite}
-.rg-draw{stroke-dasharray:700;animation:rgDraw .8s ease-out forwards}
-.rg-draw2{stroke-dasharray:700;animation:rgDraw .8s ease-out .6s forwards;stroke-dashoffset:700}
+.rg-draw{stroke-dasharray:400;animation:rgDraw .9s ease-out forwards}
+.rg-draw2{stroke-dasharray:400;stroke-dashoffset:400;animation:rgDraw .9s ease-out .7s forwards}
 .rg-glow-in{animation:rgGlowIn .3s ease-out forwards}
 .rg-glow-in2{animation:rgGlowIn .3s ease-out .6s forwards;opacity:0}
 .rg-dash-delayed{animation:rgDash 1s linear 1.4s infinite;opacity:0;animation-fill-mode:forwards}
@@ -201,10 +193,10 @@ const CSS = `
 /* ── Component ───────────────────────────────────── */
 
 export default function RouteGraph() {
-  const [from, setFrom] = useState<string>('bithumb:KRW')
-  const [to, setTo] = useState<string>('binance:USDC')
-  const [amountInput, setAmountInput] = useState<string>('1000000')
-  const [strategy, setStrategy] = useState<RoutingStrategy>('cheapest')
+  const from = 'bithumb:KRW'
+  const to = 'binance:USDC'
+  const amountInput = '1000000'
+  const strategy: RoutingStrategy = 'cheapest'
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<RoutingResponse | null>(null)
@@ -240,7 +232,8 @@ export default function RouteGraph() {
     } finally {
       setLoading(false)
     }
-  }, [amountInput, from, strategy, to])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   /* ── auto-refresh every 15s ────────────────────── */
   useEffect(() => {
@@ -272,13 +265,16 @@ export default function RouteGraph() {
     const toEx = parseExchange(data?.request.to ?? to)
 
     const routePool = [data?.optimal, ...(data?.alternatives ?? [])].filter((r): r is Route => Boolean(r))
-    const coinSet = new Set(routePool.map((r) => r.bridgeCoin.toUpperCase()))
-    const coins = Array.from(coinSet)
+    const routedCoins = new Set(routePool.map((r) => r.bridgeCoin.toUpperCase()))
+    const allCoins = data?.meta.evaluatedCoins?.map((c) => c.toUpperCase()) ?? Array.from(routedCoins)
+    const coins = allCoins.length > 0 ? allCoins : Array.from(routedCoins)
 
     const coinCount = Math.max(1, coins.length)
-    const gap = coinCount <= 1 ? 0 : Math.max(38, Math.min(56, 320 / (coinCount - 1)))
+    const svgH = 460
+    const usableH = svgH - 80
+    const gap = coinCount <= 1 ? 0 : Math.min(42, usableH / (coinCount - 1))
     const totalH = (coinCount - 1) * gap
-    const midY = 210
+    const midY = svgH / 2
     const startY = midY - totalH / 2
 
     const nodes: GraphNode[] = [
@@ -322,7 +318,7 @@ export default function RouteGraph() {
     })
 
     return { nodes, edges: Array.from(byKey.values()), fromEx, toEx }
-  }, [data, from, to])
+  }, [data])
 
   /* ── derived values ────────────────────────────── */
 
@@ -336,9 +332,7 @@ export default function RouteGraph() {
 
   const nodeById = new Map(graph.nodes.map((n) => [n.id, n]))
 
-  const handleSwap = () => { setFrom(to); setTo(from) }
 
-  const strategies: RoutingStrategy[] = ['cheapest', 'fastest', 'balanced']
 
   /* ── render helpers ────────────────────────────── */
 
@@ -367,21 +361,21 @@ export default function RouteGraph() {
 
       return (
         <g key={`oe-${idx}-${dataVersion}`}>
-          <path d={d} fill="none" stroke="#00ff88" strokeWidth={8} opacity={0.08} className={glowClass} />
-          <path d={d} fill="none" stroke="url(#rgGrad)" strokeWidth={2.5} strokeLinecap="round" className={drawClass} />
-          <path d={d} fill="none" stroke="rgba(0,255,136,0.45)" strokeWidth={2} strokeLinecap="round" strokeDasharray="6 14"
-            style={{ animationDelay: first ? '1.0s' : '1.6s', opacity: 0, animationFillMode: 'forwards', animationName: 'rgDash', animationDuration: '1s', animationIterationCount: 'infinite' }} />
+          <path d={d} fill="none" stroke="#00ff88" strokeWidth={3} opacity={0.06} className={glowClass} />
+          <path d={d} fill="none" stroke="url(#rgGrad)" strokeWidth={1.5} strokeLinecap="round" className={drawClass} />
+          <path d={d} fill="none" stroke="rgba(0,255,136,0.35)" strokeWidth={1} strokeLinecap="round" strokeDasharray="4 10"
+            style={{ animationDelay: first ? '1.0s' : '1.6s', opacity: 0, animationFillMode: 'forwards', animationName: 'rgDash', animationDuration: '1.2s', animationIterationCount: 'infinite' }} />
           <g className={labelClass}>
-            <rect x={mx - 26} y={my - 20} width={52} height={18} rx={4} fill="rgba(0,255,136,0.1)" stroke="rgba(0,255,136,0.25)" strokeWidth={0.5} />
-            <text x={mx} y={my - 8} textAnchor="middle" style={{ fill: '#00ff88', fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700 }}>{toUsd(edge.cost)}</text>
+            <rect x={mx - 24} y={my - 18} width={48} height={16} rx={3} fill="rgba(0,255,136,0.08)" stroke="rgba(0,255,136,0.2)" strokeWidth={0.5} />
+            <text x={mx} y={my - 7} textAnchor="middle" style={{ fill: '#00ff88', fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 600 }}>{toUsd(edge.cost)}</text>
           </g>
         </g>
       )
     }
     return (
       <g key={`de-${idx}`}>
-        <path d={d} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={1} strokeDasharray="4 4" />
-        <text x={mx} y={my - 6} textAnchor="middle" style={{ fill: 'rgba(255,255,255,0.2)', fontSize: 9, fontFamily: 'var(--mono)' }}>{toUsd(edge.cost)}</text>
+        <path d={d} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={0.75} strokeDasharray="3 5" />
+        <text x={mx} y={my - 5} textAnchor="middle" style={{ fill: 'rgba(255,255,255,0.15)', fontSize: 8, fontFamily: 'var(--mono)' }}>{toUsd(edge.cost)}</text>
       </g>
     )
   }
@@ -412,13 +406,13 @@ export default function RouteGraph() {
     return (
       <g key={`${node.id}-${dataVersion}`} style={needsReveal ? { opacity: 0, animation: `rgGlowIn 0.3s ease-out ${nodeDelay} forwards` } : undefined}>
         <rect x={node.x - w / 2} y={node.y - h / 2} width={w} height={h} rx={rx}
-          style={{ fill, stroke }} strokeWidth={isOnPath ? 1.5 : 1} filter={glow} />
+          style={{ fill, stroke }} strokeWidth={isOnPath ? 1 : 0.5} filter={glow} />
         {node.type === 'coin' ? (
-          <text x={node.x} y={node.y + 4} textAnchor="middle" style={{ fill: txt, fontSize: 12, fontWeight: 700, fontFamily: 'var(--mono)' }}>{node.label}</text>
+          <text x={node.x} y={node.y + 4} textAnchor="middle" style={{ fill: txt, fontSize: 10, fontWeight: 700, fontFamily: 'var(--mono)' }}>{node.label}</text>
         ) : (
           <>
-            <text x={node.x} y={node.y - 2} textAnchor="middle" style={{ fill: txt, fontSize: 13, fontWeight: 700 }}>{node.label}</text>
-            <text x={node.x} y={node.y + 14} textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 10, fontFamily: 'var(--mono)' }}>
+            <text x={node.x} y={node.y - 1} textAnchor="middle" style={{ fill: txt, fontSize: 11, fontWeight: 700 }}>{node.label}</text>
+            <text x={node.x} y={node.y + 12} textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 9, fontFamily: 'var(--mono)' }}>
               {node.type === 'source' ? fromCurrency : toCurrency}
             </text>
           </>
@@ -448,38 +442,14 @@ export default function RouteGraph() {
         </div>
       </div>
 
-      {/* ── Controls ─────────────────────────────── */}
-      <div className="rg-controls">
-        <div className="rg-row">
-          <select className="rg-sel" value={from} onChange={(e) => setFrom(e.target.value)}>
-            {ENDPOINT_OPTIONS.map((o) => <option key={`f-${o.value}`} value={o.value}>{o.label}</option>)}
-          </select>
-          <button type="button" className="rg-swap" onClick={handleSwap} aria-label="Swap">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" role="img" aria-hidden="true"><path d="M1 5h12M10 2l3 3-3 3M15 11H3M6 14l-3-3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          </button>
-          <select className="rg-sel" value={to} onChange={(e) => setTo(e.target.value)}>
-            {ENDPOINT_OPTIONS.map((o) => <option key={`t-${o.value}`} value={o.value}>{o.label}</option>)}
-          </select>
-        </div>
-        <div className="rg-row">
-          <input className="rg-inp" value={amountInput} onChange={(e) => setAmountInput(e.target.value)} placeholder="Amount" />
-          <div className="rg-strats">
-            {strategies.map((s) => (
-              <button key={s} type="button" className={`rg-sb${strategy === s ? ' on' : ''}`} onClick={() => setStrategy(s)}>{s}</button>
-            ))}
-          </div>
-          <button type="button" className="rg-go" onClick={() => void loadRoute()} disabled={loading}>
-            {loading ? 'Loading\u2026' : 'Refresh'}
-          </button>
-        </div>
-      </div>
+
 
       {/* ── Error ────────────────────────────────── */}
       {error && <div className="rg-err">{error}</div>}
 
       {/* ── SVG Graph ────────────────────────────── */}
       <div className="rg-gw" style={{ opacity: loading ? 0.55 : 1 }}>
-        <svg viewBox="0 0 800 420" className="rg-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Route graph visualization">
+        <svg viewBox="0 0 800 460" className="rg-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Route graph visualization">
           <defs>
             <filter id="rgGG" x="-50%" y="-50%" width="200%" height="200%">
               <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#00ff88" floodOpacity="0.5" />
@@ -497,11 +467,11 @@ export default function RouteGraph() {
           </defs>
 
           {/* background */}
-          <rect width="800" height="420" style={{ fill: 'var(--bg)' }} />
-          <rect width="800" height="420" fill="url(#rgDots)" />
+          <rect width="800" height="460" style={{ fill: 'var(--bg)' }} />
+          <rect width="800" height="460" fill="url(#rgDots)" />
 
           {/* bridge column highlight */}
-          <rect x="344" y="40" width="112" height="350" rx="8" fill="rgba(255,170,0,0.02)" stroke="rgba(255,170,0,0.04)" strokeWidth={0.5} />
+          <rect x="352" y="40" width="96" height="400" rx="8" fill="rgba(255,170,0,0.02)" stroke="rgba(255,170,0,0.04)" strokeWidth={0.5} />
 
           {/* column labels */}
           <text x="120" y="32" textAnchor="middle" style={{ fill: 'var(--muted2)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em' }}>SOURCE</text>
