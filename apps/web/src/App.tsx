@@ -1155,6 +1155,13 @@ console.log(await res.json());`}</code></pre>
               >
                 BaseScan
               </a>
+              <a
+                href="https://t.me/crossfinn_bot"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Telegram Bot
+              </a>
             </div>
           </div>
           <div className="footerBottom">

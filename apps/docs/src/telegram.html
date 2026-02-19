@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <title>CrossFin Telegram Bot</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="wrap">
+    <nav class="nav">
+      <a href="/">Overview</a>
+      <a href="/quickstart.html">Quickstart</a>
+      <a href="/api.html">API</a>
+      <a href="/mcp.html">MCP</a>
+      <a class="active" href="/telegram.html">Telegram</a>
+      <a href="https://crossfin.dev" target="_blank" rel="noopener">crossfin.dev</a>
+    </nav>
+
+    <section class="hero">
+      <span class="badge">Live</span>
+      <h1>Telegram Bot</h1>
+      <p>CrossFin AI agent on Telegram. Korean crypto market data, routing, and kimchi premium &mdash; all from a chat window.</p>
+    </section>
+
+    <section class="card">
+      <h2>Open the Bot</h2>
+      <p><a href="https://t.me/crossfinn_bot" target="_blank" rel="noopener" style="color:var(--cyan)">t.me/crossfinn_bot</a> &mdash; tap to start chatting.</p>
+    </section>
+
+    <section class="card">
+      <h2>Slash Commands</h2>
+      <ul>
+        <li><code>/route &lt;from&gt; &lt;to&gt; &lt;amount&gt;</code> &mdash; find the cheapest transfer path across 7 exchanges</li>
+        <li><code>/price &lt;coin&gt;</code> &mdash; live price comparison across Korean exchanges</li>
+        <li><code>/kimchi [coin]</code> &mdash; kimchi premium (Korean vs global spread)</li>
+        <li><code>/fees [coin]</code> &mdash; trading + withdrawal fee comparison</li>
+        <li><code>/status</code> &mdash; exchange network health (7 exchanges)</li>
+        <li><code>/help</code> &mdash; list all commands</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Natural Language</h2>
+      <p>No need to memorize commands. Ask in plain Korean or English:</p>
+      <ul>
+        <li>"빗썸에서 바이낸스로 500만원 보내는 가장 싼 방법 알려줘"</li>
+        <li>"지금 김치 프리미엄 얼마야?"</li>
+        <li>"XRP 거래소별 가격 비교해줘"</li>
+        <li>"업비트 출금 수수료가 얼마야?"</li>
+      </ul>
+      <p>The bot understands context and maintains conversation history (last 10 messages).</p>
+    </section>
+
+    <section class="card">
+      <h2>Examples</h2>
+      <pre><code>/route bithumb:KRW binance:USDC 5000000
+/price XRP
+/kimchi BTC
+/fees SOL
+/status</code></pre>
+    </section>
+
+    <section class="card">
+      <h2>How It Works</h2>
+      <ul>
+        <li>Powered by GLM-5 with tool calling &mdash; the bot reads your message and decides which CrossFin API to call</li>
+        <li>Multi-turn memory &mdash; remembers your last 10 messages per chat</li>
+        <li>Read-only &mdash; the bot finds routes and shows data but never executes trades</li>
+        <li>Data from 7 exchanges: Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Limitations</h2>
+      <ul>
+        <li>Route finding is read-only. No actual trades are executed.</li>
+        <li>Prices are real-time snapshots, not guaranteed quotes.</li>
+        <li>CrossFin topics only &mdash; the bot won't answer unrelated questions.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
