@@ -80,12 +80,24 @@ const EXCHANGE_LABELS: Record<string, string> = {
   upbit: 'Upbit',
   coinone: 'Coinone',
   gopax: 'GoPax',
+  bitflyer: 'bitFlyer',
+  wazirx: 'WazirX',
   binance: 'Binance',
   okx: 'OKX',
   bybit: 'Bybit',
 }
 
-
+const ENDPOINT_OPTIONS = [
+  { value: 'bithumb:KRW', label: 'Bithumb:KRW' },
+  { value: 'upbit:KRW', label: 'Upbit:KRW' },
+  { value: 'coinone:KRW', label: 'Coinone:KRW' },
+  { value: 'gopax:KRW', label: 'GoPax:KRW' },
+  { value: 'bitflyer:JPY', label: 'bitFlyer:JPY' },
+  { value: 'wazirx:INR', label: 'WazirX:INR' },
+  { value: 'binance:USDC', label: 'Binance:USDC' },
+  { value: 'okx:USDC', label: 'OKX:USDC' },
+  { value: 'bybit:USDC', label: 'Bybit:USDC' },
+] as const
 
 function formatExchange(exchange: string): string {
   const key = exchange.trim().toLowerCase()

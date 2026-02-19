@@ -587,7 +587,7 @@ function App() {
               <span style={{ fontSize: 11, fontWeight: 'bold', color: '#FFB800', letterSpacing: 1 }}>COMING SOON</span>
             </div>
             <div style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6 }}>
-              <strong>Graph-based routing algorithm</strong> — Currently scanning 77 routes via brute-force (7 exchanges × 11 coins).
+              <strong>Graph-based routing algorithm</strong> — Currently scanning 99 routes via brute-force (9 exchanges × 11 coins).
               Next update: Dijkstra shortest-path with liquidity-weighted edges for 1,000+ routes across 20+ exchanges,
               DEX aggregators, and cross-chain bridges. Real-time pruning + predictive timing recommendations.
             </div>

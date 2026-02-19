@@ -1,6 +1,6 @@
 # Quickstart
 
-Start in under 2 minutes with free endpoints across 7 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit).
+Start in under 2 minutes with free endpoints across 9 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit).
 
 ## Step 1: Check health
 
@@ -22,7 +22,7 @@ curl https://crossfin.dev/api/route/status
 curl "https://crossfin.dev/api/route/fees?coin=XRP"
 ```
 
-Returns all 7 exchanges with supported coins, online status, and fee schedules.
+Returns all 9 exchanges with supported coins, online status, and fee schedules.
 
 ## Step 3: Free arbitrage preview
 
