@@ -9573,15 +9573,19 @@ app.get('/api/acp/status', (c) => {
 })
 
 app.post('/api/telegram/webhook', async (c) => {
-  const secret = (c.env.TELEGRAM_WEBHOOK_SECRET ?? '').trim()
-  const providedSecret = (c.req.header('X-Telegram-Bot-Api-Secret-Token') ?? '').trim()
-  if (secret && !timingSafeEqual(providedSecret, secret)) {
-    throw new HTTPException(401, { message: 'Unauthorized webhook token' })
-  }
-
   const botToken = (c.env.TELEGRAM_BOT_TOKEN ?? '').trim()
   if (!botToken) {
     return c.json({ ok: true, ignored: true, reason: 'TELEGRAM_BOT_TOKEN missing' })
+  }
+
+  const secret = (c.env.TELEGRAM_WEBHOOK_SECRET ?? '').trim()
+  if (!secret) {
+    throw new HTTPException(500, { message: 'TELEGRAM_WEBHOOK_SECRET is required when TELEGRAM_BOT_TOKEN is configured' })
+  }
+
+  const providedSecret = (c.req.header('X-Telegram-Bot-Api-Secret-Token') ?? '').trim()
+  if (!timingSafeEqual(providedSecret, secret)) {
+    throw new HTTPException(401, { message: 'Unauthorized webhook token' })
   }
 
   let body: {
