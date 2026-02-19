@@ -1894,6 +1894,37 @@ app.get('/api/openapi.json', (c) => {
           },
         },
       },
+      '/api/telegram/webhook': {
+        post: {
+          operationId: 'telegramWebhook',
+          summary: 'Telegram bot webhook endpoint',
+          description: 'Receives Telegram updates and executes /route, /price, /status, /kimchi, /fees commands. If TELEGRAM_BOT_TOKEN is configured, X-Telegram-Bot-Api-Secret-Token must match TELEGRAM_WEBHOOK_SECRET.',
+          tags: ['Telegram'],
+          parameters: [
+            {
+              name: 'X-Telegram-Bot-Api-Secret-Token',
+              in: 'header',
+              required: false,
+              description: 'Telegram webhook secret token header.',
+              schema: { type: 'string' },
+            },
+          ],
+          requestBody: {
+            required: false,
+            content: {
+              'application/json': {
+                schema: { type: 'object' },
+              },
+            },
+          },
+          responses: {
+            '200': { description: 'Webhook accepted' },
+            '400': { description: 'Invalid JSON body' },
+            '401': { description: 'Unauthorized webhook token' },
+            '500': { description: 'Webhook is enabled but server secret is not configured' },
+          },
+        },
+      },
 
       '/api/registry': {
         get: {
@@ -6586,13 +6617,18 @@ async function findOptimalRoute(
         return `${formatAmountByCurrency(feeAmountUsd, 'USD')} (${totalCostPctRounded}%)`
       })()
 
-      const recommendation: Route['summary']['recommendation'] = totalCostPct < 1
-        ? 'GOOD_DEAL'
-        : totalCostPct < 3
-          ? 'PROCEED'
-          : totalCostPct < 5
-            ? 'EXPENSIVE'
-            : 'VERY_EXPENSIVE'
+      const finalAction: Route['action'] = totalCostPct < 2 ? action : 'SKIP'
+      const finalReason = totalCostPct < 2
+        ? reason
+        : `High total cost ${round2(totalCostPct)}% — consider waiting for better rates`
+      const recommendation: Route['summary']['recommendation'] =
+        finalAction === 'EXECUTE'
+          ? (totalCostPct < 1 ? 'GOOD_DEAL' : 'PROCEED')
+          : finalAction === 'WAIT'
+            ? 'PROCEED'
+            : totalCostPct < 5
+              ? 'EXPENSIVE'
+              : 'VERY_EXPENSIVE'
 
       const route: Route = {
         id: `${fromEx}-${bridgeCoin}-${toEx}`,
@@ -6642,9 +6678,9 @@ async function findOptimalRoute(
         estimatedInput: amount,
         estimatedOutput,
         bridgeCoin,
-        action: totalCostPct < 2 ? action : 'SKIP',
+        action: finalAction,
         confidence: Math.round(confidence * 100) / 100,
-        reason: totalCostPct < 2 ? reason : `High total cost ${round2(totalCostPct)}% — consider waiting for better rates`,
+        reason: finalReason,
       }
 
       routes.push(route)

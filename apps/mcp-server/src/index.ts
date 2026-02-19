@@ -574,7 +574,7 @@ server.registerTool(
     title: 'List exchange fees',
     description:
       'Show trading fees, withdrawal fees, and transfer times for all supported exchanges ' +
-      '(Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit)',
+      '(Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit)',
     inputSchema: z.object({}),
   },
   async (_params): Promise<CallToolResult> => {
