@@ -894,55 +894,90 @@
   border-left: 3px solid var(--cyan);
 }
 
-.exchangeGrid {
+.exchangeHubGrid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
-.exchangeCard {
+.exchangeHubCard {
   background: var(--bg2);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px 16px;
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.exchangeHubCard.korea {
+  border-left: 3px solid var(--cyan);
+}
+
+.exchangeHubCard.global {
+  border-left: 3px solid var(--green);
+}
+
+.exchangeHubHead {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  transition: border-color 200ms ease, box-shadow 200ms ease;
-}
-
-.exchangeCard:hover {
-  border-color: var(--border-hover);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-}
-
-.exchangeCard.online {
-  border-top: 2px solid var(--green);
-}
-
-.exchangeCard.offline {
-  border-top: 2px solid var(--red);
-}
-
-.exchangeCardTop {
-  display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
-.exchangeName {
-  font-family: var(--mono);
-  font-size: 0.9rem;
-  font-weight: 700;
+.exchangeHubTitle {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 800;
   letter-spacing: -0.01em;
 }
 
-.exchangeRegion {
+.exchangeHubDesc {
+  margin: 4px 0 0;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.exchangeHubMeta {
+  font-family: var(--mono);
   font-size: 0.72rem;
-  font-weight: 650;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.exchangeHubList {
+  display: grid;
+  gap: 8px;
+}
+
+.exchangePill {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.exchangePill.online {
+  border-color: rgba(0, 255, 136, 0.25);
+}
+
+.exchangePill.offline {
+  border-color: rgba(255, 68, 102, 0.25);
+}
+
+.exchangePillName {
+  font-family: var(--mono);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.exchangePillStatus {
+  font-size: 0.72rem;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
 }
 
 .feeCell {
@@ -950,6 +985,14 @@
   font-size: 0.84rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+.etaCell {
+  font-family: var(--mono);
+  font-size: 0.84rem;
+  color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
 }
 
 .acpCard {
@@ -1828,8 +1871,8 @@
   .twoCol {
     grid-template-columns: 1fr;
   }
-  .exchangeGrid {
-    grid-template-columns: repeat(3, 1fr);
+  .exchangeHubGrid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1900,8 +1943,8 @@
   .recentRow span:nth-child(4) {
     display: none;
   }
-  .exchangeGrid {
-    grid-template-columns: repeat(2, 1fr);
+  .exchangeHubGrid {
+    grid-template-columns: 1fr;
   }
   .acpCapabilities {
     margin-left: 0;

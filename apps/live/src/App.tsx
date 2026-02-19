@@ -126,6 +126,7 @@ interface RouteFeeEntry {
   exchange: string;
   tradingFeePct: number;
   withdrawalFees: Record<string, number>;
+  transferTimes?: Record<string, number>;
 }
 
 interface RouteFeeData {
@@ -225,6 +226,11 @@ const ROUTE_EXCHANGES = [
 
 function isKoreanExchange(ex: string): boolean {
   return KOREAN_EXCHANGES.includes(ex.toLowerCase());
+}
+
+function formatExchangeLabel(ex: string): string {
+  const exchange = ex.toLowerCase();
+  return ROUTE_EXCHANGES.find((item) => item.value === exchange)?.label ?? ex;
 }
 
 function formatRouteNum(value: string, currency: string): string {
@@ -412,12 +418,23 @@ export default function App() {
   const topServices = analytics?.topServices ?? [];
   const recentCalls = analytics?.recentCalls ?? [];
   const pairs = arb?.pairs ?? [];
-  const onlineExchanges = routeStatus?.exchanges?.filter(e => e.status === "online").length ?? 0;
-  const totalExchangeCount = routeStatus?.exchanges?.length ?? 7;
+  const routeExchangeRows = routeStatus?.exchanges ?? [];
+  const onlineExchanges = routeExchangeRows.filter((e) => e.status === "online").length;
+  const totalExchangeCount = routeExchangeRows.length || 7;
+  const koreaHubExchanges = routeExchangeRows.filter((e) => isKoreanExchange(e.exchange));
+  const globalHubExchanges = routeExchangeRows.filter((e) => !isKoreanExchange(e.exchange));
   const bridgeCoins = (routePairs?.pairs ?? []).filter(p => p.bridgeSupported);
   const feeEntries = routeFees?.fees ?? [];
   const lowestTradingFee = feeEntries.length > 0 ? Math.min(...feeEntries.map(f => f.tradingFeePct)) : null;
-  const xrpTransferTime = routePairs?.pairs?.find(p => p.coin.toUpperCase() === "XRP")?.transferTimeMin;
+  const lowestFeeExchange = lowestTradingFee == null
+    ? null
+    : feeEntries.find((f) => f.tradingFeePct === lowestTradingFee) ?? null;
+  const xrpTransferTimeFallback = routePairs?.pairs?.find(p => p.coin.toUpperCase() === "XRP")?.transferTimeMin;
+  const fastestBridge = bridgeCoins.length > 0
+    ? bridgeCoins.reduce((fastest, current) =>
+      current.transferTimeMin < fastest.transferTimeMin ? current : fastest,
+    )
+    : null;
 
   const maxServiceCalls = topServices.length
     ? Math.max(...topServices.map((s) => s.calls))
@@ -898,7 +915,7 @@ export default function App() {
                 </div>
                 <div className="agentDemoFeature">
                   <span className="agentFeatureIcon">💱</span>
-                  <span>Live kimchi premium tracking</span>
+                  <span>Live route spread monitoring</span>
                 </div>
                 <div className="agentDemoFeature">
                   <span className="agentFeatureIcon">🇰🇷</span>
@@ -925,17 +942,20 @@ export default function App() {
                   <span className="chatHighlight">비용 0.07% | 수령 $3,452</span>
                 </div>
                 <div className="chatBubble user">
-                  지금 김치 프리미엄은?
+                  지금 기준으로 어떤 브릿지 코인이 가장 빠르고 수수료가 낮아?
                 </div>
                 <div className="chatBubble agent">
                   <div className="chatToolCall">
                     <span className="toolIcon">⚡</span>
-                    <code>get_kimchi_premium</code>
+                    <code>compare_exchange_prices</code>
                   </div>
-                  평균 김프 <strong>{avgPremium >= 0 ? "+" : ""}{avgPremium.toFixed(2)}%</strong>
-                  {pairs.length > 0 && pairs[0] && (
-                    <> · 최고 {pairs.reduce((a, b) => a.premiumPct > b.premiumPct ? a : b).coin} {pairs.reduce((a, b) => a.premiumPct > b.premiumPct ? a : b).premiumPct.toFixed(2)}%</>
-                  )}
+                  <strong>
+                    가장 빠른 브릿지: {fastestBridge?.coin ?? "XRP"}
+                    {fastestBridge ? ` (~${fastestBridge.transferTimeMin}분)` : ""}
+                  </strong>
+                  <br />
+                  최저 거래 수수료 거래소: {lowestFeeExchange ? formatExchangeLabel(lowestFeeExchange.exchange) : "—"}
+                  {lowestTradingFee != null ? ` (${lowestTradingFee.toFixed(3)}%)` : ""}
                 </div>
               </div>
             </div>
@@ -984,10 +1004,10 @@ export default function App() {
             ═══════════════════════════════════════════════ */}
         <section className="metricsRow">
           <MetricCard
-            label="Kimchi Premium"
+            label="Route Spread"
             value={`${avgPremium >= 0 ? "+" : ""}${avgPremium.toFixed(2)}%`}
             tone={avgPremium >= 0 ? "positive" : "negative"}
-            sub="KR↔Global avg spread"
+            sub="KRW↔Global routing edge"
           />
           <MetricCard
             label="USD/KRW"
@@ -1047,7 +1067,7 @@ export default function App() {
             </div>
           </div>
           <p className="decisionSubtext">
-            Real-time arbitrage decisions — actionable intelligence with confidence scoring.
+            Real-time routing decisions with confidence scoring from cross-exchange spread signals.
           </p>
           <div className="decisionGrid">
             {pairs.length === 0 && (
@@ -1116,33 +1136,55 @@ export default function App() {
         <div className="routingSection">
           <section className="panel routingPanel">
             <div className="panelHeader">
-              <h2 className="panelTitle">Exchange Network</h2>
+              <h2 className="panelTitle">Routing Network Hubs</h2>
               <span className="panelBadge">
                 {onlineExchanges}/{totalExchangeCount} Online
               </span>
             </div>
-            <div className="exchangeGrid">
-              {(routeStatus?.exchanges ?? []).length === 0 && (
-                <p className="emptyText">Loading exchanges...</p>
-              )}
-              {(routeStatus?.exchanges ?? []).map((ex) => {
-                const isKorea = ["bithumb", "upbit", "coinone", "gopax"].includes(
-                  ex.exchange.toLowerCase(),
-                );
-                return (
-                  <div key={ex.exchange} className={`exchangeCard ${ex.status}`}>
-                    <div className="exchangeCardTop">
-                      <span className="exchangeName">{ex.exchange}</span>
-                      <span
-                        className={`statusDotSmall ${ex.status === "online" ? "green" : "red"}`}
-                      />
-                    </div>
-                    <span className="exchangeRegion">
-                      {isKorea ? "Korea" : "Global"}
-                    </span>
+            <div className="exchangeHubGrid">
+              <div className="exchangeHubCard korea">
+                <div className="exchangeHubHead">
+                  <div>
+                    <h3 className="exchangeHubTitle">Korea Hub</h3>
+                    <p className="exchangeHubDesc">KRW entry and local liquidity venues</p>
                   </div>
-                );
-              })}
+                  <span className="exchangeHubMeta">
+                    {koreaHubExchanges.filter((e) => e.status === "online").length}/{koreaHubExchanges.length || 4} online
+                  </span>
+                </div>
+                <div className="exchangeHubList">
+                  {koreaHubExchanges.length === 0 && <p className="emptyText">Loading hub...</p>}
+                  {koreaHubExchanges.map((ex) => (
+                    <div key={`kr-${ex.exchange}`} className={`exchangePill ${ex.status}`}>
+                      <span className="exchangePillName">{formatExchangeLabel(ex.exchange)}</span>
+                      <span className={`statusDotSmall ${ex.status === "online" ? "green" : "red"}`} />
+                      <span className="exchangePillStatus">{ex.status}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="exchangeHubCard global">
+                <div className="exchangeHubHead">
+                  <div>
+                    <h3 className="exchangeHubTitle">Global Hub</h3>
+                    <p className="exchangeHubDesc">USDC settlement and bridge exits</p>
+                  </div>
+                  <span className="exchangeHubMeta">
+                    {globalHubExchanges.filter((e) => e.status === "online").length}/{globalHubExchanges.length || 3} online
+                  </span>
+                </div>
+                <div className="exchangeHubList">
+                  {globalHubExchanges.length === 0 && <p className="emptyText">Loading hub...</p>}
+                  {globalHubExchanges.map((ex) => (
+                    <div key={`gl-${ex.exchange}`} className={`exchangePill ${ex.status}`}>
+                      <span className="exchangePillName">{formatExchangeLabel(ex.exchange)}</span>
+                      <span className={`statusDotSmall ${ex.status === "online" ? "green" : "red"}`} />
+                      <span className="exchangePillStatus">{ex.status}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </section>
 
@@ -1169,7 +1211,7 @@ export default function App() {
                     <th>Exchange</th>
                     <th>Trading Fee %</th>
                     <th>XRP Withdrawal</th>
-                    <th>Transfer Time</th>
+                    <th>Transfer ETA (XRP)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1180,26 +1222,29 @@ export default function App() {
                       </td>
                     </tr>
                   )}
-                  {feeEntries.map((f) => (
-                    <tr key={f.exchange} className="fadeIn">
-                      <td className="coinCell">{f.exchange}</td>
-                      <td
-                        className={`pctCell ${f.tradingFeePct === lowestTradingFee ? "positive" : ""}`}
-                      >
-                        {f.tradingFeePct.toFixed(3)}%
-                      </td>
-                      <td className="feeCell">
-                        {f.withdrawalFees?.XRP != null
-                          ? `${f.withdrawalFees.XRP} XRP`
-                          : "\u2014"}
-                      </td>
-                      <td className="dirCell">
-                        {xrpTransferTime != null
-                          ? `~${xrpTransferTime} min`
-                          : "\u2014"}
-                      </td>
-                    </tr>
-                  ))}
+                  {feeEntries.map((f) => {
+                    const xrpEta = f.transferTimes?.XRP ?? xrpTransferTimeFallback;
+                    return (
+                      <tr key={f.exchange} className="fadeIn">
+                        <td className="coinCell">{formatExchangeLabel(f.exchange)}</td>
+                        <td
+                          className={`pctCell ${f.tradingFeePct === lowestTradingFee ? "positive" : ""}`}
+                        >
+                          {f.tradingFeePct.toFixed(3)}%
+                        </td>
+                        <td className="feeCell">
+                          {f.withdrawalFees?.XRP != null
+                            ? `${f.withdrawalFees.XRP} XRP`
+                            : "\u2014"}
+                        </td>
+                        <td className="etaCell">
+                          {xrpEta != null
+                            ? `~${xrpEta} min`
+                            : "\u2014"}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1207,10 +1252,9 @@ export default function App() {
 
         </div>
 
-        {/* Kimchi Premium Table */}
         <section className="panel">
           <div className="panelHeader">
-            <h2 className="panelTitle">Live Kimchi Premium</h2>
+            <h2 className="panelTitle">Live Route Spread Signals</h2>
             <span className="panelBadge">
               <span className="liveDot" />
               Auto-refresh 15s
@@ -1221,9 +1265,9 @@ export default function App() {
               <thead>
                 <tr>
                   <th>Coin</th>
-                  <th>Premium %</th>
-                  <th>Direction</th>
-                  <th>Status</th>
+                  <th>Spread %</th>
+                  <th>Route Bias</th>
+                  <th>Routing Signal</th>
                 </tr>
               </thead>
               <tbody>
@@ -1247,7 +1291,7 @@ export default function App() {
                     <td>
                       <span className="statusPill active">
                         <span className="statusDotSmall" />
-                        Active
+                        {p.decision?.action ?? "MONITOR"}
                       </span>
                     </td>
                   </tr>
