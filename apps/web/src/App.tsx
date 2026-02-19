@@ -572,29 +572,6 @@ function App() {
           </div>
 
           <RouteGraph />
-
-          <div style={{
-            marginTop: 24,
-            padding: '16px 20px',
-            background: '#141B2D',
-            border: '1px solid #384152',
-            borderLeft: '3px solid #FFB800',
-            borderRadius: 4,
-            maxWidth: 850,
-            margin: '24px auto 0',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{ fontSize: 11, fontWeight: 'bold', color: '#FFB800', letterSpacing: 1 }}>COMING SOON</span>
-            </div>
-            <div style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6 }}>
-              <strong>Graph-based routing algorithm</strong> — Currently scanning 90+ routes via brute-force (9 exchanges × 11 coins).
-              Next update: Dijkstra shortest-path with liquidity-weighted edges for 1,000+ routes across 20+ exchanges,
-              DEX aggregators, and cross-chain bridges. Real-time pruning + predictive timing recommendations.
-            </div>
-            <div style={{ fontSize: 11, color: '#7B8794', marginTop: 8 }}>
-              Phase 2 of CrossFin Intelligence Layer
-            </div>
-          </div>
         </section>
         )}
 

@@ -124,8 +124,14 @@ function parseExchange(endpoint: string): string {
   return (exchange ?? '').toLowerCase()
 }
 
-function toUsd(value: number): string {
-  return `$${value.toFixed(2)}`
+function formatTradingFeePct(value: number): string {
+  if (!Number.isFinite(value)) return 'n/a'
+  return `${value.toFixed(2)}%`
+}
+
+function formatWithdrawalFee(value: number | undefined, coin: string | null): string {
+  if (!coin || !Number.isFinite(value)) return 'n/a'
+  return `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 6 })} ${coin}`
 }
 
 export default function RouteGraph() {
@@ -270,11 +276,6 @@ export default function RouteGraph() {
       ctx.stroke()
       ctx.setLineDash([])
 
-      const mx = (x1 + x2) / 2
-      const my = (y1 + y2) / 2
-      ctx.font = '10px sans-serif'
-      ctx.fillStyle = edge.isOptimal ? C.green : C.muted
-      ctx.fillText(toUsd(edge.cost), mx, my - 4)
     })
 
     graph.nodes.forEach((node) => {
@@ -306,6 +307,8 @@ export default function RouteGraph() {
   const tradingFees = data?.fees.trading ?? {}
   const optimalCoin = optimal?.bridgeCoin?.toUpperCase() ?? null
   const withdrawalByExchange = data?.fees.withdrawal ?? {}
+  const hasData = Boolean(data)
+  const isInitialLoading = loading && !hasData
 
   return (
     <div style={{
@@ -338,7 +341,7 @@ export default function RouteGraph() {
             cursor: loading ? 'not-allowed' : 'pointer',
           }}
         >
-          {loading ? 'Loading...' : 'Refresh Live Route'}
+          {loading ? 'Loading…' : 'Refresh Live Route'}
         </button>
       </div>
 
@@ -376,7 +379,9 @@ export default function RouteGraph() {
       <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <div style={{ background: C.card, border: `1px solid ${C.dim}`, borderRadius: 6, padding: 12 }}>
           <div style={{ color: C.white, fontWeight: 700, marginBottom: 8 }}>Optimal</div>
-          {optimal ? (
+          {isInitialLoading ? (
+            <div style={{ color: C.muted, fontSize: 12 }}>Loading live route data…</div>
+          ) : optimal ? (
             <>
               <div style={{ color: C.green, fontWeight: 700, marginBottom: 4 }}>
                 {formatExchange(parseExchange(data?.request.from ?? from))}
@@ -389,43 +394,57 @@ export default function RouteGraph() {
               <div style={{ color: C.muted, fontSize: 12 }}>Action: {optimal.action} ({(optimal.confidence * 100).toFixed(0)}%)</div>
               <div style={{ color: C.white, fontSize: 12, marginTop: 6 }}>{optimal.reason}</div>
             </>
+          ) : error ? (
+            <div style={{ color: '#FFB4B4', fontSize: 12 }}>
+              Route fetch failed. Check endpoint status and retry.
+            </div>
           ) : (
-            <div style={{ color: C.muted, fontSize: 12 }}>No route found</div>
+            <div style={{ color: C.muted, fontSize: 12 }}>No valid route for current pair/amount.</div>
           )}
         </div>
 
         <div style={{ background: C.card, border: `1px solid ${C.dim}`, borderRadius: 6, padding: 12 }}>
           <div style={{ color: C.white, fontWeight: 700, marginBottom: 8 }}>Route Data Freshness</div>
-          <div style={{ color: C.muted, fontSize: 12 }}>Evaluated routes: {data?.meta.routesEvaluated ?? 0}</div>
-          <div style={{ color: C.muted, fontSize: 12 }}>Global price source: {data?.meta.priceAge?.globalPrices?.source ?? 'n/a'}</div>
-          <div style={{ color: C.muted, fontSize: 12 }}>Price age: {data?.meta.priceAge?.globalPrices?.ageMs ?? 0}ms</div>
-          <div style={{ color: C.muted, fontSize: 12 }}>Data freshness: {data?.meta.dataFreshness ?? 'n/a'}</div>
-          <div style={{ color: C.muted, fontSize: 12 }}>Fees source: {data?.meta.feesSource ?? 'n/a'}</div>
+          {hasData ? (
+            <>
+              <div style={{ color: C.muted, fontSize: 12 }}>Evaluated routes: {data?.meta.routesEvaluated ?? 0}</div>
+              <div style={{ color: C.muted, fontSize: 12 }}>Global price source: {data?.meta.priceAge?.globalPrices?.source ?? 'n/a'}</div>
+              <div style={{ color: C.muted, fontSize: 12 }}>Price age: {data?.meta.priceAge?.globalPrices?.ageMs ?? 0}ms</div>
+              <div style={{ color: C.muted, fontSize: 12 }}>Data freshness: {data?.meta.dataFreshness ?? 'n/a'}</div>
+              <div style={{ color: C.muted, fontSize: 12 }}>Fees source: {data?.meta.feesSource ?? 'n/a'}</div>
+            </>
+          ) : (
+            <div style={{ color: C.muted, fontSize: 12 }}>Waiting for first live response…</div>
+          )}
         </div>
       </div>
 
       <div style={{ marginTop: 10, background: C.card, border: `1px solid ${C.dim}`, borderRadius: 6, padding: 12 }}>
         <div style={{ color: C.white, fontWeight: 700, marginBottom: 8 }}>Real Exchange Fees (D1)</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <div>
-            <div style={{ color: C.gold, fontSize: 12, marginBottom: 6 }}>Trading Fees</div>
-            {Object.entries(tradingFees).map(([exchange, fee]) => (
-              <div key={`trade-${exchange}`} style={{ color: C.muted, fontSize: 12 }}>
-                {formatExchange(exchange)}: {(fee * 100).toFixed(2)}%
-              </div>
-            ))}
-          </div>
-          <div>
-            <div style={{ color: C.gold, fontSize: 12, marginBottom: 6 }}>
-              Withdrawal Fees {optimalCoin ? `(${optimalCoin})` : ''}
+        {hasData ? (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <div style={{ color: C.gold, fontSize: 12, marginBottom: 6 }}>Trading Fees</div>
+              {Object.entries(tradingFees).map(([exchange, fee]) => (
+                <div key={`trade-${exchange}`} style={{ color: C.muted, fontSize: 12 }}>
+                  {formatExchange(exchange)}: {formatTradingFeePct(fee)}
+                </div>
+              ))}
             </div>
-            {Object.entries(withdrawalByExchange).map(([exchange, byCoin]) => (
-              <div key={`wd-${exchange}`} style={{ color: C.muted, fontSize: 12 }}>
-                {formatExchange(exchange)}: {optimalCoin && byCoin[optimalCoin] !== undefined ? byCoin[optimalCoin] : '-'}
+            <div>
+              <div style={{ color: C.gold, fontSize: 12, marginBottom: 6 }}>
+                Withdrawal Fees {optimalCoin ? `(${optimalCoin})` : ''}
               </div>
-            ))}
+              {Object.entries(withdrawalByExchange).map(([exchange, byCoin]) => (
+                <div key={`wd-${exchange}`} style={{ color: C.muted, fontSize: 12 }}>
+                  {formatExchange(exchange)}: {formatWithdrawalFee(byCoin[optimalCoin ?? ''], optimalCoin)}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div style={{ color: C.muted, fontSize: 12 }}>Loading fee table…</div>
+        )}
       </div>
 
       {alternatives.length > 0 && (
