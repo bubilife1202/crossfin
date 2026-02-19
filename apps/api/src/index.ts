@@ -163,6 +163,32 @@ async function telegramSendTyping(botToken: string, chatId: string | number): Pr
   })
 }
 
+async function telegramSendTypingSafe(botToken: string, chatId: string | number): Promise<void> {
+  try {
+    await telegramSendTyping(botToken, chatId)
+  } catch (err) {
+    console.warn('[telegram] sendChatAction failed', err)
+  }
+}
+
+function startTelegramTypingLoop(
+  botToken: string,
+  chatId: string | number,
+  intervalMs: number = 4000,
+): () => void {
+  let stopped = false
+  void telegramSendTypingSafe(botToken, chatId)
+  const timer = setInterval(() => {
+    if (stopped) return
+    void telegramSendTypingSafe(botToken, chatId)
+  }, intervalMs)
+
+  return () => {
+    stopped = true
+    clearInterval(timer)
+  }
+}
+
 interface GlmMessage {
   role: string
   content?: string
@@ -11551,6 +11577,7 @@ app.post('/api/telegram/webhook', async (c) => {
   if (text.startsWith('/')) {
     const commandRaw = text.split(/\s+/)[0] ?? ''
     const command = commandRaw.split('@')[0]?.toLowerCase() ?? ''
+    const stopTyping = startTelegramTypingLoop(botToken, chatId)
 
     try {
       if (command === '/help' || command === '/start') {
@@ -11742,17 +11769,18 @@ app.post('/api/telegram/webhook', async (c) => {
       const message = err instanceof HTTPException ? err.message : (err instanceof Error ? err.message : 'Failed to process command')
       await telegramSendMessage(botToken, chatId, `Route error: ${message}`)
       return c.json({ ok: true, handled: true, error: message, mode: 'slash' })
+    } finally {
+      stopTyping()
     }
   }
 
+  const stopTyping = startTelegramTypingLoop(botToken, chatId)
   try {
     const zaiApiKey = (c.env.ZAI_API_KEY ?? '').trim()
     if (!zaiApiKey) {
       await telegramSendMessage(botToken, chatId, 'AI mode is not configured yet (missing ZAI_API_KEY). Use /help to see slash commands.')
       return c.json({ ok: true, handled: true, mode: 'ai', configured: false })
     }
-
-    await telegramSendTyping(botToken, chatId)
 
     const chatIdStr = String(chatId)
     const MAX_HISTORY = 10
@@ -11782,7 +11810,6 @@ app.post('/api/telegram/webhook', async (c) => {
     let finalReply = ''
 
     for (let loop = 0; loop < maxToolLoops; loop += 1) {
-      await telegramSendTyping(botToken, chatId)
       const assistantMessage = await glmChatCompletion(zaiApiKey, messages, CROSSFIN_TELEGRAM_TOOLS)
       messages.push({
         role: 'assistant',
@@ -11846,6 +11873,8 @@ app.post('/api/telegram/webhook', async (c) => {
     const message = err instanceof Error ? err.message : 'Failed to process AI request'
     await telegramSendMessage(botToken, chatId, `AI error: ${message}`)
     return c.json({ ok: true, handled: true, error: message, mode: 'ai' })
+  } finally {
+    stopTyping()
   }
 })
 
