@@ -1,6 +1,6 @@
 # MCP Integration
 
-16 tools for Claude Desktop or any MCP client. Routes across 7 exchanges with 11 bridge coins.
+16 tools for Claude Desktop or any MCP client. Routes across 9 exchanges with 11 bridge coins.
 
 ## Install
 
@@ -33,7 +33,7 @@ No EVM key? Free tools work without one. Paid tools require a Base wallet with U
 ## All 16 Tools
 
 <ToolGrid :tools="[
-  { name: 'find_optimal_route', description: 'Optimal path across 7 exchanges', price: '$0.10' },
+  { name: 'find_optimal_route', description: 'Optimal path across 9 exchanges', price: '$0.10' },
   { name: 'list_exchange_fees', description: 'Trading + withdrawal fees', price: 'Free' },
   { name: 'compare_exchange_prices', description: 'Live price comparison', price: 'Free' },
   { name: 'get_kimchi_premium', description: 'Korean vs global spread', price: 'Free' },

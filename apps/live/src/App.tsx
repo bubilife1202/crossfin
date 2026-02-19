@@ -236,19 +236,73 @@ function usdcAmount(raw: string, decimals: string): string {
 
 /* ─── Route Finder helpers ─── */
 
-const KOREAN_EXCHANGES = ["bithumb", "upbit", "coinone", "gopax"];
-const ROUTE_EXCHANGES = [
-  { value: "bithumb", label: "Bithumb" },
-  { value: "upbit", label: "Upbit" },
-  { value: "coinone", label: "Coinone" },
-  { value: "gopax", label: "GoPax" },
-  { value: "binance", label: "Binance" },
-  { value: "okx", label: "OKX" },
-  { value: "bybit", label: "Bybit" },
-];
+type ExchangeRegion = "korean" | "regional" | "global";
 
-function isKoreanExchange(ex: string): boolean {
-  return KOREAN_EXCHANGES.includes(ex.toLowerCase());
+const ROUTE_EXCHANGES = [
+  { value: "bithumb", label: "Bithumb", region: "korean", fiat: "KRW" },
+  { value: "upbit", label: "Upbit", region: "korean", fiat: "KRW" },
+  { value: "coinone", label: "Coinone", region: "korean", fiat: "KRW" },
+  { value: "gopax", label: "GoPax", region: "korean", fiat: "KRW" },
+  { value: "bitflyer", label: "bitFlyer", region: "regional", fiat: "JPY" },
+  { value: "wazirx", label: "WazirX", region: "regional", fiat: "INR" },
+  { value: "binance", label: "Binance", region: "global", fiat: "USDC" },
+  { value: "okx", label: "OKX", region: "global", fiat: "USDC" },
+  { value: "bybit", label: "Bybit", region: "global", fiat: "USDC" },
+] as const;
+
+const FIAT_INTEGER_CURRENCIES = new Set(["KRW", "JPY", "INR"]);
+const GLOBAL_SETTLEMENT_CURRENCIES = ["USDC", "USDT", "USD"] as const;
+const CURRENCY_SYMBOL: Record<string, string> = {
+  KRW: "₩",
+  JPY: "¥",
+  INR: "₹",
+  USD: "$",
+  USDC: "$",
+  USDT: "$",
+  BTC: "₿",
+  ETH: "Ξ",
+};
+
+function getExchangeMeta(ex: string) {
+  return ROUTE_EXCHANGES.find((item) => item.value === ex.toLowerCase()) ?? null;
+}
+
+function getExchangeRegion(ex: string): ExchangeRegion {
+  return getExchangeMeta(ex)?.region ?? "global";
+}
+
+function getDefaultCurrencyForExchange(ex: string): string {
+  return getExchangeMeta(ex)?.fiat ?? "USDC";
+}
+
+function getReceiveCurrencyOptions(ex: string): readonly string[] {
+  if (getExchangeRegion(ex) === "global") return GLOBAL_SETTLEMENT_CURRENCIES;
+  return [getDefaultCurrencyForExchange(ex)];
+}
+
+function amountPresetForCurrency(currency: string): string {
+  if (currency === "KRW") return "5,000,000";
+  if (currency === "JPY") return "500,000";
+  if (currency === "INR") return "500,000";
+  return "1,000";
+}
+
+function minAmountForCurrency(currency: string): number {
+  if (currency === "KRW") return 10000;
+  if (currency === "JPY") return 1000;
+  if (currency === "INR") return 1000;
+  return 10;
+}
+
+function formatCurrencyAmount(value: number, currency: string): string {
+  const symbol = CURRENCY_SYMBOL[currency] ?? "";
+  if (FIAT_INTEGER_CURRENCIES.has(currency)) {
+    return `${symbol}${Math.max(0, Math.round(value)).toLocaleString()}`;
+  }
+  return `${symbol}${Math.max(0, value).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 function formatExchangeLabel(ex: string): string {
@@ -259,7 +313,7 @@ function formatExchangeLabel(ex: string): string {
 function formatRouteNum(value: string, currency: string): string {
   const raw = value.replace(/[^0-9.]/g, "");
   if (!raw) return "";
-  if (currency === "KRW") {
+  if (FIAT_INTEGER_CURRENCIES.has(currency)) {
     const num = parseInt(raw, 10);
     return isNaN(num) ? "" : num.toLocaleString("en-US");
   }
@@ -323,9 +377,9 @@ export default function App() {
 
   const [routeFrom, setRouteFrom] = useState("bithumb");
   const [routeTo, setRouteTo] = useState("binance");
-  const [routeFromCur, setRouteFromCur] = useState("KRW");
-  const [routeToCur, setRouteToCur] = useState("USDC");
-  const [routeAmount, setRouteAmount] = useState("5,000,000");
+  const [routeFromCur, setRouteFromCur] = useState(() => getDefaultCurrencyForExchange("bithumb"));
+  const [routeToCur, setRouteToCur] = useState(() => getReceiveCurrencyOptions("binance")[0] ?? "USDC");
+  const [routeAmount, setRouteAmount] = useState(() => amountPresetForCurrency(getDefaultCurrencyForExchange("bithumb")));
   const [routeStrategy, setRouteStrategy] = useState<"cheapest" | "fastest" | "balanced">("cheapest");
   const [routeResult, setRouteResult] = useState<AcpQuoteResponse | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
@@ -449,9 +503,13 @@ export default function App() {
   const pairs = arb?.pairs ?? [];
   const routeExchangeRows = routeStatus?.exchanges ?? [];
   const onlineExchanges = routeExchangeRows.filter((e) => e.status === "online").length;
-  const totalExchangeCount = routeExchangeRows.length || 7;
-  const koreaHubExchanges = routeExchangeRows.filter((e) => isKoreanExchange(e.exchange));
-  const globalHubExchanges = routeExchangeRows.filter((e) => !isKoreanExchange(e.exchange));
+  const totalExchangeCount = routeExchangeRows.length || ROUTE_EXCHANGES.length;
+  const koreaHubExchanges = routeExchangeRows.filter((e) => getExchangeRegion(e.exchange) === "korean");
+  const regionalHubExchanges = routeExchangeRows.filter((e) => getExchangeRegion(e.exchange) === "regional");
+  const globalHubExchanges = routeExchangeRows.filter((e) => getExchangeRegion(e.exchange) === "global");
+  const defaultKoreaExchangeCount = ROUTE_EXCHANGES.filter((e) => e.region === "korean").length;
+  const defaultRegionalExchangeCount = ROUTE_EXCHANGES.filter((e) => e.region === "regional").length;
+  const defaultGlobalExchangeCount = ROUTE_EXCHANGES.filter((e) => e.region === "global").length;
   const bridgeCoins = (routePairs?.pairs ?? []).filter(p => p.bridgeSupported);
   const feeEntries = routeFees?.fees ?? [];
   const lowestTradingFee = feeEntries.length > 0 ? Math.min(...feeEntries.map(f => f.tradingFeePct)) : null;
@@ -469,15 +527,15 @@ export default function App() {
     ? Math.max(...topServices.map((s) => s.calls))
     : 1;
 
-  const routeFromSymbol = routeFromCur === "KRW" ? "₩" : "$";
+  const routeFromSymbol = CURRENCY_SYMBOL[routeFromCur] ?? "";
   const routeOptimal = routeResult?.optimal_route;
   const routeAlts = routeResult?.alternatives ?? [];
   const routeAllRoutes = routeOptimal ? [routeOptimal, ...routeAlts] : [];
-  const savingsCurrency = routeToCur === "KRW" ? "KRW" : "USD";
+  const savingsCurrency = routeToCur;
+  const routeToOptions = getReceiveCurrencyOptions(routeTo);
 
   const formatSavings = (value: number): string => {
-    if (savingsCurrency === "KRW") return `₩${Math.max(0, Math.round(value)).toLocaleString()}`;
-    return `$${Math.max(0, Math.round(value)).toLocaleString()}`;
+    return formatCurrencyAmount(value, savingsCurrency);
   };
 
   // Calculate savings vs worst route
@@ -497,16 +555,16 @@ export default function App() {
 
   const handleRouteFromChange = (ex: string) => {
     setRouteFrom(ex);
-    const cur = isKoreanExchange(ex) ? "KRW" : "USDC";
+    const cur = getDefaultCurrencyForExchange(ex);
     setRouteFromCur(cur);
-    setRouteAmount(cur === "KRW" ? "5,000,000" : "1,000");
+    setRouteAmount(amountPresetForCurrency(cur));
     setRouteResult(null);
     setRouteError(null);
   };
 
   const handleRouteToChange = (ex: string) => {
     setRouteTo(ex);
-    setRouteToCur(isKoreanExchange(ex) ? "KRW" : "USDC");
+    setRouteToCur(getReceiveCurrencyOptions(ex)[0] ?? "USDC");
     setRouteResult(null);
     setRouteError(null);
   };
@@ -514,8 +572,8 @@ export default function App() {
   const swapRouteFromTo = () => {
     const nextFrom = routeTo;
     const nextTo = routeFrom;
-    const nextFromCur = isKoreanExchange(nextFrom) ? "KRW" : "USDC";
-    const nextToCur = isKoreanExchange(nextTo) ? "KRW" : "USDC";
+    const nextFromCur = getDefaultCurrencyForExchange(nextFrom);
+    const nextToCur = getReceiveCurrencyOptions(nextTo)[0] ?? "USDC";
 
     setRouteFrom(nextFrom);
     setRouteTo(nextTo);
@@ -523,10 +581,11 @@ export default function App() {
     setRouteToCur(nextToCur);
 
     const currentAmount = parseRouteAmount(routeAmount);
-    const defaultAmount = nextFromCur === "KRW" ? "5,000,000" : "1,000";
+    const defaultAmount = amountPresetForCurrency(nextFromCur);
+    const nextMin = minAmountForCurrency(nextFromCur);
     if (currentAmount <= 0) {
       setRouteAmount(defaultAmount);
-    } else if ((nextFromCur === "KRW" && currentAmount < 10000) || (nextFromCur !== "KRW" && currentAmount < 10)) {
+    } else if (currentAmount < nextMin) {
       setRouteAmount(defaultAmount);
     } else {
       setRouteAmount(formatRouteNum(String(currentAmount), nextFromCur));
@@ -542,12 +601,9 @@ export default function App() {
 
   const findRoute = useCallback(async () => {
     const amount = parseRouteAmount(routeAmount);
-    if (routeFromCur === "KRW" && amount < 10000) {
-      setRouteError("Minimum amount: ₩10,000");
-      return;
-    }
-    if (routeFromCur !== "KRW" && amount < 10) {
-      setRouteError("Minimum amount: $10");
+    const minAmount = minAmountForCurrency(routeFromCur);
+    if (amount < minAmount) {
+      setRouteError(`Minimum amount: ${formatCurrencyAmount(minAmount, routeFromCur)}`);
       return;
     }
     setRouteLoading(true);
@@ -583,8 +639,13 @@ export default function App() {
   const formatRouteOutput = (val: number): string => {
     if (routeToCur === "BTC") return val.toFixed(6);
     if (routeToCur === "ETH") return val.toFixed(4);
-    if (routeToCur === "KRW") return `₩${Math.round(val).toLocaleString()}`;
-    return `$${Math.round(val).toLocaleString()}`;
+    if (FIAT_INTEGER_CURRENCIES.has(routeToCur)) {
+      return `${CURRENCY_SYMBOL[routeToCur] ?? ""}${Math.round(val).toLocaleString()}`;
+    }
+    return `${CURRENCY_SYMBOL[routeToCur] ?? "$"}${val.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   };
 
   // Auto-run route on first load
@@ -676,22 +737,15 @@ export default function App() {
                   type="text"
                   value={routeAmount}
                   onChange={e => handleRouteAmountChange(e.target.value)}
-                  placeholder={routeFromCur === "KRW" ? "5,000,000" : "1,000"}
+                  placeholder={amountPresetForCurrency(routeFromCur)}
                 />
               </div>
               <div className="routeInputGroup">
                 <label htmlFor="routeToCurSelect">Receive</label>
                 <select id="routeToCurSelect" value={routeToCur} onChange={e => setRouteToCur(e.target.value)}>
-                  {isKoreanExchange(routeTo) ? (
-                    <option value="KRW">KRW</option>
-                  ) : (
-                    <>
-                      <option value="USDC">USDC</option>
-                      <option value="USDT">USDT</option>
-                      <option value="BTC">BTC</option>
-                      <option value="ETH">ETH</option>
-                    </>
-                  )}
+                  {routeToOptions.map((currency) => (
+                    <option key={currency} value={currency}>{currency}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -1069,13 +1123,35 @@ export default function App() {
                     <p className="exchangeHubDesc">KRW entry and local liquidity venues</p>
                   </div>
                   <span className="exchangeHubMeta">
-                    {koreaHubExchanges.filter((e) => e.status === "online").length}/{koreaHubExchanges.length || 4} online
+                    {koreaHubExchanges.filter((e) => e.status === "online").length}/{koreaHubExchanges.length || defaultKoreaExchangeCount} online
                   </span>
                 </div>
                 <div className="exchangeHubList">
                   {koreaHubExchanges.length === 0 && <p className="emptyText">Loading hub...</p>}
                   {koreaHubExchanges.map((ex) => (
                     <div key={`kr-${ex.exchange}`} className={`exchangePill ${ex.status}`}>
+                      <span className="exchangePillName">{formatExchangeLabel(ex.exchange)}</span>
+                      <span className={`statusDotSmall ${ex.status === "online" ? "green" : "red"}`} />
+                      <span className="exchangePillStatus">{ex.status}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="exchangeHubCard regional">
+                <div className="exchangeHubHead">
+                  <div>
+                    <h3 className="exchangeHubTitle">Regional Fiat Hub</h3>
+                    <p className="exchangeHubDesc">JPY/INR local rails (Japan, India)</p>
+                  </div>
+                  <span className="exchangeHubMeta">
+                    {regionalHubExchanges.filter((e) => e.status === "online").length}/{regionalHubExchanges.length || defaultRegionalExchangeCount} online
+                  </span>
+                </div>
+                <div className="exchangeHubList">
+                  {regionalHubExchanges.length === 0 && <p className="emptyText">Loading hub...</p>}
+                  {regionalHubExchanges.map((ex) => (
+                    <div key={`rg-${ex.exchange}`} className={`exchangePill ${ex.status}`}>
                       <span className="exchangePillName">{formatExchangeLabel(ex.exchange)}</span>
                       <span className={`statusDotSmall ${ex.status === "online" ? "green" : "red"}`} />
                       <span className="exchangePillStatus">{ex.status}</span>
@@ -1091,7 +1167,7 @@ export default function App() {
                     <p className="exchangeHubDesc">USDC settlement and bridge exits</p>
                   </div>
                   <span className="exchangeHubMeta">
-                    {globalHubExchanges.filter((e) => e.status === "online").length}/{globalHubExchanges.length || 3} online
+                    {globalHubExchanges.filter((e) => e.status === "online").length}/{globalHubExchanges.length || defaultGlobalExchangeCount} online
                   </span>
                 </div>
                 <div className="exchangeHubList">

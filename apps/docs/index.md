@@ -13,7 +13,7 @@ hero:
       link: /api
 features:
   - title: Routing Engine
-    details: Cheapest KRW→USDC transfer route across 7 exchanges with 11 bridge coins
+    details: Cheapest regional-fiat→stablecoin route across 9 exchanges with 11 bridge coins
   - title: Kimchi Premium
     details: Real-time Korean vs global price spread with AI decision layer
   - title: MCP Integration
@@ -25,7 +25,7 @@ features:
 ## Core Endpoints
 
 <ApiTable :endpoints="[
-  { method: 'GET', path: '/api/route/status', description: 'Exchange network health (7/7 online)', price: 'Free' },
+  { method: 'GET', path: '/api/route/status', description: 'Exchange network health (9/9 online)', price: 'Free' },
   { method: 'GET', path: '/api/route/fees', description: 'Trading + withdrawal fee table', price: 'Free' },
   { method: 'GET', path: '/api/arbitrage/demo', description: 'Top 3 kimchi premium decisions', price: 'Free' },
   { method: 'GET', path: '/api/premium/route/find', description: 'Full optimal route analysis', price: '$0.10' },
@@ -44,5 +44,6 @@ features:
 | Region | Exchanges |
 |--------|-----------|
 | **Korea** | Bithumb, Upbit, Coinone, GoPax |
+| **Regional Fiat** | bitFlyer (JPY), WazirX (INR) |
 | **Global** | Binance, OKX, Bybit |
 | **Bridge coins** | BTC, ETH, XRP, SOL, DOGE, ADA, DOT, LINK, AVAX, TRX, KAIA |
