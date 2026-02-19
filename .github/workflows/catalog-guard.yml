@@ -37,6 +37,12 @@ jobs:
         run: npx tsc --noEmit -p tsconfig.json
         working-directory: apps/api
 
+      - name: Verify API contracts
+        run: npm run contract:verify
+        working-directory: apps/api
+        env:
+          CONTRACT_BASE_URL: https://crossfin.dev
+
       - name: Build web
         run: npm run build
         working-directory: apps/web
