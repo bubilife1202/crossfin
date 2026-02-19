@@ -5753,6 +5753,12 @@ interface RouteMeta {
   skippedReasons?: Record<string, string>
   analysisTimestamp: string
   disclaimer: string
+  priceAge: {
+    globalPrices: { ageMs: number; source: string; cacheTtlMs: number }
+    koreanPrices: { source: string }
+  }
+  feesSource: 'd1' | 'hardcoded-fallback'
+  dataFreshness: 'live' | 'cached' | 'stale'
 }
 
 type RoutingStrategy = 'cheapest' | 'fastest' | 'balanced'
@@ -5862,6 +5868,15 @@ async function findOptimalRoute(
   const krwRate = krwRateResult.status === 'fulfilled' ? krwRateResult.value : 1450
   const bithumbAll = bithumbAllResult.status === 'fulfilled' ? bithumbAllResult.value : {}
   const globalPrices: Record<string, number> = globalPricesResult.status === 'fulfilled' ? globalPricesResult.value : {}
+
+  const feesFromD1 = tradingFeesResult.status === 'fulfilled'
+  const globalPricesSource = (() => {
+    const globalAny = globalThis as unknown as { __crossfinGlobalPricesCache?: { expiresAt: number; source: string } }
+    const cached = globalAny.__crossfinGlobalPricesCache
+    if (!cached) return { ageMs: 0, source: 'none', cacheTtlMs: GLOBAL_PRICES_SUCCESS_TTL_MS }
+    const ageMs = Math.max(0, Date.now() - (cached.expiresAt - GLOBAL_PRICES_SUCCESS_TTL_MS))
+    return { ageMs, source: cached.source ?? 'unknown', cacheTtlMs: GLOBAL_PRICES_SUCCESS_TTL_MS }
+  })()
 
   const pricesUsed: Record<string, Record<string, number>> = {}
   const routes: Route[] = []
@@ -6136,6 +6151,12 @@ async function findOptimalRoute(
         : undefined,
       analysisTimestamp: new Date().toISOString(),
       disclaimer: 'Estimates based on current orderbook depth and market prices. Actual costs may vary due to price movements during execution.',
+      priceAge: {
+        globalPrices: globalPricesSource,
+        koreanPrices: { source: 'exchange-api-direct' },
+      },
+      feesSource: feesFromD1 ? 'd1' : 'hardcoded-fallback',
+      dataFreshness: globalPricesSource.ageMs < GLOBAL_PRICES_SUCCESS_TTL_MS ? (globalPricesSource.ageMs < 5000 ? 'live' : 'cached') : 'stale',
     },
   }
 }
@@ -6235,7 +6256,7 @@ async function fetchBithumbAll(): Promise<Record<string, Record<string, string>>
   return promise
 }
 
-const GLOBAL_PRICES_SUCCESS_TTL_MS = 30_000
+const GLOBAL_PRICES_SUCCESS_TTL_MS = 10_000
 const GLOBAL_PRICES_FAILURE_TTL_MS = 5_000
 
 type CachedGlobalPrices = { value: Record<string, number>; expiresAt: number; source: string }
