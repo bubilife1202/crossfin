@@ -16,3 +16,9 @@ LAUNCH_POSTS.md
 # Screenshots / debug artifacts
 *.png
 cloudflare-*.md
+
+*.pptx
+*.pdf
+.~lock.*
+lu*.tmp
+HASHED_APPLICATION_EMAIL.md
