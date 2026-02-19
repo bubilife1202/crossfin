@@ -15,7 +15,8 @@
     "x402:funds": "node scripts/x402-funds-check.mjs",
     "x402:make20": "node scripts/x402-make-20.mjs",
     "catalog:sync": "node scripts/catalog-guard.mjs --sync",
-    "catalog:verify": "node scripts/catalog-guard.mjs"
+    "catalog:verify": "node scripts/catalog-guard.mjs",
+    "contract:verify": "node scripts/contract-guard.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
