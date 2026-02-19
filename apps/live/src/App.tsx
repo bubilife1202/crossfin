@@ -468,13 +468,16 @@ export default function App() {
         <section className="panel agentDemoPanel">
           <div className="panelHeader">
             <h2 className="panelTitle">Works with AI agents</h2>
-            <span className="panelBadge">MCP Protocol</span>
+            <div className="decisionBadges">
+              <span className="panelBadge">MCP Protocol</span>
+              <span className="panelBadge">Telegram Bot</span>
+            </div>
           </div>
           <div className="agentDemoLayout">
             <div className="agentDemoLeft">
               <h3 className="agentDemoHeading">Your agent speaks Korean crypto</h3>
               <p className="agentDemoDesc">
-                Install the MCP server and your AI agent can query Korean exchanges, find optimal routes, and access 35 paid APIs — all through natural language.
+                Connect via MCP server (Claude, Cursor) or Telegram bot — query Korean exchanges, find optimal routes, and access 35 paid APIs through natural language.
               </p>
               <div className="agentDemoFeatures">
                 <div className="agentDemoFeature">
@@ -497,33 +500,45 @@ export default function App() {
             </div>
             <div className="agentDemoRight">
               <div className="agentChatDemo">
-                <div className="chatBubble user">
-                  빗썸에서 바이낸스로 500만원 USDC 만들려면 가장 싼 방법이 뭐야?
-                </div>
-                <div className="chatBubble agent">
-                  <div className="chatToolCall">
-                    <span className="toolIcon">⚡</span>
-                    <code>find_optimal_route</code>
+                <div className="chatGroup">
+                  <span className="chatLabel chatLabelUser">You</span>
+                  <div className="chatBubble user">
+                    빗썸에서 바이낸스로 500만원 USDC 만들려면 가장 싼 방법이 뭐야?
                   </div>
-                  <strong>최적 경로: AVAX 브릿지</strong><br/>
-                  빗썸 AVAX 매수 → 바이낸스 전송(~3분) → USDC 매도<br/>
-                  <span className="chatHighlight">비용 0.07% | 수령 $3,452</span>
                 </div>
-                <div className="chatBubble user">
-                  지금 기준으로 어떤 브릿지 코인이 가장 빠르고 수수료가 낮아?
-                </div>
-                <div className="chatBubble agent">
-                  <div className="chatToolCall">
-                    <span className="toolIcon">⚡</span>
-                    <code>compare_exchange_prices</code>
+                <div className="chatGroup">
+                  <span className="chatLabel chatLabelAgent">CrossFin Agent</span>
+                  <div className="chatBubble agent">
+                    <div className="chatToolCall">
+                      <span className="toolIcon">⚡</span>
+                      <code>find_optimal_route</code>
+                    </div>
+                    <strong>최적 경로: AVAX 브릿지</strong><br/>
+                    빗썸 AVAX 매수 → 바이낸스 전송(~3분) → USDC 매도<br/>
+                    <span className="chatHighlight">비용 0.07% | 수령 $3,452</span>
                   </div>
-                  <strong>
-                    가장 빠른 브릿지: {fastestBridge?.coin ?? "XRP"}
-                    {fastestBridge ? ` (~${fastestBridge.transferTimeMin}분)` : ""}
-                  </strong>
-                  <br />
-                  최저 거래 수수료 거래소: {lowestFeeExchange ? formatExchangeLabel(lowestFeeExchange.exchange) : "—"}
-                  {lowestTradingFee != null ? ` (${lowestTradingFee.toFixed(3)}%)` : ""}
+                </div>
+                <div className="chatGroup">
+                  <span className="chatLabel chatLabelUser">You</span>
+                  <div className="chatBubble user">
+                    지금 기준으로 어떤 브릿지 코인이 가장 빠르고 수수료가 낮아?
+                  </div>
+                </div>
+                <div className="chatGroup">
+                  <span className="chatLabel chatLabelAgent">CrossFin Agent</span>
+                  <div className="chatBubble agent">
+                    <div className="chatToolCall">
+                      <span className="toolIcon">⚡</span>
+                      <code>compare_exchange_prices</code>
+                    </div>
+                    <strong>
+                      가장 빠른 브릿지: {fastestBridge?.coin ?? "XRP"}
+                      {fastestBridge ? ` (~${fastestBridge.transferTimeMin}분)` : ""}
+                    </strong>
+                    <br />
+                    최저 거래 수수료 거래소: {lowestFeeExchange ? formatExchangeLabel(lowestFeeExchange.exchange) : "—"}
+                    {lowestTradingFee != null ? ` (${lowestTradingFee.toFixed(3)}%)` : ""}
+                  </div>
                 </div>
               </div>
             </div>

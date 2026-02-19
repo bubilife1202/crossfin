@@ -1718,7 +1718,30 @@
 .agentChatDemo {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
+}
+
+.chatGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chatLabel {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.chatLabelUser {
+  align-self: flex-end;
+  color: rgba(0, 212, 255, 0.6);
+}
+
+.chatLabelAgent {
+  align-self: flex-start;
+  color: rgba(0, 255, 136, 0.6);
 }
 
 .chatBubble {
