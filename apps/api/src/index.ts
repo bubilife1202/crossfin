@@ -5452,10 +5452,11 @@ async function findOptimalRoute(
   const pricesUsed: Record<string, Record<string, number>> = {}
   const routes: Route[] = []
 
-  const getGlobalPriceUsd = (coin: string): number | null => {
+  const getGlobalPriceUsd = (exchange: string, coin: string): number | null => {
     const symbol = TRACKED_PAIRS[coin]
     if (!symbol) return null
-    const price = globalPrices[symbol]
+    const exchangePrice = getExchangePrice(exchange, symbol)
+    const price = typeof exchangePrice === 'number' ? exchangePrice : globalPrices[symbol]
     return typeof price === 'number' && Number.isFinite(price) && price > 0 ? price : null
   }
 
@@ -5496,7 +5497,7 @@ async function findOptimalRoute(
       let outputValueUsdForCost: number
 
       if (isGlobalToKorea) {
-        const sourceGlobalPrice = getGlobalPriceUsd(bridgeCoin)
+        const sourceGlobalPrice = getGlobalPriceUsd(fromEx, bridgeCoin)
         if (!sourceGlobalPrice) continue
 
         buyFeePct = fromFeePct
@@ -5549,7 +5550,7 @@ async function findOptimalRoute(
         transferTime = getTransferTime(bridgeCoin)
 
         if (isGlobalRoutingExchange(toEx)) {
-          const targetGlobalPrice = getGlobalPriceUsd(bridgeCoin)
+          const targetGlobalPrice = getGlobalPriceUsd(toEx, bridgeCoin)
           if (!targetGlobalPrice) continue
           sellPriceUsed = targetGlobalPrice
           finalOutput = coinsAfterWithdraw * targetGlobalPrice * (1 - toFeePct / 100)
@@ -5810,15 +5811,233 @@ async function fetchBithumbAll(): Promise<Record<string, Record<string, string>>
   return promise
 }
 
+const GLOBAL_PRICES_SUCCESS_TTL_MS = 30_000
+const GLOBAL_PRICES_FAILURE_TTL_MS = 5_000
+
+type CachedGlobalPrices = { value: Record<string, number>; expiresAt: number; source: string }
+type CachedExchangePriceFeed = { value: Record<string, number>; expiresAt: number; source: string }
+type ExchangePrices = Record<string, Record<string, number>>
+
+async function fetchBinancePrices(): Promise<Record<string, number>> {
+  const globalAny = globalThis as unknown as {
+    __crossfinBinancePricesCache?: CachedExchangePriceFeed
+    __crossfinBinancePricesInFlight?: Promise<Record<string, number>> | null
+  }
+
+  const now = Date.now()
+  const cached = globalAny.__crossfinBinancePricesCache
+  if (cached && now < cached.expiresAt && Object.keys(cached.value).length > 0) return cached.value
+  if (globalAny.__crossfinBinancePricesInFlight) return globalAny.__crossfinBinancePricesInFlight
+
+  const fallback = cached?.value ?? {}
+  const symbols = Array.from(new Set(Object.values(TRACKED_PAIRS)))
+  const query = encodeURIComponent(JSON.stringify(symbols))
+  const BINANCE_BASE_URLS = [
+    'https://data-api.binance.vision',
+    'https://api.binance.com',
+    'https://api1.binance.com',
+    'https://api2.binance.com',
+    'https://api3.binance.com',
+  ]
+
+  const promise = (async () => {
+    for (const baseUrl of BINANCE_BASE_URLS) {
+      try {
+        const url = `${baseUrl}/api/v3/ticker/price?symbols=${query}`
+        const res = await fetch(url)
+        if (!res.ok) throw new Error(`Binance price feed unavailable (${res.status})`)
+        const data: unknown = await res.json()
+        if (!Array.isArray(data)) throw new Error('Binance price feed invalid response')
+
+        const prices: Record<string, number> = {}
+        for (const row of data) {
+          if (!isRecord(row)) continue
+          const symbol = typeof row.symbol === 'string' ? row.symbol.trim().toUpperCase() : ''
+          const priceRaw = typeof row.price === 'string' ? row.price.trim() : ''
+          const price = Number(priceRaw)
+          if (!symbol || !Number.isFinite(price) || price <= 0) continue
+          prices[symbol] = price
+        }
+
+        const btcSymbol = TRACKED_PAIRS.BTC
+        const btc = btcSymbol ? prices[btcSymbol] : undefined
+        if (typeof btc === 'number' && Number.isFinite(btc) && btc > 1000) {
+          const hostname = new URL(baseUrl).hostname
+          globalAny.__crossfinBinancePricesCache = {
+            value: prices,
+            expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS,
+            source: `binance:${hostname}`,
+          }
+          return prices
+        }
+      } catch {
+        // Try next base URL
+      }
+    }
+
+    globalAny.__crossfinBinancePricesCache = {
+      value: fallback,
+      expiresAt: now + GLOBAL_PRICES_FAILURE_TTL_MS,
+      source: cached?.source ?? 'binance:cached',
+    }
+    if (Object.keys(fallback).length > 0) return fallback
+    throw new Error('Binance price feed unavailable')
+  })()
+
+  globalAny.__crossfinBinancePricesInFlight = promise
+  return promise.finally(() => {
+    globalAny.__crossfinBinancePricesInFlight = null
+  })
+}
+
+async function fetchOkxPrices(): Promise<Record<string, number>> {
+  const globalAny = globalThis as unknown as {
+    __crossfinOkxPricesCache?: CachedExchangePriceFeed
+    __crossfinOkxPricesInFlight?: Promise<Record<string, number>> | null
+  }
+
+  const now = Date.now()
+  const cached = globalAny.__crossfinOkxPricesCache
+  if (cached && now < cached.expiresAt && Object.keys(cached.value).length > 0) return cached.value
+  if (globalAny.__crossfinOkxPricesInFlight) return globalAny.__crossfinOkxPricesInFlight
+
+  const fallback = cached?.value ?? {}
+  const trackedSymbols = new Set(Object.values(TRACKED_PAIRS))
+
+  const promise = (async () => {
+    try {
+      const res = await fetch('https://www.okx.com/api/v5/market/tickers?instType=SPOT')
+      if (!res.ok) throw new Error(`OKX price feed unavailable (${res.status})`)
+      const data: unknown = await res.json()
+      if (!isRecord(data) || data.code !== '0' || !Array.isArray(data.data)) {
+        throw new Error('OKX price feed invalid response')
+      }
+
+      const prices: Record<string, number> = {}
+      for (const row of data.data) {
+        if (!isRecord(row)) continue
+        const instId = typeof row.instId === 'string' ? row.instId.trim().toUpperCase() : ''
+        const lastRaw = typeof row.last === 'string' ? row.last.trim() : ''
+        if (!instId.endsWith('-USDT')) continue
+        const symbol = instId.replace('-', '')
+        if (!trackedSymbols.has(symbol)) continue
+        const price = Number(lastRaw)
+        if (!Number.isFinite(price) || price <= 0) continue
+        prices[symbol] = price
+      }
+
+      const btcSymbol = TRACKED_PAIRS.BTC
+      const btc = btcSymbol ? prices[btcSymbol] : undefined
+      if (typeof btc !== 'number' || !Number.isFinite(btc) || btc <= 1000) {
+        throw new Error('OKX price feed returned no valid BTCUSDT')
+      }
+
+      globalAny.__crossfinOkxPricesCache = {
+        value: prices,
+        expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS,
+        source: 'okx',
+      }
+      return prices
+    } catch {
+      globalAny.__crossfinOkxPricesCache = {
+        value: fallback,
+        expiresAt: now + GLOBAL_PRICES_FAILURE_TTL_MS,
+        source: cached?.source ?? 'okx:cached',
+      }
+      if (Object.keys(fallback).length > 0) return fallback
+      throw new Error('OKX price feed unavailable')
+    }
+  })()
+
+  globalAny.__crossfinOkxPricesInFlight = promise
+  return promise.finally(() => {
+    globalAny.__crossfinOkxPricesInFlight = null
+  })
+}
+
+async function fetchBybitPrices(): Promise<Record<string, number>> {
+  const globalAny = globalThis as unknown as {
+    __crossfinBybitPricesCache?: CachedExchangePriceFeed
+    __crossfinBybitPricesInFlight?: Promise<Record<string, number>> | null
+  }
+
+  const now = Date.now()
+  const cached = globalAny.__crossfinBybitPricesCache
+  if (cached && now < cached.expiresAt && Object.keys(cached.value).length > 0) return cached.value
+  if (globalAny.__crossfinBybitPricesInFlight) return globalAny.__crossfinBybitPricesInFlight
+
+  const fallback = cached?.value ?? {}
+  const trackedSymbols = new Set(Object.values(TRACKED_PAIRS))
+
+  const promise = (async () => {
+    try {
+      const res = await fetch('https://api.bybit.com/v5/market/tickers?category=spot')
+      if (!res.ok) throw new Error(`Bybit price feed unavailable (${res.status})`)
+      const data: unknown = await res.json()
+      if (!isRecord(data) || data.retCode !== 0 || !isRecord(data.result) || !Array.isArray(data.result.list)) {
+        throw new Error('Bybit price feed invalid response')
+      }
+
+      const prices: Record<string, number> = {}
+      for (const row of data.result.list) {
+        if (!isRecord(row)) continue
+        const symbol = typeof row.symbol === 'string' ? row.symbol.trim().toUpperCase() : ''
+        const lastPriceRaw = typeof row.lastPrice === 'string' ? row.lastPrice.trim() : ''
+        if (!trackedSymbols.has(symbol)) continue
+        const price = Number(lastPriceRaw)
+        if (!Number.isFinite(price) || price <= 0) continue
+        prices[symbol] = price
+      }
+
+      const btcSymbol = TRACKED_PAIRS.BTC
+      const btc = btcSymbol ? prices[btcSymbol] : undefined
+      if (typeof btc !== 'number' || !Number.isFinite(btc) || btc <= 1000) {
+        throw new Error('Bybit price feed returned no valid BTCUSDT')
+      }
+
+      globalAny.__crossfinBybitPricesCache = {
+        value: prices,
+        expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS,
+        source: 'bybit',
+      }
+      return prices
+    } catch {
+      globalAny.__crossfinBybitPricesCache = {
+        value: fallback,
+        expiresAt: now + GLOBAL_PRICES_FAILURE_TTL_MS,
+        source: cached?.source ?? 'bybit:cached',
+      }
+      if (Object.keys(fallback).length > 0) return fallback
+      throw new Error('Bybit price feed unavailable')
+    }
+  })()
+
+  globalAny.__crossfinBybitPricesInFlight = promise
+  return promise.finally(() => {
+    globalAny.__crossfinBybitPricesInFlight = null
+  })
+}
+
+function getExchangePrice(exchange: string, symbol: string): number | undefined {
+  const ex = exchange.trim().toLowerCase()
+  const sym = symbol.trim().toUpperCase()
+  if (!ex || !sym) return undefined
+  const globalAny = globalThis as unknown as {
+    __crossfinExchangePricesCache?: ExchangePrices
+    __crossfinExchangePrices?: ExchangePrices
+  }
+  const cache = globalAny.__crossfinExchangePricesCache ?? globalAny.__crossfinExchangePrices
+  const price = cache?.[ex]?.[sym]
+  return typeof price === 'number' && Number.isFinite(price) && price > 0 ? price : undefined
+}
+
 async function fetchGlobalPrices(db?: D1Database): Promise<Record<string, number>> {
   // Cache to avoid rate-limits on upstream price providers.
-  const GLOBAL_PRICES_SUCCESS_TTL_MS = 30_000
-  const GLOBAL_PRICES_FAILURE_TTL_MS = 5_000
-
-  type CachedGlobalPrices = { value: Record<string, number>; expiresAt: number; source: string }
   const globalAny = globalThis as unknown as {
     __crossfinGlobalPricesCache?: CachedGlobalPrices
     __crossfinGlobalPricesInFlight?: Promise<Record<string, number>> | null
+    __crossfinExchangePricesCache?: ExchangePrices
+    __crossfinExchangePrices?: ExchangePrices
   }
 
   const now = Date.now()
@@ -5829,57 +6048,53 @@ async function fetchGlobalPrices(db?: D1Database): Promise<Record<string, number
   const fallback = cached?.value ?? {}
 
   const promise = (async () => {
-    const symbols = Array.from(new Set(Object.values(TRACKED_PAIRS)))
-
     const isValidPrices = (prices: Record<string, number>): boolean => {
       const btcSymbol = TRACKED_PAIRS.BTC
       if (!btcSymbol) return false
       const btc = prices[btcSymbol]
       if (typeof btc !== 'number' || !Number.isFinite(btc) || btc <= 1000) return false
-      // We can operate with partial coverage (demo + some paid endpoints),
-      // so only require at least one sane price.
       return Object.keys(prices).length >= 1
     }
 
-    // 1) Binance (USDT ~= USD) batch endpoint.
-    // We try binance.vision first because Cloudflare Workers egress can be geo-blocked on api.binance.com.
-    {
-      const query = encodeURIComponent(JSON.stringify(symbols))
-      const BINANCE_BASE_URLS = [
-        'https://data-api.binance.vision',
-        'https://api.binance.com',
-        'https://api1.binance.com',
-        'https://api2.binance.com',
-        'https://api3.binance.com',
-      ]
+    const [binanceSet, okxSet, bybitSet] = await Promise.allSettled([
+      fetchBinancePrices(),
+      fetchOkxPrices(),
+      fetchBybitPrices(),
+    ])
 
-      for (const baseUrl of BINANCE_BASE_URLS) {
-        try {
-          const url = `${baseUrl}/api/v3/ticker/price?symbols=${query}`
-          const res = await fetch(url)
-          if (!res.ok) throw new Error(`Binance price feed unavailable (${res.status})`)
-          const data: unknown = await res.json()
-          if (!Array.isArray(data)) throw new Error('Binance price feed invalid response')
+    const exchangePrices: ExchangePrices = {
+      binance: binanceSet.status === 'fulfilled' ? binanceSet.value : {},
+      okx: okxSet.status === 'fulfilled' ? okxSet.value : {},
+      bybit: bybitSet.status === 'fulfilled' ? bybitSet.value : {},
+    }
 
-          const prices: Record<string, number> = {}
-          for (const row of data) {
-            if (!isRecord(row)) continue
-            const symbol = typeof row.symbol === 'string' ? row.symbol.trim().toUpperCase() : ''
-            const priceRaw = typeof row.price === 'string' ? row.price.trim() : ''
-            const price = Number(priceRaw)
-            if (!symbol || !Number.isFinite(price) || price <= 0) continue
-            prices[symbol] = price
-          }
+    const mergedPrices: Record<string, number> = {
+      ...exchangePrices.binance,
+    }
+    const okxPrices: Record<string, number> = exchangePrices.okx ?? {}
+    const bybitPrices: Record<string, number> = exchangePrices.bybit ?? {}
+    for (const [symbol, price] of Object.entries(okxPrices)) {
+      if (!(symbol in mergedPrices)) mergedPrices[symbol] = price
+    }
+    for (const [symbol, price] of Object.entries(bybitPrices)) {
+      if (!(symbol in mergedPrices)) mergedPrices[symbol] = price
+    }
 
-          if (isValidPrices(prices)) {
-            const hostname = new URL(baseUrl).hostname
-            globalAny.__crossfinGlobalPricesCache = { value: prices, expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS, source: `binance:${hostname}` }
-            return prices
-          }
-        } catch {
-          // Try next base URL
-        }
+    if (isValidPrices(mergedPrices)) {
+      const sourceParts: string[] = []
+      if (binanceSet.status === 'fulfilled') sourceParts.push('binance')
+      if (okxSet.status === 'fulfilled') sourceParts.push('okx')
+      if (bybitSet.status === 'fulfilled') sourceParts.push('bybit')
+      const source = sourceParts.length > 0 ? sourceParts.join('+') : 'global'
+
+      globalAny.__crossfinExchangePricesCache = exchangePrices
+      globalAny.__crossfinExchangePrices = exchangePrices
+      globalAny.__crossfinGlobalPricesCache = {
+        value: mergedPrices,
+        expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS,
+        source,
       }
+      return mergedPrices
     }
 
     // 2) CryptoCompare fallback (no key) — detect 200/ERROR payloads
