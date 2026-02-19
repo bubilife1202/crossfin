@@ -56,6 +56,7 @@ defineProps({
 
 .api-table {
   width: 100%;
+  min-width: 560px;
   border-collapse: collapse;
   font-size: 0.9rem;
 }
@@ -169,6 +170,43 @@ defineProps({
   .api-table thead th,
   .api-table tbody td {
     padding: 8px 10px;
+  }
+
+  .endpoint-path {
+    font-size: 0.75rem;
+    white-space: normal;
+    word-break: break-all;
+  }
+
+  .endpoint-desc {
+    font-size: 0.78rem;
+    min-width: 120px;
+  }
+}
+
+@media (max-width: 480px) {
+  .api-table {
+    font-size: 0.75rem;
+  }
+
+  .api-table thead th,
+  .api-table tbody td {
+    padding: 6px 8px;
+  }
+
+  .endpoint-path {
+    font-size: 0.7rem;
+  }
+
+  .method-badge {
+    font-size: 0.65rem;
+    padding: 2px 5px;
+    min-width: 32px;
+  }
+
+  .price-badge {
+    font-size: 0.68rem;
+    padding: 2px 5px;
   }
 }
 </style>

@@ -21,7 +21,7 @@ export default defineConfig({
     ],
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/paxfin/crossfin' },
+      { icon: 'github', link: 'https://github.com/bubilife1202/crossfin' },
     ],
   },
 })

@@ -195,6 +195,9 @@
 .dark .vp-doc table {
   border-collapse: collapse;
   width: 100%;
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .dark .vp-doc th {
@@ -204,6 +207,7 @@
   letter-spacing: 0.06em;
   color: var(--vp-c-text-3);
   background: transparent;
+  white-space: nowrap;
 }
 
 .dark .vp-doc tr {
@@ -241,4 +245,81 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: #363c50;
+}
+
+
+/* ── Mobile responsive ───────────────────────────────── */
+
+@media (max-width: 768px) {
+  .dark .vp-doc table {
+    font-size: 0.82rem;
+  }
+
+  .dark .vp-doc th,
+  .dark .vp-doc td {
+    padding: 8px 10px;
+    font-size: 0.8rem;
+  }
+
+  .dark .vp-doc td code {
+    font-size: 0.75rem;
+    word-break: break-all;
+    white-space: normal;
+  }
+
+  .dark .vp-doc div[class*='language-'] {
+    margin: 12px -24px;
+    border-radius: 0;
+    border-left: 3px solid rgba(0, 212, 255, 0.4);
+  }
+
+  .dark .vp-doc div[class*='language-'] pre {
+    font-size: 0.78rem;
+  }
+
+  .vp-doc {
+    padding: 0 16px;
+  }
+
+  .dark .VPHero .name {
+    font-size: 2rem !important;
+  }
+
+  .dark .VPHero .tagline {
+    font-size: 0.95rem;
+  }
+
+  .dark .vp-doc div[class*='language-']::after,
+  .dark .api-table-wrap::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 24px;
+    background: linear-gradient(to right, transparent, #161921);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .dark .vp-doc div[class*='language-'],
+  .dark .api-table-wrap {
+    position: relative;
+  }
+}
+
+@media (max-width: 480px) {
+  .dark .vp-doc th,
+  .dark .vp-doc td {
+    padding: 6px 8px;
+    font-size: 0.75rem;
+  }
+
+  .dark .vp-doc td code {
+    font-size: 0.7rem;
+  }
+
+  .dark .vp-doc div[class*='language-'] pre {
+    font-size: 0.72rem;
+  }
 }
