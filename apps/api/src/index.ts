@@ -375,6 +375,9 @@ function getPublicRateLimitRouteKey(path: string): string | null {
     normalized === '/api/route/pairs' ||
     normalized === '/api/route/status' ||
     normalized === '/api/acp/status' ||
+    normalized === '/api/acp/quote' ||
+    normalized === '/api/acp/execute' ||
+    normalized === '/api/mcp' ||
     normalized === '/api/telegram/webhook'
   ) {
     return normalized
