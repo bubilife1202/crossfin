@@ -10339,14 +10339,18 @@ app.post('/api/acp/quote', async (c) => {
     estimatedOutput: r.estimatedOutput,
   }))
 
-  // Strip meta (remove pricesUsed)
   const metaPreview = {
     exchangeRates: meta.exchangeRates,
     routesEvaluated: meta.routesEvaluated,
     bridgeCoinsTotal: meta.bridgeCoinsTotal,
+    evaluatedCoins: meta.evaluatedCoins,
     skippedCoins: meta.skippedCoins,
+    skippedReasons: meta.skippedReasons,
     analysisTimestamp: meta.analysisTimestamp,
     disclaimer: meta.disclaimer,
+    priceAge: meta.priceAge,
+    feesSource: meta.feesSource,
+    dataFreshness: meta.dataFreshness,
   }
 
   return c.json({
