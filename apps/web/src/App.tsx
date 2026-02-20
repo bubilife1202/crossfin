@@ -7,7 +7,6 @@ import {
   fetchRegistryCategories,
   fetchRegistryServices,
   fetchRegistryStats,
-  fetchStats,
   getApiBaseUrl,
   searchRegistryServices,
   type AnalyticsOverview,
@@ -61,7 +60,6 @@ function App() {
   const apiBase = getApiBaseUrl()
 
   const [registryStats, setRegistryStats] = useState<LoadState<{ total: number; crossfin: number; external: number }>>({ status: 'loading' })
-  const [agentStats, setAgentStats] = useState<LoadState<{ agents: number; wallets: number; transactions: number; blocked: number }>>({ status: 'loading' })
   const [categories, setCategories] = useState<LoadState<RegistryCategory[]>>({ status: 'loading' })
   const [services, setServices] = useState<LoadState<{ items: RegistryService[]; total: number }>>({ status: 'loading' })
   const [selected, setSelected] = useState<RegistryService | null>(null)
@@ -145,17 +143,12 @@ function App() {
 
     void (async () => {
       try {
-        const [rs, as] = await Promise.all([
-          fetchRegistryStats(ctrl.signal),
-          fetchStats(ctrl.signal),
-        ])
+        const rs = await fetchRegistryStats(ctrl.signal)
         setRegistryStats({ status: 'success', data: rs })
-        setAgentStats({ status: 'success', data: as })
       } catch (e) {
         if (ctrl.signal.aborted) return
         const msg = e instanceof Error ? e.message : 'Failed to load stats'
         setRegistryStats({ status: 'error', message: msg })
-        setAgentStats({ status: 'error', message: msg })
       }
     })()
 
@@ -507,46 +500,6 @@ function App() {
               </div>
             </div>
           ) : null}
-        </section>
-
-        <section className="section">
-          <div className="statsGrid">
-            <div className="statCard">
-              <div className="statLabel">Services</div>
-              <div className="statValue">
-                {registryStats.status === 'success' ? registryStats.data.total : '—'}
-              </div>
-              <div className="statMeta">
-                {registryStats.status === 'success'
-                  ? `${registryStats.data.crossfin} CrossFin · ${registryStats.data.external} External`
-                  : registryStats.status === 'error'
-                    ? registryStats.message
-                    : 'Loading…'}
-              </div>
-            </div>
-
-            <div className="statCard">
-              <div className="statLabel">Agents</div>
-              <div className="statValue">
-                {agentStats.status === 'success' ? agentStats.data.agents : '—'}
-              </div>
-              <div className="statMeta">
-                {agentStats.status === 'success'
-                  ? `${agentStats.data.transactions} tx · ${agentStats.data.blocked} blocked`
-                  : agentStats.status === 'error'
-                    ? agentStats.message
-                    : 'Loading…'}
-              </div>
-            </div>
-
-            <div className="statCard">
-              <div className="statLabel">Wallets</div>
-              <div className="statValue">
-                {agentStats.status === 'success' ? agentStats.data.wallets : '—'}
-              </div>
-              <div className="statMeta">Budget + circuit breaker supported</div>
-            </div>
-          </div>
         </section>
 
         <div className="tabBar" role="tablist">
