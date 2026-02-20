@@ -296,6 +296,7 @@ async function telegramSendTyping(botToken: string, chatId: string | number): Pr
 async function telegramSendTypingSafe(botToken: string, chatId: string | number): Promise<void> {
   try {
     await telegramSendTyping(botToken, chatId)
+    console.log('[telegram] sendChatAction success', chatId)
   } catch (err) {
     console.warn('[telegram] sendChatAction failed', err)
   }
@@ -305,6 +306,7 @@ function startTelegramTypingLoop(
   botToken: string,
   chatId: string | number,
   intervalMs: number = 4000,
+  waitUntil?: (promise: Promise<unknown>) => void,
 ): () => void {
   let stopped = false
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -317,12 +319,17 @@ function startTelegramTypingLoop(
     }
   }
 
-  void telegramSendTypingSafe(botToken, chatId)
+  const sendTyping = () => {
+    const p = telegramSendTypingSafe(botToken, chatId)
+    if (waitUntil) waitUntil(p)
+  }
+
+  sendTyping()
   const tick = () => {
     if (stopped) return
     timer = setTimeout(() => {
       if (stopped) return
-      void telegramSendTypingSafe(botToken, chatId)
+      sendTyping()
       tick()
     }, intervalMs)
   }
@@ -11367,6 +11374,29 @@ app.get('/api/admin/telegram/webhook-info', async (c) => {
   return c.json(result)
 })
 
+// POST /api/admin/telegram/test-typing — Send a test typing indicator to TELEGRAM_ADMIN_CHAT_ID (admin-only)
+app.post('/api/admin/telegram/test-typing', async (c) => {
+  requireAdmin(c)
+
+  const botToken = (c.env.TELEGRAM_BOT_TOKEN ?? '').trim()
+  const adminChatId = (c.env.TELEGRAM_ADMIN_CHAT_ID ?? '').trim()
+  if (!botToken) {
+    throw new HTTPException(500, { message: 'TELEGRAM_BOT_TOKEN not configured' })
+  }
+  if (!adminChatId) {
+    throw new HTTPException(500, { message: 'TELEGRAM_ADMIN_CHAT_ID not configured' })
+  }
+
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendChatAction`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ chat_id: adminChatId, action: 'typing' }),
+  })
+
+  const result = await response.json()
+  return c.json({ ok: response.ok, status: response.status, chat_id: adminChatId, telegram_response: result })
+})
+
 // GET /api/route/exchanges — List supported exchanges (free)
 app.get('/api/route/exchanges', async (c) => {
   const [tradingFees, withdrawalFees] = await Promise.all([
@@ -12174,6 +12204,7 @@ app.get('/api/acp/status', (c) => {
 })
 
 app.post('/api/telegram/webhook', async (c) => {
+  console.log('[telegram] webhook POST received')
   const botToken = (c.env.TELEGRAM_BOT_TOKEN ?? '').trim()
   if (!botToken) {
     return c.json({ ok: true, ignored: true, reason: 'TELEGRAM_BOT_TOKEN missing' })
@@ -12231,7 +12262,7 @@ app.post('/api/telegram/webhook', async (c) => {
   if (text.startsWith('/')) {
     const commandRaw = text.split(/\s+/)[0] ?? ''
     const command = commandRaw.split('@')[0]?.toLowerCase() ?? ''
-    const stopTyping = startTelegramTypingLoop(botToken, chatId)
+    const stopTyping = startTelegramTypingLoop(botToken, chatId, 4000, (p) => c.executionCtx.waitUntil(p))
 
     try {
       if (command === '/help' || command === '/start') {
@@ -12432,7 +12463,7 @@ app.post('/api/telegram/webhook', async (c) => {
     }
   }
 
-  const stopTyping = startTelegramTypingLoop(botToken, chatId)
+  const stopTyping = startTelegramTypingLoop(botToken, chatId, 4000, (p) => c.executionCtx.waitUntil(p))
   try {
     const zaiApiKey = (c.env.ZAI_API_KEY ?? '').trim()
     if (!zaiApiKey) {
