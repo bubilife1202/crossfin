@@ -8,7 +8,7 @@
 npx -y crossfin-mcp
 ```
 
-### Claude Desktop config
+### MCP client config
 
 ```json
 {

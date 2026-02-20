@@ -1,6 +1,6 @@
 # MCP Integration
 
-16 tools for Claude Desktop or any MCP client. Routes across 9 exchanges with 11 bridge coins.
+16 tools for any MCP client. Routes across 9 exchanges with 11 bridge coins.
 
 ## Install
 
@@ -10,7 +10,7 @@ npx -y crossfin-mcp
 
 npm: [crossfin-mcp](https://www.npmjs.com/package/crossfin-mcp)
 
-## Claude Desktop config
+## MCP client config
 
 ```json
 {

@@ -27,7 +27,7 @@ const tabLabels: Record<TabId, string> = { routing: 'Routing', services: 'Servic
 const MCP_NPX_COMMAND = 'npx -y crossfin-mcp'
 const MCP_ENV_SNIPPET = `CROSSFIN_API_URL=https://crossfin.dev
 EVM_PRIVATE_KEY=0x...`
-const MCP_CLAUDE_CONFIG = `{
+const MCP_CLIENT_CONFIG = `{
   "mcpServers": {
     "crossfin": {
       "command": "npx",
@@ -406,7 +406,7 @@ function App() {
             <div className="featureCard">
               <div className="featureIcon">&#x2699;</div>
               <h3>MCP Integration</h3>
-              <p>16 tools for Claude Desktop. One command install: npx crossfin-mcp. Works with any MCP-compatible client.</p>
+              <p>16 tools for any MCP client. One command install: npx crossfin-mcp. Works with any MCP-compatible client.</p>
             </div>
           </div>
         </section>
@@ -415,7 +415,7 @@ function App() {
           <div className="mcpLaunchHeader">
             <div className="mcpLaunchBadge">MCP Quick Start</div>
             <h2>Add CrossFin MCP in one minute</h2>
-            <p>Claude Desktop (and most MCP clients) will launch this command automatically once configured.</p>
+            <p>Most MCP clients will launch this command automatically once configured.</p>
           </div>
 
           <div className="mcpLaunchCommandRow">
@@ -443,7 +443,7 @@ function App() {
                 })
               }}
             >
-              {showMcpConfig ? 'Hide Claude Config' : 'View Claude Config'}
+              {showMcpConfig ? 'Hide MCP Config' : 'View MCP Config'}
             </button>
             <button
               type="button"
@@ -497,14 +497,14 @@ function App() {
                     type="button"
                     className="codeBlockCopy"
                     onClick={() => {
-                      copyToClipboard('mcp-config', MCP_CLAUDE_CONFIG)
+                      copyToClipboard('mcp-config', MCP_CLIENT_CONFIG)
                       trackFunnel('mcp_config_copy', { target: 'claude_config' })
                     }}
                   >
                     {copiedId === 'mcp-config' ? '✓ Copied' : 'Copy'}
                   </button>
                 </div>
-                <pre className="codeBlockPre"><code>{MCP_CLAUDE_CONFIG}</code></pre>
+                <pre className="codeBlockPre"><code>{MCP_CLIENT_CONFIG}</code></pre>
               </div>
             </div>
           ) : null}

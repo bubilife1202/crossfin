@@ -90,6 +90,8 @@ export async function getBalance(filePath: string, walletId: string): Promise<nu
   return w ? w.balanceKrw : null
 }
 
+export type TransferError = { error: string }
+
 export async function transfer(
   filePath: string,
   input: {
@@ -99,7 +101,7 @@ export async function transfer(
     rail: Rail
     memo: string
   }
-): Promise<{ tx: Transaction; fromBalanceKrw: number; toBalanceKrw: number } | null> {
+): Promise<{ tx: Transaction; fromBalanceKrw: number; toBalanceKrw: number } | TransferError | null> {
   const db = await readDb(filePath)
   const from = db.wallets.find((w) => w.id === input.fromWalletId)
   const to = db.wallets.find((w) => w.id === input.toWalletId)
@@ -108,6 +110,17 @@ export async function transfer(
   const amount = Math.round(input.amountKrw)
   if (amount <= 0) return null
   if (from.balanceKrw < amount) return null
+
+  // Budget enforcement: check daily spend limit before executing
+  if (db.budget.dailyLimitKrw !== null) {
+    const todaySpent = getDailySpent(db, input.fromWalletId)
+    if (todaySpent + amount > db.budget.dailyLimitKrw) {
+      const remaining = Math.max(0, db.budget.dailyLimitKrw - todaySpent)
+      return {
+        error: `Daily budget exceeded. Limit: ${db.budget.dailyLimitKrw} KRW, spent today: ${todaySpent} KRW, remaining: ${remaining} KRW, requested: ${amount} KRW`,
+      }
+    }
+  }
 
   from.balanceKrw -= amount
   to.balanceKrw += amount
@@ -125,6 +138,19 @@ export async function transfer(
 
   await writeDb(filePath, db)
   return { tx, fromBalanceKrw: from.balanceKrw, toBalanceKrw: to.balanceKrw }
+}
+
+/** Sum all outgoing transfers from a wallet for today (UTC). */
+function getDailySpent(db: LedgerDb, walletId: string): number {
+  const todayPrefix = new Date().toISOString().slice(0, 10) // "YYYY-MM-DD"
+  let total = 0
+  for (const tx of db.transactions) {
+    if (!tx.at.startsWith(todayPrefix)) continue
+    if (tx.fromWalletId === walletId) {
+      total += tx.amountKrw
+    }
+  }
+  return total
 }
 
 export async function listTransactions(

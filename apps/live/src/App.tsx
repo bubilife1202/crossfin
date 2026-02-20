@@ -477,7 +477,7 @@ export default function App() {
             <div className="agentDemoLeft">
               <h3 className="agentDemoHeading">Your agent speaks Korean crypto</h3>
               <p className="agentDemoDesc">
-                Connect via MCP server (Claude, Cursor) or Telegram bot — query Korean exchanges, find optimal routes, and access 35 paid APIs through natural language.
+                Connect via MCP server or Telegram bot — query Korean exchanges, find optimal routes, and access 35 paid APIs through natural language.
               </p>
               <div className="agentDemoFeatures">
                 <div className="agentDemoFeature">

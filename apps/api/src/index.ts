@@ -615,13 +615,10 @@ function getEndpointTelemetryRouteKey(path: string): string | null {
 }
 
 function getClientRateLimitKey(c: Context<Env>): string {
+  // Use only CF-Connecting-IP (set by Cloudflare, not spoofable by clients).
+  // Do NOT fall back to X-Forwarded-For which can be forged to bypass rate limits.
   const cfIp = (c.req.header('CF-Connecting-IP') ?? '').trim()
-  if (cfIp) return cfIp
-
-  const forwardedFor = (c.req.header('X-Forwarded-For') ?? '').trim()
-  if (!forwardedFor) return 'unknown'
-
-  return forwardedFor.split(',')[0]?.trim() || 'unknown'
+  return cfIp || 'unknown'
 }
 
 function pruneRateLimitBuckets(now: number): void {
@@ -682,8 +679,15 @@ const publicRateLimit: MiddlewareHandler<Env> = async (c, next) => {
   await next()
 }
 
+const CORS_ALLOWED_ORIGINS = new Set([
+  'https://crossfin.xyz',
+  'https://live.crossfin.xyz',
+  'http://localhost:5173',
+  'http://localhost:5174',
+])
+
 app.use('*', cors({
-  origin: ['http://localhost:5173', 'https://crossfin.pages.dev', 'https://crossfin.dev', 'https://www.crossfin.dev', 'https://live.crossfin.dev', 'https://crossfin-live.pages.dev'],
+  origin: (requestOrigin) => CORS_ALLOWED_ORIGINS.has(requestOrigin) ? requestOrigin : '',
   allowHeaders: ['Content-Type', 'Authorization', 'X-Agent-Key', 'X-CrossFin-Admin-Token', 'X-CrossFin-Internal', 'PAYMENT-SIGNATURE'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   exposeHeaders: ['PAYMENT-REQUIRED', 'PAYMENT-RESPONSE'],
@@ -1177,13 +1181,13 @@ app.get('/api/docs/guide', (c) => {
       },
     },
     mcpServer: {
-      description: 'CrossFin MCP server for Claude Desktop and other MCP clients.',
+      description: 'CrossFin MCP server for any MCP-compatible client.',
       npmPackage: 'crossfin-mcp',
       install: 'npx -y crossfin-mcp',
       globalInstall: 'npm i -g crossfin-mcp && crossfin-mcp',
       localBuild: 'cd apps/mcp-server && npm install && npm run build',
       notes: [
-        'MCP servers are typically launched by the client (Claude Desktop, Cursor, etc). You usually do not run the stdio server directly in a terminal.',
+        'MCP servers are typically launched by the client (e.g. Cursor, Windsurf, or any MCP-compatible app). You usually do not run the stdio server directly in a terminal.',
         'Set EVM_PRIVATE_KEY to enable paid calls; leave it unset if you only want free browsing/search tools.',
       ],
       tools: [
@@ -1204,7 +1208,7 @@ app.get('/api/docs/guide', (c) => {
         { name: 'list_exchange_fees', description: 'List supported exchange fees — trading and withdrawal fees for all exchanges (routing engine)' },
         { name: 'compare_exchange_prices', description: 'Compare live exchange prices for routing across 9 exchanges (routing engine)' },
       ],
-      claudeDesktopConfig: {
+      mcpClientConfig: {
         mcpServers: {
           crossfin: {
             command: 'npx',
@@ -1216,7 +1220,7 @@ app.get('/api/docs/guide', (c) => {
           },
         },
       },
-      claudeDesktopConfigLocalBuild: {
+      mcpClientConfigLocalBuild: {
         mcpServers: {
           crossfin: {
             command: 'node',
@@ -10420,25 +10424,30 @@ app.post('/api/deposits', agentAuth, async (c) => {
   }
 
   const depositId = crypto.randomUUID()
-  await c.env.DB.prepare(
-    "INSERT INTO deposits (id, agent_id, tx_hash, amount_usd, from_address, status, verified_at) VALUES (?, ?, ?, ?, ?, 'verified', datetime('now'))"
-  ).bind(depositId, agentId, txHash, amountUsd, fromAddress).run()
 
   let credited = false
   const wallet = await c.env.DB.prepare(
-    'SELECT id, balance_cents FROM wallets WHERE agent_id = ? LIMIT 1'
-  ).bind(agentId).first<{ id: string; balance_cents: number }>()
+    'SELECT id FROM wallets WHERE agent_id = ? LIMIT 1'
+  ).bind(agentId).first<{ id: string }>()
 
   if (wallet) {
     const creditCents = Math.round(amountUsd * 100)
-    await c.env.DB.prepare(
-      'UPDATE wallets SET balance_cents = balance_cents + ? WHERE id = ?'
-    ).bind(creditCents, wallet.id).run()
-
-    await c.env.DB.prepare(
-      "INSERT INTO transactions (id, to_wallet_id, amount_cents, rail, memo, status) VALUES (?, ?, ?, 'x402', ?, 'completed')"
-    ).bind(crypto.randomUUID(), wallet.id, creditCents, `Deposit via ${txHash.slice(0, 10)}...`).run()
+    await c.env.DB.batch([
+      c.env.DB.prepare(
+        "INSERT INTO deposits (id, agent_id, tx_hash, amount_usd, from_address, status, verified_at) VALUES (?, ?, ?, ?, ?, 'verified', datetime('now'))"
+      ).bind(depositId, agentId, txHash, amountUsd, fromAddress),
+      c.env.DB.prepare(
+        'UPDATE wallets SET balance_cents = balance_cents + ? WHERE id = ?'
+      ).bind(creditCents, wallet.id),
+      c.env.DB.prepare(
+        "INSERT INTO transactions (id, to_wallet_id, amount_cents, rail, memo, status) VALUES (?, ?, ?, 'x402', ?, 'completed')"
+      ).bind(crypto.randomUUID(), wallet.id, creditCents, `Deposit via ${txHash.slice(0, 10)}...`),
+    ])
     credited = true
+  } else {
+    await c.env.DB.prepare(
+      "INSERT INTO deposits (id, agent_id, tx_hash, amount_usd, from_address, status, verified_at) VALUES (?, ?, ?, ?, ?, 'verified', datetime('now'))"
+    ).bind(depositId, agentId, txHash, amountUsd, fromAddress).run()
   }
 
   await logAutonomousAction(c.env.DB, agentId, 'DEPOSIT_VERIFY', null, 'EXECUTE', 1.0, amountUsd, null, {
@@ -10830,33 +10839,41 @@ api.post('/transfers', async (c) => {
   const txId = crypto.randomUUID()
   const rail = body.rail ?? 'internal'
 
-  const debit = await c.env.DB.prepare(
-    'UPDATE wallets SET balance_cents = balance_cents - ?, updated_at = datetime("now") WHERE id = ? AND agent_id = ? AND balance_cents >= ?'
-  ).bind(amount, body.fromWalletId, agentId, amount).run()
-
-  const debitChanges = Number(debit.meta.changes ?? 0)
-  if (debitChanges === 0) {
+  // Pre-check balance to fast-fail before the atomic batch
+  const srcWallet = await c.env.DB.prepare(
+    'SELECT balance_cents FROM wallets WHERE id = ? AND agent_id = ?'
+  ).bind(body.fromWalletId, agentId).first<{ balance_cents: number }>()
+  if (!srcWallet || srcWallet.balance_cents < amount) {
     await audit(c.env.DB, agentId, 'transfer.blocked', 'transactions', null, 'blocked', 'Insufficient balance')
     throw new HTTPException(400, { message: 'Insufficient balance' })
   }
 
-  try {
+  // Atomic batch: debit, credit, and transaction record all succeed or all fail.
+  // The debit WHERE clause (balance_cents >= ?) is a safety net against concurrent races.
+  const batchResults = await c.env.DB.batch([
+    c.env.DB.prepare(
+      'UPDATE wallets SET balance_cents = balance_cents - ?, updated_at = datetime("now") WHERE id = ? AND agent_id = ? AND balance_cents >= ?'
+    ).bind(amount, body.fromWalletId, agentId, amount),
+    c.env.DB.prepare(
+      'UPDATE wallets SET balance_cents = balance_cents + ?, updated_at = datetime("now") WHERE id = ?'
+    ).bind(amount, body.toWalletId),
+    c.env.DB.prepare(
+      "INSERT INTO transactions (id, from_wallet_id, to_wallet_id, amount_cents, rail, memo, status) VALUES (?, ?, ?, ?, ?, ?, 'completed')"
+    ).bind(txId, body.fromWalletId, body.toWalletId, amount, rail, body.memo ?? ''),
+  ])
+
+  const debitChanges = Number(batchResults[0]?.meta.changes ?? 0)
+  if (debitChanges === 0) {
+    // Debit WHERE clause didn't match (concurrent race drained balance).
+    // Reverse the credit and remove the transaction record atomically.
     await c.env.DB.batch([
-      c.env.DB.prepare('UPDATE wallets SET balance_cents = balance_cents + ?, updated_at = datetime("now") WHERE id = ?').bind(amount, body.toWalletId),
       c.env.DB.prepare(
-        "INSERT INTO transactions (id, from_wallet_id, to_wallet_id, amount_cents, rail, memo, status) VALUES (?, ?, ?, ?, ?, ?, 'completed')"
-      ).bind(txId, body.fromWalletId, body.toWalletId, amount, rail, body.memo ?? ''),
+        'UPDATE wallets SET balance_cents = balance_cents - ?, updated_at = datetime("now") WHERE id = ?'
+      ).bind(amount, body.toWalletId),
+      c.env.DB.prepare('DELETE FROM transactions WHERE id = ?').bind(txId),
     ])
-  } catch (error) {
-    try {
-      await c.env.DB.prepare(
-        'UPDATE wallets SET balance_cents = balance_cents + ?, updated_at = datetime("now") WHERE id = ? AND agent_id = ?'
-      ).bind(amount, body.fromWalletId, agentId).run()
-    } catch (rollbackError) {
-      console.error('Transfer rollback failed', rollbackError)
-    }
-    console.error('Transfer finalization failed', error)
-    throw new HTTPException(500, { message: 'Transfer failed' })
+    await audit(c.env.DB, agentId, 'transfer.blocked', 'transactions', null, 'blocked', 'Insufficient balance')
+    throw new HTTPException(400, { message: 'Insufficient balance' })
   }
 
   await audit(c.env.DB, agentId, 'transfer.execute', 'transactions', txId, 'success')
@@ -12275,10 +12292,11 @@ app.post('/api/telegram/webhook', async (c) => {
 // ============================================================
 
 app.all('/api/mcp', async (c) => {
-  const origin = c.req.header('origin') ?? '*'
+  const requestOrigin = (c.req.header('origin') ?? '').trim()
+  const allowedOrigin = CORS_ALLOWED_ORIGINS.has(requestOrigin) ? requestOrigin : ''
   if (c.req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: {
-      'Access-Control-Allow-Origin': origin,
+      ...(allowedOrigin ? { 'Access-Control-Allow-Origin': allowedOrigin } : {}),
       'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Accept, mcp-session-id, Last-Event-ID, mcp-protocol-version',
       'Access-Control-Expose-Headers': 'mcp-session-id, mcp-protocol-version',
@@ -12330,7 +12348,7 @@ app.all('/api/mcp', async (c) => {
   const res = await transport.handleRequest(c.req.raw)
   return new Response(res.body, { status: res.status, headers: {
     ...Object.fromEntries(res.headers.entries()),
-    'Access-Control-Allow-Origin': origin,
+    ...(allowedOrigin ? { 'Access-Control-Allow-Origin': allowedOrigin } : {}),
     'Access-Control-Expose-Headers': 'mcp-session-id, mcp-protocol-version',
   }})
 })

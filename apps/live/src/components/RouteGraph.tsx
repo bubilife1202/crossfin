@@ -392,20 +392,37 @@ export default function RouteGraph() {
     setDataVersion((v) => v + 1)
   }
 
-  const handleFindRoute = useCallback(() => {
-    const amount = parseAmountStr(manualAmount)
+  const runManualRoute = useCallback((overrides?: {
+    from?: string
+    fromCur?: string
+    to?: string
+    toCur?: string
+    amountStr?: string
+    strategy?: RoutingStrategy
+  }) => {
+    const from = overrides?.from ?? manualFrom
+    const fromCur = overrides?.fromCur ?? manualFromCur
+    const to = overrides?.to ?? manualTo
+    const toCur = overrides?.toCur ?? manualToCur
+    const amountStr = overrides?.amountStr ?? manualAmount
+    const strategy = overrides?.strategy ?? manualStrategy
+    const amount = parseAmountStr(amountStr)
     if (!Number.isFinite(amount) || amount <= 0) {
       setError('Amount must be a positive number')
       return
     }
     const scenario: RouteScenario = {
-      from: `${manualFrom}:${manualFromCur}`,
-      to: `${manualTo}:${manualToCur}`,
+      from: `${from}:${fromCur}`,
+      to: `${to}:${toCur}`,
       amount,
     }
     setSelectedBridgeCoin('auto')
-    void loadRoute(scenario, manualStrategy)
+    void loadRoute(scenario, strategy)
   }, [manualFrom, manualFromCur, manualTo, manualToCur, manualAmount, manualStrategy, loadRoute])
+
+  const handleFindRoute = useCallback(() => {
+    runManualRoute()
+  }, [runManualRoute])
 
   const switchMode = (next: 'auto' | 'manual') => {
     if (next === mode) return
@@ -753,12 +770,28 @@ export default function RouteGraph() {
               />
               <span className="rg-cur-tag">{manualFromCur}</span>
             </div>
-            <select className="rg-sel" value={manualToCur} onChange={(e) => setManualToCur(e.target.value)} aria-label="Receive currency" style={{ flex: '0 0 100px' }}>
+            <select
+              className="rg-sel"
+              value={manualToCur}
+              onChange={(e) => {
+                const nextToCur = e.target.value
+                setManualToCur(nextToCur)
+                // Apply quote-currency changes immediately so USDT/USDC switch is visible without extra click.
+                runManualRoute({ toCur: nextToCur })
+              }}
+              aria-label="Receive currency"
+              style={{ flex: '0 0 100px' }}
+            >
               {toCurrencies.map((cur) => (
                 <option key={cur} value={cur}>{cur}</option>
               ))}
             </select>
           </div>
+          {['USDT', 'USDC', 'USD'].includes(manualToCur.toUpperCase()) && (
+            <div style={{ color: 'var(--muted2)', fontSize: '0.78rem', marginTop: -2 }}>
+              Note: USDT/USDC/USD are modeled as USD-equivalent in the current engine, so costs can be similar.
+            </div>
+          )}
           <div className="rg-row">
             <div className="rg-strats">
               {(['cheapest', 'fastest', 'balanced'] as const).map((s) => (

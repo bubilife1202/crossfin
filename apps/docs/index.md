@@ -17,7 +17,7 @@ features:
   - title: Route Spread Intelligence
     details: Real-time regional-vs-global spread monitoring with AI decision layer
   - title: MCP Integration
-    details: 16 tools for Claude Desktop — routing, pricing, wallet management
+    details: 16 tools for any MCP client — routing, pricing, wallet management
   - title: Telegram Bot
     details: Chat-based access to all CrossFin data via @crossfinn_bot
 ---

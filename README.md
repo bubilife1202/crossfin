@@ -10,7 +10,7 @@ CrossFin is a financial router for AI agents. It finds the cheapest path to move
 
 ## Install in 30 seconds
 
-Add this to your Claude Desktop config (`claude_desktop_config.json`):
+Add this to your MCP client config (e.g. `claude_desktop_config.json`, Cursor settings, etc.):
 
 ```json
 {
@@ -26,7 +26,7 @@ Add this to your Claude Desktop config (`claude_desktop_config.json`):
 }
 ```
 
-Restart Claude Desktop. Done. 16 tools available immediately.
+Restart your MCP client. Done. 16 tools available immediately.
 
 > **No EVM key?** Free tools (price lookup, fee comparison, route spread) work without one. Paid tools ($0.01–$0.10 per call) require a Base wallet with USDC.
 
@@ -275,4 +275,4 @@ apps/
 
 ## Built with AI
 
-CrossFin was built entirely through AI collaboration by a non-developer in 3 weeks. Zero prior coding experience. This project is proof that AI agents can build production software — and CrossFin is the infrastructure for that future.
+CrossFin was built entirely through AI collaboration by a non-developer in 1 week. Zero prior coding experience. This project is proof that AI agents can build production software — and CrossFin is the infrastructure for that future.

@@ -187,6 +187,18 @@ server.registerTool(
       }
     }
 
+    if (!('tx' in result)) {
+      return {
+        content: [{ type: 'text', text: result.error }],
+        structuredContent: {
+          transactionId: '',
+          fromBalanceKrw: -1,
+          toBalanceKrw: -1,
+        },
+        isError: true,
+      }
+    }
+
     const out = {
       transactionId: result.tx.id,
       fromBalanceKrw: result.fromBalanceKrw,
