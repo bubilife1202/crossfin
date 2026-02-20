@@ -16,61 +16,67 @@ import {
   CROSSFIN_PAID_PRICING,
   withSampleQuery,
 } from './catalog'
-
-type Bindings = {
-  DB: D1Database
-  FACILITATOR_URL: string
-  X402_NETWORK: string
-  PAYMENT_RECEIVER_ADDRESS: string
-  CROSSFIN_ADMIN_TOKEN?: string
-  CROSSFIN_GUARDIAN_ENABLED?: string
-  TELEGRAM_BOT_TOKEN?: string
-  TELEGRAM_WEBHOOK_SECRET?: string
-  TELEGRAM_ADMIN_CHAT_ID?: string
-  ZAI_API_KEY?: string
-  CROSSFIN_AGENT_SIGNUP_TOKEN?: string
-}
-
-type Variables = {
-  agentId: string
-}
-
-type Env = { Bindings: Bindings; Variables: Variables }
-
-type Caip2 = `${string}:${string}`
-
-function requireCaip2(value: string): Caip2 {
-  const trimmed = value.trim()
-  if (!trimmed || !trimmed.includes(':')) {
-    throw new HTTPException(500, { message: 'Invalid X402_NETWORK (expected CAIP-2 like eip155:84532)' })
-  }
-  return trimmed as Caip2
-}
-
-function timingSafeEqual(a: string, b: string): boolean {
-  const encoder = new TextEncoder()
-  const aBytes = encoder.encode(a)
-  const bBytes = encoder.encode(b)
-  const maxLength = Math.max(aBytes.length, bBytes.length)
-
-  let diff = aBytes.length === bBytes.length ? 0 : 1
-  for (let i = 0; i < maxLength; i += 1) {
-    diff |= (aBytes[i] ?? 0) ^ (bBytes[i] ?? 0)
-  }
-
-  return diff === 0
-}
-
-function isEnabledFlag(value: string | undefined): boolean {
-  const raw = (value ?? '').trim().toLowerCase()
-  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
-}
-
-function requireGuardianEnabled(c: Context<Env>): void {
-  if (!isEnabledFlag(c.env.CROSSFIN_GUARDIAN_ENABLED)) {
-    throw new HTTPException(404, { message: 'Not found' })
-  }
-}
+import type { Bindings, Env, Caip2 } from './types'
+import {
+  requireCaip2,
+  timingSafeEqual,
+  isEnabledFlag,
+  requireGuardianEnabled,
+  isRecord,
+  sha256Hex,
+  requireAdmin,
+  round2,
+} from './types'
+import {
+  CROSSFIN_DISCLAIMER,
+  TRACKED_PAIRS,
+  DEFAULT_CROSS_EXCHANGE_COINS,
+  BITHUMB_FEES_PCT,
+  BINANCE_FEES_PCT,
+  EXCHANGE_FEES,
+  WITHDRAWAL_FEES,
+  ROUTING_EXCHANGES,
+  GLOBAL_ROUTING_EXCHANGE_SET,
+  KOREAN_ROUTING_EXCHANGE_SET,
+  ROUTING_EXCHANGE_CURRENCIES,
+  ROUTING_SUPPORTED_CURRENCIES,
+  EXCHANGE_DISPLAY_NAME,
+  ROUTING_EXCHANGE_COUNTRY,
+  BRIDGE_COINS,
+  GLOBAL_PRICES_SUCCESS_TTL_MS,
+} from './constants'
+import type {
+  RoutingExchange,
+  RoutingStrategy,
+} from './constants'
+import {
+  cloneDefaultTradingFees,
+  cloneDefaultWithdrawalFees,
+  getWithdrawalFee,
+  invalidateFeeCaches,
+  ensureFeeTables,
+  getExchangeTradingFees,
+  getExchangeWithdrawalFees,
+  getWithdrawalSuspensions,
+  fetchBithumbAll,
+  fetchBithumbOrderbook,
+  getExchangePrice,
+  fetchGlobalPrices,
+  fetchUsdFxRates,
+  fetchKrwRate,
+  fetchUpbitTicker,
+  fetchUpbitOrderbook,
+  fetchCoinoneTicker,
+  fetchWazirxTickers,
+  calcPremiums,
+} from './lib/fetchers'
+import {
+  getTransferTime,
+  estimateSlippage,
+  getPremiumTrend,
+  computeAction,
+  computeRouteAction,
+} from './lib/engine'
 
 const TELEGRAM_ROUTE_USAGE = [
   '라우팅 명령 형식:',
@@ -502,16 +508,6 @@ async function executeTelegramTool(name: string, args: Record<string, unknown>, 
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
-}
-
-function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
-}
-
-async function sha256Hex(value: string): Promise<string> {
-  const data = new TextEncoder().encode(value)
-  const digest = await crypto.subtle.digest('SHA-256', data)
-  return toHex(new Uint8Array(digest))
 }
 
 const app = new Hono<Env>()
@@ -960,22 +956,6 @@ const endpointTelemetry: MiddlewareHandler<Env> = async (c, next) => {
 
 app.use('/api/*', endpointTelemetry)
 
-function requireAdmin(c: Context<Env>): void {
-  const expected = (c.env.CROSSFIN_ADMIN_TOKEN ?? '').trim()
-
-  if (!expected) {
-    throw new HTTPException(404, { message: 'Not found' })
-  }
-
-  const headerToken = (c.req.header('X-CrossFin-Admin-Token') ?? '').trim()
-  const auth = (c.req.header('Authorization') ?? '').trim()
-  const bearer = auth.startsWith('Bearer ') ? auth.slice('Bearer '.length).trim() : ''
-
-  const provided = headerToken || bearer
-  if (!provided || !timingSafeEqual(provided, expected)) {
-    throw new HTTPException(401, { message: 'Unauthorized' })
-  }
-}
 
 app.onError((err, c) => {
   if (err instanceof HTTPException) {
@@ -1057,8 +1037,8 @@ app.get('/api/docs/guide', (c) => {
       crypto_arbitrage: [
         { id: 'crossfin_kimchi_premium', endpoint: '/api/premium/arbitrage/kimchi', price: '$0.05', description: 'Real-time Route Spread Index — price spread between Korean (Bithumb) and global (Binance) exchanges for 11 crypto pairs including KAIA.' },
         { id: 'crossfin_kimchi_premium_history', endpoint: '/api/premium/arbitrage/kimchi/history', price: '$0.05', description: 'Hourly snapshots of route spread data from D1 database, up to 7 days lookback. Query by coin and time range.' },
-        { id: 'crossfin_arbitrage_opportunities', endpoint: '/api/premium/arbitrage/opportunities', price: '$0.10', description: 'AI-ready arbitrage decisions: EXECUTE/WAIT/SKIP with slippage, premium trends, transfer time risk, and confidence scores.' },
-        { id: 'crossfin_cross_exchange', endpoint: '/api/premium/market/cross-exchange', price: '$0.08', description: 'Compare prices across 4 Korean exchanges with ARBITRAGE/HOLD/MONITOR signals and best buy/sell routing.' },
+        { id: 'crossfin_arbitrage_opportunities', endpoint: '/api/premium/arbitrage/opportunities', price: '$0.10', description: 'AI-ready market condition indicators: FAVORABLE/NEUTRAL/UNFAVORABLE with slippage, premium trends, transfer time risk, and signal strength scores.' },
+        { id: 'crossfin_cross_exchange', endpoint: '/api/premium/market/cross-exchange', price: '$0.08', description: 'Compare prices across 4 Korean exchanges with SPREAD_OPPORTUNITY/NEUTRAL_SIGNAL/MONITORING indicators and best buy/sell routing.' },
         { id: 'crossfin_5exchange', endpoint: '/api/premium/crypto/korea/5exchange?coin=BTC', price: '$0.08', description: 'Compare crypto prices across 4 Korean exchanges (Upbit, Bithumb, Coinone, GoPax) for any coin.' },
       ],
       exchange_data: [
@@ -1306,6 +1286,7 @@ app.get('/.well-known/crossfin.json', (c) => {
       env: { CROSSFIN_API_URL: origin },
       tools: CROSSFIN_MCP_TOOLS,
     },
+    _disclaimer: CROSSFIN_DISCLAIMER,
     updatedAt: new Date().toISOString(),
   })
 })
@@ -1338,7 +1319,7 @@ app.get('/.well-known/x402.json', (c) => {
     },
     endpoints: [
       { resource: `${origin}/api/premium/arbitrage/kimchi`, method: 'GET', price: '$0.05', description: 'Real-time Route Spread Index — Korean vs global exchange price spread for 11 crypto pairs' },
-      { resource: `${origin}/api/premium/arbitrage/opportunities`, method: 'GET', price: '$0.10', description: 'AI-ready arbitrage decisions: EXECUTE/WAIT/SKIP with confidence scores' },
+      { resource: `${origin}/api/premium/arbitrage/opportunities`, method: 'GET', price: '$0.10', description: 'AI-ready market condition indicators: FAVORABLE/NEUTRAL/UNFAVORABLE with signal strength scores' },
       { resource: `${origin}/api/premium/route/find`, method: 'GET', price: '$0.10', description: 'Optimal crypto transfer route across 9 exchanges using 11 bridge coins' },
       { resource: `${origin}/api/premium/bithumb/orderbook`, method: 'GET', price: '$0.02', description: 'Live Bithumb orderbook depth (30 levels)' },
       { resource: `${origin}/api/premium/market/upbit/ticker`, method: 'GET', price: '$0.02', description: 'Upbit real-time ticker' },
@@ -1531,7 +1512,7 @@ app.get('/api/openapi.json', (c) => {
     info: {
       title: 'CrossFin — x402 Agent Services Gateway (Korea)',
       version: CROSSFIN_API_VERSION,
-      description: 'Service registry + pay-per-request APIs for AI agents. Discover x402 services and access Korean market data. Payments via x402 protocol with USDC on Base mainnet.',
+      description: 'Service registry + pay-per-request APIs for AI agents. Discover x402 services and access Korean market data. Payments via x402 protocol with USDC on Base mainnet. Disclaimer: All data is for informational purposes only and does not constitute investment advice.',
       contact: { url: 'https://crossfin.dev' },
       'x-logo': { url: 'https://crossfin.dev/logos/crossfin.png' },
     },
@@ -1593,10 +1574,10 @@ app.get('/api/openapi.json', (c) => {
                   coin: { type: 'string' },
                   premiumPct: { type: 'number' },
                   direction: { type: 'string' },
-                  decision: { type: 'object', properties: { action: { type: 'string' }, confidence: { type: 'number' }, reason: { type: 'string' } } },
+                  decision: { type: 'object', properties: { indicator: { type: 'string' }, signalStrength: { type: 'number' }, reason: { type: 'string' } } },
                 } } },
                 avgPremiumPct: { type: 'number' },
-                executeCandidates: { type: 'integer' },
+                favorableCandidates: { type: 'integer' },
                 marketCondition: { type: 'string' },
                 at: { type: 'string', format: 'date-time' },
               } } } },
@@ -1695,7 +1676,7 @@ app.get('/api/openapi.json', (c) => {
         get: {
           operationId: 'arbitrageOpportunities',
           summary: 'Arbitrage Decision Service — $0.10 USDC',
-          description: 'AI-ready arbitrage decision service for Korean vs global crypto exchanges. Returns actionable recommendations (EXECUTE/WAIT/SKIP) with slippage estimates, premium trends, transfer time risk, and confidence scores. Includes direction, estimated profit after fees (Bithumb 0.25% + Binance 0.10%), and market condition assessment. Payment: $0.10 USDC on Base via x402.',
+          description: 'AI-ready market condition analysis for Korean vs global crypto exchanges. Returns condition indicators (FAVORABLE/NEUTRAL/UNFAVORABLE) with slippage estimates, premium trends, transfer time risk, and signal strength scores. Includes direction, estimated profit after fees (Bithumb 0.25% + Binance 0.10%), and market condition assessment. Payment: $0.10 USDC on Base via x402.',
           tags: ['Paid — x402'],
           responses: {
             '200': {
@@ -1706,19 +1687,21 @@ app.get('/api/openapi.json', (c) => {
                 krwUsdRate: { type: 'number' },
                 totalOpportunities: { type: 'integer' },
                 profitableCount: { type: 'integer' },
-                executeCandidates: { type: 'integer' },
+                favorableCandidates: { type: 'integer' },
                 marketCondition: { type: 'string', enum: ['favorable', 'neutral', 'unfavorable'] },
                 estimatedFeesNote: { type: 'string' },
                 bestOpportunity: { type: 'object' },
                 opportunities: { type: 'array', items: { type: 'object', properties: {
                   coin: { type: 'string' }, direction: { type: 'string' }, grossPremiumPct: { type: 'number' },
-                  estimatedFeesPct: { type: 'number' }, netProfitPct: { type: 'number' },
+                  estimatedFeesPct: { type: 'number' }, tradingFeesPct: { type: 'number' },
+                  withdrawalFeePct: { type: 'number' }, withdrawalSuspended: { type: 'boolean' },
+                  netProfitPct: { type: 'number' },
                   profitPer10kUsd: { type: 'number' }, volume24hUsd: { type: 'number' },
                   riskScore: { type: 'string' }, profitable: { type: 'boolean' },
                   slippageEstimatePct: { type: 'number' }, transferTimeMin: { type: 'number' },
                   premiumTrend: { type: 'string', enum: ['rising', 'falling', 'stable'] },
-                  action: { type: 'string', enum: ['EXECUTE', 'WAIT', 'SKIP'] },
-                  confidence: { type: 'number' }, reason: { type: 'string' },
+                  indicator: { type: 'string', enum: ['FAVORABLE', 'NEUTRAL', 'UNFAVORABLE'] },
+                  signalStrength: { type: 'number' }, reason: { type: 'string' },
                 } } },
                 at: { type: 'string', format: 'date-time' },
               } } } },
@@ -1901,17 +1884,17 @@ app.get('/api/openapi.json', (c) => {
         get: {
           operationId: 'crossExchangeComparison',
           summary: 'Cross-Exchange Decision Service (Bithumb vs Upbit vs Coinone vs Binance)',
-          description: 'Compare crypto prices across 4 exchanges with actionable recommendations. Returns per-coin best buy/sell exchange, spread analysis, and action signals (ARBITRAGE/HOLD/MONITOR). Shows route spread per exchange and domestic arbitrage opportunities.',
+          description: 'Compare crypto prices across 4 exchanges with market condition indicators. Returns per-coin best buy/sell exchange, spread analysis, and condition indicators (SPREAD_OPPORTUNITY/NEUTRAL_SIGNAL/MONITORING). Shows route spread per exchange and domestic spread opportunities.',
           parameters: [{ name: 'coins', in: 'query', schema: { type: 'string' }, description: 'Comma-separated coins (default: BTC,ETH,XRP,DOGE,ADA,SOL)' }],
           tags: ['Premium — $0.08 USDC'],
           responses: {
             '200': { description: 'Cross-exchange comparison with decision signals', content: { 'application/json': { schema: { type: 'object', properties: {
               paid: { type: 'boolean' }, service: { type: 'string' },
               coinsCompared: { type: 'integer' }, krwUsdRate: { type: 'number' },
-              arbitrageCandidateCount: { type: 'integer' },
+              spreadOpportunityCount: { type: 'integer' },
               coins: { type: 'array', items: { type: 'object', properties: {
                 coin: { type: 'string' }, bestBuyExchange: { type: 'string' }, bestSellExchange: { type: 'string' },
-                spreadPct: { type: 'number' }, action: { type: 'string', enum: ['ARBITRAGE', 'HOLD', 'MONITOR'] },
+                spreadPct: { type: 'number' }, indicator: { type: 'string', enum: ['SPREAD_OPPORTUNITY', 'NEUTRAL_SIGNAL', 'MONITORING'] },
               } } },
               at: { type: 'string', format: 'date-time' },
             } } } } },
@@ -2041,10 +2024,10 @@ app.get('/api/openapi.json', (c) => {
                       bestOpportunity: { type: 'object', properties: {
                         coin: { type: 'string' },
                         premiumPct: { type: 'number' },
-                        action: { type: 'string', enum: ['EXECUTE', 'WAIT', 'SKIP'] },
-                        confidence: { type: 'number' },
+                        indicator: { type: 'string', enum: ['FAVORABLE', 'NEUTRAL', 'UNFAVORABLE'] },
+                        signalStrength: { type: 'number' },
                         reason: { type: 'string' },
-                      }, required: ['coin', 'premiumPct', 'action', 'confidence', 'reason'] },
+                      }, required: ['coin', 'premiumPct', 'indicator', 'signalStrength', 'reason'] },
                       crossExchangeSpread: { type: 'object', properties: {
                         coin: { type: 'string' },
                         upbitKrw: { type: ['number', 'null'] },
@@ -2632,13 +2615,13 @@ app.use(
             payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
             maxTimeoutSeconds: 300,
           },
-          description: 'AI-ready arbitrage decision service. Returns EXECUTE/WAIT/SKIP recommendations with slippage estimates, premium trends, transfer time risk, and confidence scores for Korean vs global exchange arbitrage.',
+          description: 'AI-ready market condition analysis. Returns FAVORABLE/NEUTRAL/UNFAVORABLE indicators with slippage estimates, premium trends, transfer time risk, and signal strength scores for Korean vs global exchange arbitrage.',
           mimeType: 'application/json',
           extensions: {
             ...declareDiscoveryExtension({
               output: {
-                example: { paid: true, service: 'crossfin-arbitrage-opportunities', totalOpportunities: 10, profitableCount: 3, executeCandidates: 2, marketCondition: 'favorable', bestOpportunity: { coin: 'BTC', direction: 'buy-global-sell-korea', netProfitPct: 1.85, action: 'EXECUTE', confidence: 0.87 }, opportunities: [] },
-                schema: { properties: { paid: { type: 'boolean' }, totalOpportunities: { type: 'number' }, profitableCount: { type: 'number' }, executeCandidates: { type: 'number' }, marketCondition: { type: 'string' }, opportunities: { type: 'array' } }, required: ['paid', 'totalOpportunities', 'profitableCount', 'executeCandidates', 'marketCondition', 'opportunities'] },
+                example: { paid: true, service: 'crossfin-arbitrage-opportunities', totalOpportunities: 10, profitableCount: 3, favorableCandidates: 2, marketCondition: 'favorable', bestOpportunity: { coin: 'BTC', direction: 'buy-global-sell-korea', netProfitPct: 1.85, indicator: 'FAVORABLE', signalStrength: 0.87 }, opportunities: [] },
+                schema: { properties: { paid: { type: 'boolean' }, totalOpportunities: { type: 'number' }, profitableCount: { type: 'number' }, favorableCandidates: { type: 'number' }, marketCondition: { type: 'string' }, opportunities: { type: 'array' } }, required: ['paid', 'totalOpportunities', 'profitableCount', 'favorableCandidates', 'marketCondition', 'opportunities'] },
               },
             }),
           },
@@ -2834,12 +2817,12 @@ app.use(
             payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
             maxTimeoutSeconds: 300,
           },
-          description: 'Cross-exchange decision service. Compares prices across Bithumb, Upbit, Coinone, and Binance with ARBITRAGE/HOLD/MONITOR signals, best buy/sell exchange per coin, and spread analysis.',
+          description: 'Cross-exchange condition analysis. Compares prices across Bithumb, Upbit, Coinone, and Binance with SPREAD_OPPORTUNITY/NEUTRAL_SIGNAL/MONITORING indicators, best buy/sell exchange per coin, and spread analysis.',
           mimeType: 'application/json',
           extensions: {
             ...declareDiscoveryExtension({
               output: {
-                example: { paid: true, service: 'crossfin-cross-exchange', coinsAnalyzed: 10, signals: [{ coin: 'BTC', action: 'ARBITRAGE', bestBuy: 'Binance', bestSell: 'Bithumb', spreadPct: 2.1, confidence: 0.85 }], overallCondition: 'favorable' },
+                example: { paid: true, service: 'crossfin-cross-exchange', coinsAnalyzed: 10, signals: [{ coin: 'BTC', indicator: 'SPREAD_OPPORTUNITY', bestBuy: 'Binance', bestSell: 'Bithumb', spreadPct: 2.1, signalStrength: 0.85 }], overallCondition: 'favorable' },
                 schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, coinsAnalyzed: { type: 'number' }, signals: { type: 'array' }, overallCondition: { type: 'string' } }, required: ['paid', 'coinsAnalyzed', 'signals'] },
               },
             }),
@@ -3155,12 +3138,12 @@ app.use(
         },
         'GET /api/premium/kimchi/stats': {
           accepts: { scheme: 'exact', price: '$0.15', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Route Spread Stats — comprehensive route spread analysis combining current premiums, 24h trend, top arbitrage opportunity with EXECUTE/WAIT/SKIP signal, and cross-exchange spread. One call replaces 3+ individual endpoints.',
+          description: 'Route Spread Stats — comprehensive route spread analysis combining current premiums, 24h trend, top opportunity with FAVORABLE/NEUTRAL/UNFAVORABLE indicator, and cross-exchange spread. One call replaces 3+ individual endpoints.',
           mimeType: 'application/json',
           extensions: {
             ...declareDiscoveryExtension({
               output: {
-                example: { paid: true, service: 'crossfin-kimchi-stats', current: { avgPremiumPct: 2.15, pairsTracked: 10 }, trend: { direction: 'rising', change24hPct: 0.3 }, bestOpportunity: { coin: 'BTC', action: 'WAIT', confidence: 0.6 }, crossExchangeSpread: { spreadPct: 0.18 }, at: '2026-02-17T00:00:00.000Z' },
+                example: { paid: true, service: 'crossfin-kimchi-stats', current: { avgPremiumPct: 2.15, pairsTracked: 10 }, trend: { direction: 'rising', change24hPct: 0.3 }, bestOpportunity: { coin: 'BTC', indicator: 'NEUTRAL', signalStrength: 0.6 }, crossExchangeSpread: { spreadPct: 0.18 }, at: '2026-02-17T00:00:00.000Z' },
                 schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, current: { type: 'object' }, trend: { type: 'object' }, bestOpportunity: { type: 'object' }, crossExchangeSpread: { type: 'object' } }, required: ['paid', 'service', 'current'] },
               },
             }),
@@ -3371,10 +3354,10 @@ const CROSSFIN_RUNTIME_DOCS: Record<string, CrossfinRuntimeDocs> = {
   },
   crossfin_arbitrage_opportunities: {
     guide: {
-      whatItDoes: 'AI-ready arbitrage decision service. Analyzes Korean vs global exchange prices, estimates slippage from live orderbooks, checks premium trends, and returns actionable EXECUTE/WAIT/SKIP recommendations with confidence scores.',
+      whatItDoes: 'AI-ready market condition analysis. Analyzes Korean vs global exchange prices, estimates slippage from live orderbooks, checks premium trends, and returns FAVORABLE/NEUTRAL/UNFAVORABLE indicators with signal strength scores.',
       whenToUse: [
-        'Get instant EXECUTE/WAIT/SKIP decisions for route spread arbitrage',
-        'Build autonomous trading agents that act on confidence scores',
+        'Get instant FAVORABLE/NEUTRAL/UNFAVORABLE condition indicators for route spread analysis',
+        'Build autonomous monitoring agents that act on signal strength scores',
         'Monitor market conditions (favorable/neutral/unfavorable) for timing entry',
         'Estimate real execution costs including slippage and transfer time risk',
       ],
@@ -3382,8 +3365,8 @@ const CROSSFIN_RUNTIME_DOCS: Record<string, CrossfinRuntimeDocs> = {
         'Send GET request',
         'Pay via x402 if HTTP 402 is returned',
         'Check marketCondition for overall assessment',
-        'Filter opportunities[] where action === "EXECUTE" for immediate candidates',
-        'Use confidence score to size positions (higher confidence = larger allocation)',
+        'Filter opportunities[] where indicator === "FAVORABLE" for favorable conditions',
+        'Use signalStrength score to gauge conviction (higher = stronger signal)',
       ],
       exampleCurl: 'curl -s -D - https://crossfin.dev/api/premium/arbitrage/opportunities -o /dev/null',
       relatedServiceIds: ['crossfin_kimchi_premium', 'crossfin_cross_exchange'],
@@ -3394,17 +3377,18 @@ const CROSSFIN_RUNTIME_DOCS: Record<string, CrossfinRuntimeDocs> = {
       service: 'crossfin-arbitrage-opportunities',
       totalOpportunities: 24,
       profitableCount: 8,
-      executeCandidates: 3,
+      favorableCandidates: 3,
       marketCondition: 'favorable',
       bestOpportunity: {
         coin: 'XRP', netProfitPct: 1.2, direction: 'buy-global-sell-korea',
         slippageEstimatePct: 0.15, transferTimeMin: 0.5, premiumTrend: 'rising',
-        action: 'EXECUTE', confidence: 0.87, reason: 'Adjusted profit 1.05% exceeds risk 0.12% with strong margin',
+        indicator: 'FAVORABLE', signalStrength: 0.87, reason: 'Adjusted profit 1.05% exceeds risk 0.12% with strong margin',
       },
       opportunities: [{
-        coin: 'XRP', netProfitPct: 1.2, grossPremiumPct: 2.3, estimatedFeesPct: 1.1, riskScore: 'low',
+        coin: 'XRP', netProfitPct: 1.2, grossPremiumPct: 2.3, estimatedFeesPct: 1.1,
+        tradingFeesPct: 0.35, withdrawalFeePct: 0.75, withdrawalSuspended: false, riskScore: 'low',
         slippageEstimatePct: 0.15, transferTimeMin: 0.5, premiumTrend: 'rising',
-        action: 'EXECUTE', confidence: 0.87, reason: 'Adjusted profit 1.05% exceeds risk 0.12% with strong margin',
+        indicator: 'FAVORABLE', signalStrength: 0.87, reason: 'Adjusted profit 1.05% exceeds risk 0.12% with strong margin',
       }],
       at: '2026-02-16T00:00:00.000Z',
     },
@@ -3604,18 +3588,18 @@ const CROSSFIN_RUNTIME_DOCS: Record<string, CrossfinRuntimeDocs> = {
   },
   crossfin_cross_exchange: {
     guide: {
-      whatItDoes: 'Cross-exchange decision service. Compares crypto prices across Bithumb, Upbit, Coinone, and Binance with actionable signals. Returns best buy/sell exchange per coin and ARBITRAGE/HOLD/MONITOR recommendations.',
+      whatItDoes: 'Cross-exchange condition analysis. Compares crypto prices across Bithumb, Upbit, Coinone, and Binance with market condition indicators. Returns best buy/sell exchange per coin and SPREAD_OPPORTUNITY/NEUTRAL_SIGNAL/MONITORING indicators.',
       whenToUse: [
         'Find the cheapest exchange to buy and most expensive to sell',
-        'Get instant ARBITRAGE/HOLD/MONITOR signals for domestic exchange spreads',
+        'Get instant SPREAD_OPPORTUNITY/NEUTRAL_SIGNAL/MONITORING indicators for domestic exchange spreads',
         'Compare KRW prices vs global USD prices across all 4 exchanges',
-        'Build cross-exchange arbitrage bots using action signals',
+        'Build cross-exchange monitoring tools using condition indicators',
       ],
       howToCall: [
         'Send GET request (optional ?coins=BTC,ETH,XRP)',
         'Pay via x402 if HTTP 402 is returned',
-        'Check arbitrageCandidateCount in summary for quick assessment',
-        'Filter coins[] where action === "ARBITRAGE" for immediate opportunities',
+        'Check spreadOpportunityCount in summary for quick assessment',
+        'Filter coins[] where indicator === "SPREAD_OPPORTUNITY" for spread opportunities',
         'Use bestBuyExchange and bestSellExchange for execution routing',
       ],
       exampleCurl: 'curl -s -D - https://crossfin.dev/api/premium/market/cross-exchange -o /dev/null',
@@ -3624,12 +3608,12 @@ const CROSSFIN_RUNTIME_DOCS: Record<string, CrossfinRuntimeDocs> = {
     inputSchema: { type: 'http', method: 'GET', query: { coins: 'Comma-separated coins (default: BTC,ETH,XRP,DOGE,ADA,SOL)' } },
     outputExample: {
       paid: true, service: 'crossfin-cross-exchange', coinsCompared: 6, krwUsdRate: 1450,
-      arbitrageCandidateCount: 2,
+      spreadOpportunityCount: 2,
       coins: [{
         coin: 'BTC', bestBuyExchange: 'coinone', bestSellExchange: 'bithumb', spreadPct: 0.65,
-        action: 'ARBITRAGE', kimchiPremium: { average: 2.1 },
+        indicator: 'SPREAD_OPPORTUNITY', kimchiPremium: { average: 2.1 },
       }],
-      summary: { avgKimchiPremium: 2.1, arbitrageCandidateCount: 2, bestDomesticArbitrage: { coin: 'BTC', buy: 'coinone', sell: 'bithumb', spreadPct: 0.65, action: 'ARBITRAGE' } },
+      summary: { avgKimchiPremium: 2.1, spreadOpportunityCount: 2, bestDomesticSpread: { coin: 'BTC', buy: 'coinone', sell: 'bithumb', spreadPct: 0.65, indicator: 'SPREAD_OPPORTUNITY' } },
       at: '2026-02-16T00:00:00.000Z',
     },
   },
@@ -3667,9 +3651,6 @@ function applyCrossfinDocs(service: RegistryService): RegistryServiceResponse {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
 
 function toRecordArray(value: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(value)) return []
@@ -5983,401 +5964,6 @@ app.get('/api/analytics/services/:serviceId', async (c) => {
 
 // === Korean Arbitrage Data Helpers ===
 
-const TRACKED_PAIRS: Record<string, string> = {
-  BTC: 'BTCUSDT', ETH: 'ETHUSDT', XRP: 'XRPUSDT',
-  SOL: 'SOLUSDT', DOGE: 'DOGEUSDT', ADA: 'ADAUSDT',
-  DOT: 'DOTUSDT', LINK: 'LINKUSDT', AVAX: 'AVAXUSDT',
-  TRX: 'TRXUSDT', KAIA: 'KAIAUSDT',
-}
-
-const DEFAULT_CROSS_EXCHANGE_COINS = ['BTC', 'ETH', 'XRP', 'DOGE', 'ADA', 'SOL'] as const
-
-const BITHUMB_FEES_PCT = 0.25 // Bithumb maker/taker fee
-const BINANCE_FEES_PCT = 0.10 // Binance spot fee
-
-// --- Routing Engine: Exchange trading fees (%) ---
-const EXCHANGE_FEES: Record<string, number> = {
-  bithumb: 0.25, upbit: 0.25, coinone: 0.20,
-  gopax: 0.20, bitflyer: 0.15, wazirx: 0.20,
-  binance: 0.10, okx: 0.08, bybit: 0.10,
-}
-
-// --- Routing Engine: Withdrawal fees per exchange per coin (fixed amount in coin units) ---
-const WITHDRAWAL_FEES: Record<string, Record<string, number>> = {
-  bithumb: { BTC: 0.0005, ETH: 0.005, XRP: 1.0, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.5, AVAX: 0.01, TRX: 1.0, KAIA: 0.005 },
-  upbit: { BTC: 0.0005, ETH: 0.01, XRP: 1.0, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.5, AVAX: 0.01, TRX: 1.0 },
-  coinone: { BTC: 0.0005, ETH: 0.01, XRP: 1.0, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.5, AVAX: 0.01, TRX: 1.0, KAIA: 0.86 },
-  gopax: { BTC: 0.0005, ETH: 0.01, XRP: 1.0, SOL: 0.01, DOGE: 5.0, ADA: 1.0, TRX: 1.0, LINK: 0.5, AVAX: 0.01, KAIA: 1.0 },
-  bitflyer: { BTC: 0.0004, ETH: 0.005, XRP: 0.1 },
-  wazirx: { BTC: 0.0006, ETH: 0.005, XRP: 1.0, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.3, AVAX: 0.01, TRX: 1.0, KAIA: 0.5 },
-  binance: { BTC: 0.0002, ETH: 0.0016, XRP: 0.25, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.3, AVAX: 0.01, TRX: 1.0, USDT: 1.0, USDC: 1.0, KAIA: 0.005 },
-  okx: { BTC: 0.0002, ETH: 0.0008, XRP: 0.2, SOL: 0.008, DOGE: 4.0, ADA: 0.8, DOT: 0.08, LINK: 0.3, AVAX: 0.01, TRX: 1.0, USDT: 1.0, USDC: 1.0, KAIA: 0.005 },
-  bybit: { BTC: 0.0002, ETH: 0.0016, XRP: 0.25, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.3, AVAX: 0.01, TRX: 1.0, USDT: 1.0, USDC: 1.0, KAIA: 0.005 },
-}
-
-const FEE_CACHE_TTL_MS = 5 * 60_000
-const BITHUMB_WITHDRAWAL_STATUS_CACHE_TTL_MS = 60_000
-
-let feeTablesReady: Promise<void> | null = null
-
-function cloneDefaultTradingFees(): Record<string, number> {
-  return { ...EXCHANGE_FEES }
-}
-
-function cloneDefaultWithdrawalFees(): Record<string, Record<string, number>> {
-  const entries = Object.entries(WITHDRAWAL_FEES).map(([exchange, fees]) => [exchange, { ...fees }])
-  return Object.fromEntries(entries)
-}
-
-function getWithdrawalFee(
-  exchange: string,
-  coin: string,
-  withdrawalFees: Record<string, Record<string, number>> = WITHDRAWAL_FEES,
-): number {
-  return withdrawalFees[exchange.toLowerCase()]?.[coin.toUpperCase()] ?? 0
-}
-
-function invalidateFeeCaches(): void {
-  const globalAny = globalThis as unknown as {
-    __crossfinTradingFeesCache?: { value: Record<string, number>; expiresAt: number }
-    __crossfinTradingFeesInFlight?: Promise<Record<string, number>> | null
-    __crossfinWithdrawalFeesCache?: { value: Record<string, Record<string, number>>; expiresAt: number }
-    __crossfinWithdrawalFeesInFlight?: Promise<Record<string, Record<string, number>>> | null
-    __crossfinWithdrawalSuspensionsCache?: { value: Record<string, Set<string>>; expiresAt: number }
-    __crossfinWithdrawalSuspensionsInFlight?: Promise<Record<string, Set<string>>> | null
-  }
-
-  globalAny.__crossfinTradingFeesCache = undefined
-  globalAny.__crossfinTradingFeesInFlight = null
-  globalAny.__crossfinWithdrawalFeesCache = undefined
-  globalAny.__crossfinWithdrawalFeesInFlight = null
-  globalAny.__crossfinWithdrawalSuspensionsCache = undefined
-  globalAny.__crossfinWithdrawalSuspensionsInFlight = null
-}
-
-async function ensureFeeTables(db: D1Database): Promise<void> {
-  if (!feeTablesReady) {
-    feeTablesReady = (async () => {
-      await db.batch([
-        db.prepare(
-          `CREATE TABLE IF NOT EXISTS exchange_trading_fees (
-             exchange TEXT NOT NULL,
-             fee_pct REAL NOT NULL,
-             updated_at TEXT DEFAULT (datetime('now')),
-             PRIMARY KEY (exchange)
-           )`
-        ),
-        db.prepare(
-          `CREATE TABLE IF NOT EXISTS exchange_withdrawal_fees (
-             exchange TEXT NOT NULL,
-             coin TEXT NOT NULL,
-             fee REAL NOT NULL,
-             suspended INTEGER DEFAULT 0,
-             updated_at TEXT DEFAULT (datetime('now')),
-             PRIMARY KEY (exchange, coin)
-           )`
-        ),
-      ])
-
-      const [tradingCountRow, withdrawalCountRow] = await Promise.all([
-        db.prepare('SELECT COUNT(*) AS count FROM exchange_trading_fees').first<{ count: number | string }>(),
-        db.prepare('SELECT COUNT(*) AS count FROM exchange_withdrawal_fees').first<{ count: number | string }>(),
-      ])
-
-      const tradingCount = Number(tradingCountRow?.count ?? 0)
-      if (tradingCount === 0) {
-        const tradingStatements = Object.entries(EXCHANGE_FEES).map(([exchange, feePct]) =>
-          db.prepare('INSERT INTO exchange_trading_fees (exchange, fee_pct) VALUES (?, ?)').bind(exchange, feePct)
-        )
-        if (tradingStatements.length > 0) {
-          await db.batch(tradingStatements)
-        }
-      }
-
-      const withdrawalCount = Number(withdrawalCountRow?.count ?? 0)
-      if (withdrawalCount === 0) {
-        const withdrawalStatements: D1PreparedStatement[] = []
-        for (const [exchange, feesByCoin] of Object.entries(WITHDRAWAL_FEES)) {
-          for (const [coin, fee] of Object.entries(feesByCoin)) {
-            withdrawalStatements.push(
-              db.prepare('INSERT INTO exchange_withdrawal_fees (exchange, coin, fee, suspended) VALUES (?, ?, ?, 0)')
-                .bind(exchange, coin, fee)
-            )
-          }
-        }
-        if (withdrawalStatements.length > 0) {
-          await db.batch(withdrawalStatements)
-        }
-      }
-    })().catch((err) => {
-      feeTablesReady = null
-      throw err
-    })
-  }
-
-  await feeTablesReady
-}
-
-async function fetchBithumbWithdrawalStatuses(): Promise<Record<string, boolean>> {
-  const globalAny = globalThis as unknown as {
-    __crossfinBithumbWithdrawalStatusCache?: { value: Record<string, boolean>; expiresAt: number }
-    __crossfinBithumbWithdrawalStatusInFlight?: Promise<Record<string, boolean>> | null
-  }
-
-  const now = Date.now()
-  const cached = globalAny.__crossfinBithumbWithdrawalStatusCache
-  if (cached && now < cached.expiresAt) return cached.value
-  if (globalAny.__crossfinBithumbWithdrawalStatusInFlight) return globalAny.__crossfinBithumbWithdrawalStatusInFlight
-
-  const fallback = cached?.value ?? {}
-
-  const promise = (async () => {
-    try {
-      const res = await fetch('https://api.bithumb.com/public/assetsstatus/ALL')
-      if (!res.ok) throw new Error(`Bithumb asset status unavailable (${res.status})`)
-      const data: unknown = await res.json()
-      if (!isRecord(data) || data.status !== '0000' || !isRecord(data.data)) {
-        throw new Error('Bithumb asset status invalid response')
-      }
-
-      const parsed: Record<string, boolean> = {}
-      for (const [coinRaw, row] of Object.entries(data.data)) {
-        if (!isRecord(row)) continue
-        const coin = coinRaw.trim().toUpperCase()
-        if (!coin) continue
-        const withdrawalStatusRaw = row.withdrawal_status
-        const withdrawalStatus = typeof withdrawalStatusRaw === 'string'
-          ? Number(withdrawalStatusRaw)
-          : Number(withdrawalStatusRaw)
-        parsed[coin] = Number.isFinite(withdrawalStatus) && withdrawalStatus === 1
-      }
-
-      globalAny.__crossfinBithumbWithdrawalStatusCache = {
-        value: parsed,
-        expiresAt: now + BITHUMB_WITHDRAWAL_STATUS_CACHE_TTL_MS,
-      }
-      return parsed
-    } catch {
-      globalAny.__crossfinBithumbWithdrawalStatusCache = {
-        value: fallback,
-        expiresAt: now + BITHUMB_WITHDRAWAL_STATUS_CACHE_TTL_MS,
-      }
-      return fallback
-    } finally {
-      globalAny.__crossfinBithumbWithdrawalStatusInFlight = null
-    }
-  })()
-
-  globalAny.__crossfinBithumbWithdrawalStatusInFlight = promise
-  return promise
-}
-
-async function syncBithumbWithdrawalSuspensions(db: D1Database): Promise<boolean> {
-  try {
-    await ensureFeeTables(db)
-    const statuses = await fetchBithumbWithdrawalStatuses()
-    const rowsResult = await db.prepare(
-      "SELECT coin, suspended FROM exchange_withdrawal_fees WHERE exchange = 'bithumb'"
-    ).all<{ coin: string; suspended: number | string }>()
-
-    const updates: D1PreparedStatement[] = []
-    for (const row of rowsResult.results ?? []) {
-      const coin = row.coin.toUpperCase()
-      const enabled = statuses[coin]
-      const nextSuspended = enabled ? 0 : 1
-      const currentSuspended = Number(row.suspended ?? 0) === 1 ? 1 : 0
-      if (currentSuspended === nextSuspended) continue
-      updates.push(
-        db.prepare(
-          "UPDATE exchange_withdrawal_fees SET suspended = ?, updated_at = datetime('now') WHERE exchange = 'bithumb' AND coin = ?"
-        ).bind(nextSuspended, coin)
-      )
-    }
-
-    if (updates.length === 0) return false
-    await db.batch(updates)
-    return true
-  } catch {
-    return false
-  }
-}
-
-async function getExchangeTradingFees(db: D1Database): Promise<Record<string, number>> {
-  const globalAny = globalThis as unknown as {
-    __crossfinTradingFeesCache?: { value: Record<string, number>; expiresAt: number }
-    __crossfinTradingFeesInFlight?: Promise<Record<string, number>> | null
-  }
-
-  const now = Date.now()
-  const cached = globalAny.__crossfinTradingFeesCache
-  if (cached && now < cached.expiresAt) return cached.value
-  if (globalAny.__crossfinTradingFeesInFlight) return globalAny.__crossfinTradingFeesInFlight
-
-  const fallback = cached?.value ?? cloneDefaultTradingFees()
-
-  const promise = (async () => {
-    try {
-      await ensureFeeTables(db)
-      const res = await db.prepare('SELECT exchange, fee_pct FROM exchange_trading_fees').all<{ exchange: string; fee_pct: number | string }>()
-      const fees = cloneDefaultTradingFees()
-      for (const row of res.results ?? []) {
-        const exchange = row.exchange.trim().toLowerCase()
-        const fee = Number(row.fee_pct)
-        if (!exchange || !Number.isFinite(fee) || fee < 0) continue
-        fees[exchange] = fee
-      }
-      globalAny.__crossfinTradingFeesCache = { value: fees, expiresAt: now + FEE_CACHE_TTL_MS }
-      return fees
-    } catch {
-      globalAny.__crossfinTradingFeesCache = { value: fallback, expiresAt: now + FEE_CACHE_TTL_MS }
-      return fallback
-    } finally {
-      globalAny.__crossfinTradingFeesInFlight = null
-    }
-  })()
-
-  globalAny.__crossfinTradingFeesInFlight = promise
-  return promise
-}
-
-async function getExchangeWithdrawalFees(db: D1Database): Promise<Record<string, Record<string, number>>> {
-  const globalAny = globalThis as unknown as {
-    __crossfinWithdrawalFeesCache?: { value: Record<string, Record<string, number>>; expiresAt: number }
-    __crossfinWithdrawalFeesInFlight?: Promise<Record<string, Record<string, number>>> | null
-  }
-
-  const now = Date.now()
-  const cached = globalAny.__crossfinWithdrawalFeesCache
-  if (cached && now < cached.expiresAt) return cached.value
-  if (globalAny.__crossfinWithdrawalFeesInFlight) return globalAny.__crossfinWithdrawalFeesInFlight
-
-  const fallback = cached?.value ?? cloneDefaultWithdrawalFees()
-
-  const promise = (async () => {
-    try {
-      await ensureFeeTables(db)
-      const res = await db.prepare('SELECT exchange, coin, fee FROM exchange_withdrawal_fees').all<{
-        exchange: string
-        coin: string
-        fee: number | string
-      }>()
-
-      const fees = cloneDefaultWithdrawalFees()
-      for (const row of res.results ?? []) {
-        const exchange = row.exchange.trim().toLowerCase()
-        const coin = row.coin.trim().toUpperCase()
-        const fee = Number(row.fee)
-        if (!exchange || !coin || !Number.isFinite(fee) || fee < 0) continue
-        if (!fees[exchange]) fees[exchange] = {}
-        fees[exchange]![coin] = fee
-      }
-
-      globalAny.__crossfinWithdrawalFeesCache = { value: fees, expiresAt: now + FEE_CACHE_TTL_MS }
-      return fees
-    } catch {
-      globalAny.__crossfinWithdrawalFeesCache = { value: fallback, expiresAt: now + FEE_CACHE_TTL_MS }
-      return fallback
-    } finally {
-      globalAny.__crossfinWithdrawalFeesInFlight = null
-    }
-  })()
-
-  globalAny.__crossfinWithdrawalFeesInFlight = promise
-  return promise
-}
-
-async function getWithdrawalSuspensions(db: D1Database): Promise<Record<string, Set<string>>> {
-  const globalAny = globalThis as unknown as {
-    __crossfinWithdrawalSuspensionsCache?: { value: Record<string, Set<string>>; expiresAt: number }
-    __crossfinWithdrawalSuspensionsInFlight?: Promise<Record<string, Set<string>>> | null
-  }
-
-  const now = Date.now()
-  const cached = globalAny.__crossfinWithdrawalSuspensionsCache
-  if (cached && now < cached.expiresAt) {
-    const changed = await syncBithumbWithdrawalSuspensions(db)
-    if (!changed) return cached.value
-  }
-  if (globalAny.__crossfinWithdrawalSuspensionsInFlight) return globalAny.__crossfinWithdrawalSuspensionsInFlight
-
-  const fallback = cached?.value ?? {}
-
-  const promise = (async () => {
-    try {
-      await ensureFeeTables(db)
-      await syncBithumbWithdrawalSuspensions(db)
-      const res = await db.prepare('SELECT exchange, coin FROM exchange_withdrawal_fees WHERE suspended = 1').all<{
-        exchange: string
-        coin: string
-      }>()
-
-      const byExchange: Record<string, Set<string>> = {}
-      for (const row of res.results ?? []) {
-        const exchange = row.exchange.trim().toLowerCase()
-        const coin = row.coin.trim().toUpperCase()
-        if (!exchange || !coin) continue
-        if (!byExchange[exchange]) byExchange[exchange] = new Set<string>()
-        byExchange[exchange]!.add(coin)
-      }
-
-      globalAny.__crossfinWithdrawalSuspensionsCache = { value: byExchange, expiresAt: now + FEE_CACHE_TTL_MS }
-      return byExchange
-    } catch {
-      globalAny.__crossfinWithdrawalSuspensionsCache = { value: fallback, expiresAt: now + FEE_CACHE_TTL_MS }
-      return fallback
-    } finally {
-      globalAny.__crossfinWithdrawalSuspensionsInFlight = null
-    }
-  })()
-
-  globalAny.__crossfinWithdrawalSuspensionsInFlight = promise
-  return promise
-}
-
-// --- Routing Engine: Supported exchanges ---
-const ROUTING_EXCHANGES = ['bithumb', 'upbit', 'coinone', 'gopax', 'bitflyer', 'wazirx', 'binance', 'okx', 'bybit'] as const
-type RoutingExchange = typeof ROUTING_EXCHANGES[number]
-
-const GLOBAL_ROUTING_EXCHANGE_SET = new Set<string>(['binance', 'okx', 'bybit'])
-const KOREAN_ROUTING_EXCHANGE_SET = new Set<string>(['bithumb', 'upbit', 'coinone', 'gopax'])
-
-const ROUTING_EXCHANGE_CURRENCIES: Record<RoutingExchange, readonly string[]> = {
-  bithumb: ['KRW'],
-  upbit: ['KRW'],
-  coinone: ['KRW'],
-  gopax: ['KRW'],
-  bitflyer: ['JPY'],
-  wazirx: ['INR'],
-  binance: ['USDC', 'USDT', 'USD'],
-  okx: ['USDC', 'USDT', 'USD'],
-  bybit: ['USDC', 'USDT', 'USD'],
-}
-
-const ROUTING_SUPPORTED_CURRENCIES = ['KRW', 'JPY', 'INR', 'USDC', 'USDT', 'USD'] as const
-
-const EXCHANGE_DISPLAY_NAME: Record<RoutingExchange, string> = {
-  bithumb: 'Bithumb',
-  upbit: 'Upbit',
-  coinone: 'Coinone',
-  gopax: 'GoPax',
-  bitflyer: 'bitFlyer',
-  wazirx: 'WazirX',
-  binance: 'Binance',
-  okx: 'OKX',
-  bybit: 'Bybit',
-}
-
-const ROUTING_EXCHANGE_COUNTRY: Record<RoutingExchange, string> = {
-  bithumb: 'South Korea',
-  upbit: 'South Korea',
-  coinone: 'South Korea',
-  gopax: 'South Korea',
-  bitflyer: 'Japan',
-  wazirx: 'India',
-  binance: 'Global',
-  okx: 'Global',
-  bybit: 'Global',
-}
 
 function isGlobalRoutingExchange(exchange: string): boolean {
   return GLOBAL_ROUTING_EXCHANGE_SET.has(exchange.toLowerCase())
@@ -6413,170 +5999,6 @@ function assertRoutingCurrencySupported(exchange: string, currency: string, labe
   })
 }
 
-// --- Routing Engine: Bridge coins for cross-exchange transfers ---
-const BRIDGE_COINS = ['XRP', 'SOL', 'TRX', 'KAIA', 'ETH', 'BTC', 'ADA', 'DOGE', 'AVAX', 'DOT', 'LINK'] as const
-
-// --- Decision Layer: Transfer times (minutes) per coin ---
-const TRANSFER_TIME_MIN: Record<string, number> = {
-  BTC: 20, ETH: 5, XRP: 0.5, SOL: 1, DOGE: 10, ADA: 5,
-  DOT: 5, LINK: 5, AVAX: 2, TRX: 1, KAIA: 1,
-}
-const DEFAULT_TRANSFER_TIME_MIN = 10
-
-function getTransferTime(coin: string): number {
-  return TRANSFER_TIME_MIN[coin.toUpperCase()] ?? DEFAULT_TRANSFER_TIME_MIN
-}
-
-// Estimate slippage from orderbook depth for a given trade size in KRW
-function estimateSlippage(
-  asks: Array<{ price: string; quantity: string }>,
-  tradeAmountKrw: number,
-): number {
-  if (!asks.length || tradeAmountKrw <= 0) return 0
-  const firstAsk = asks[0]
-  if (!firstAsk) return 0
-  const bestAsk = parseFloat(firstAsk.price)
-  if (!bestAsk || !Number.isFinite(bestAsk)) return 0
-
-  let remaining = tradeAmountKrw
-  let totalCost = 0
-  let totalQty = 0
-
-  for (const level of asks) {
-    const price = parseFloat(level.price)
-    const qty = parseFloat(level.quantity)
-    if (!Number.isFinite(price) || !Number.isFinite(qty) || price <= 0 || qty <= 0) continue
-
-    const levelValue = price * qty
-    if (remaining <= levelValue) {
-      const fillQty = remaining / price
-      totalCost += fillQty * price
-      totalQty += fillQty
-      remaining = 0
-      break
-    } else {
-      totalCost += qty * price
-      totalQty += qty
-      remaining -= levelValue
-    }
-  }
-
-  if (totalQty === 0) return 2.0 // default high slippage if no depth
-  const avgPrice = totalCost / totalQty
-  return Math.round(((avgPrice - bestAsk) / bestAsk) * 10000) / 100 // percentage
-}
-
-// Get premium trend from kimchi_snapshots (last N hours)
-async function getPremiumTrend(
-  db: D1Database,
-  coin: string,
-  hours: number = 6,
-): Promise<{ trend: 'rising' | 'falling' | 'stable'; volatilityPct: number }> {
-  try {
-    const rangeArg = `-${hours} hours`
-    const sql = `
-      SELECT premium_pct AS premiumPct, created_at AS createdAt
-      FROM kimchi_snapshots
-      WHERE datetime(created_at) >= datetime('now', ?)
-        AND coin = ?
-      ORDER BY datetime(created_at) ASC
-    `
-    const res = await db.prepare(sql).bind(rangeArg, coin).all<{ premiumPct: number; createdAt: string }>()
-    const rows = res.results ?? []
-
-    if (rows.length < 2) return { trend: 'stable' as const, volatilityPct: 0 }
-
-    const firstRow = rows[0]!
-    const lastRow = rows[rows.length - 1]!
-    const first = firstRow.premiumPct
-    const last = lastRow.premiumPct
-    const diff = last - first
-
-    const values = rows.map((r) => r.premiumPct)
-    const mean = values.reduce((s, v) => s + v, 0) / values.length
-    const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length
-    const volatilityPct = Math.round(Math.sqrt(variance) * 100) / 100
-
-    const trend: 'rising' | 'falling' | 'stable' =
-      diff > 0.3 ? 'rising' : diff < -0.3 ? 'falling' : 'stable'
-
-    return { trend, volatilityPct }
-  } catch {
-    return { trend: 'stable', volatilityPct: 0 }
-  }
-}
-
-// Compute action recommendation
-function computeAction(
-  netProfitPct: number,
-  slippageEstimatePct: number,
-  transferTimeMin: number,
-  volatilityPct: number,
-): { action: 'EXECUTE' | 'WAIT' | 'SKIP'; confidence: number; reason: string } {
-  const adjustedProfit = netProfitPct - slippageEstimatePct
-  // Estimate premium risk during transfer: volatility * sqrt(transferTime/60)
-  const premiumRisk = volatilityPct * Math.sqrt(transferTimeMin / 60)
-  const score = adjustedProfit - premiumRisk
-
-  if (score > 1.0) {
-    const confidence = Math.min(0.95, 0.8 + (score - 1.0) * 0.05)
-    return {
-      action: 'EXECUTE',
-      confidence: Math.round(confidence * 100) / 100,
-      reason: `Adjusted profit ${round2(adjustedProfit)}% exceeds risk ${round2(premiumRisk)}% with strong margin`,
-    }
-  } else if (score > 0) {
-    const confidence = 0.5 + (score / 1.0) * 0.3
-    return {
-      action: 'WAIT',
-      confidence: Math.round(confidence * 100) / 100,
-      reason: `Marginal profit ${round2(adjustedProfit)}% after risk ${round2(premiumRisk)}% — monitor for better entry`,
-    }
-  } else {
-    const confidence = Math.max(0.1, 0.5 + score * 0.2)
-    return {
-      action: 'SKIP',
-      confidence: Math.round(confidence * 100) / 100,
-      reason: `Negative expected return: adjusted profit ${round2(adjustedProfit)}% minus risk ${round2(premiumRisk)}%`,
-    }
-  }
-}
-
-function computeRouteAction(
-  totalCostPct: number,
-  slippageEstimatePct: number,
-  transferTimeMin: number,
-): { action: 'EXECUTE' | 'WAIT' | 'SKIP'; confidence: number; reason: string } {
-  const slippagePenalty = Math.max(0, slippageEstimatePct) * 0.4
-  const timePenalty = Math.max(0, transferTimeMin - 2) * 0.07
-  const score = totalCostPct + slippagePenalty + timePenalty
-
-  if (score < 1.4) {
-    const confidence = Math.max(0.58, Math.min(0.95, 0.91 - score * 0.1))
-    return {
-      action: 'EXECUTE',
-      confidence: Math.round(confidence * 100) / 100,
-      reason: `Low projected routing cost ${round2(totalCostPct)}% with manageable transfer risk`,
-    }
-  }
-
-  if (score < 3.2) {
-    const confidence = Math.max(0.46, Math.min(0.84, 0.78 - (score - 1.4) * 0.08))
-    return {
-      action: 'WAIT',
-      confidence: Math.round(confidence * 100) / 100,
-      reason: `Moderate routing cost ${round2(totalCostPct)}% — monitor liquidity before execution`,
-    }
-  }
-
-  const confidence = Math.max(0.62, Math.min(0.97, 0.64 + (score - 3.2) * 0.08))
-  return {
-    action: 'SKIP',
-    confidence: Math.round(confidence * 100) / 100,
-    reason: `High projected routing cost ${round2(totalCostPct)}% for current market conditions`,
-  }
-}
-
 // ============================================================
 // ROUTING ENGINE — Asia Agent Financial Router
 // Finds the cheapest/fastest path to move money across exchanges
@@ -6605,8 +6027,8 @@ interface Route {
   estimatedInput: number
   estimatedOutput: number
   bridgeCoin: (typeof BRIDGE_COINS)[number]
-  action: 'EXECUTE' | 'WAIT' | 'SKIP'
-  confidence: number
+  indicator: 'FAVORABLE' | 'NEUTRAL' | 'UNFAVORABLE'
+  signalStrength: number
   reason: string
   summary: {
     input: string
@@ -6637,57 +6059,10 @@ interface RouteMeta {
   dataFreshness: 'live' | 'cached' | 'stale'
 }
 
-type RoutingStrategy = 'cheapest' | 'fastest' | 'balanced'
-
 type RegionalExchangePriceQuote = {
   priceLocal: number
   quoteCurrency: string
   asks: Array<{ price: string; quantity: string }>
-}
-
-async function fetchWazirxTickers(): Promise<Record<string, Record<string, unknown>>> {
-  const WAZIRX_TICKERS_SUCCESS_TTL_MS = 10_000
-  const WAZIRX_TICKERS_FAILURE_TTL_MS = 3_000
-
-  type CachedWazirxTickers = { value: Record<string, Record<string, unknown>>; expiresAt: number }
-  const globalAny = globalThis as unknown as {
-    __crossfinWazirxTickersCache?: CachedWazirxTickers
-    __crossfinWazirxTickersInFlight?: Promise<Record<string, Record<string, unknown>>> | null
-  }
-
-  const now = Date.now()
-  const cached = globalAny.__crossfinWazirxTickersCache
-  if (cached && now < cached.expiresAt && Object.keys(cached.value).length > 0) return cached.value
-  if (globalAny.__crossfinWazirxTickersInFlight) return globalAny.__crossfinWazirxTickersInFlight
-
-  const fallback = cached?.value ?? {}
-  const promise = (async () => {
-    try {
-      const res = await fetch('https://api.wazirx.com/api/v2/tickers')
-      if (!res.ok) throw new Error(`WazirX ticker feed unavailable (${res.status})`)
-      const data: unknown = await res.json()
-      if (!isRecord(data)) throw new Error('WazirX ticker feed invalid response')
-
-      const parsed: Record<string, Record<string, unknown>> = {}
-      for (const [market, row] of Object.entries(data)) {
-        if (!isRecord(row)) continue
-        parsed[market.trim().toLowerCase()] = row
-      }
-      if (Object.keys(parsed).length === 0) throw new Error('WazirX ticker feed empty')
-
-      globalAny.__crossfinWazirxTickersCache = { value: parsed, expiresAt: now + WAZIRX_TICKERS_SUCCESS_TTL_MS }
-      return parsed
-    } catch {
-      globalAny.__crossfinWazirxTickersCache = { value: fallback, expiresAt: now + WAZIRX_TICKERS_FAILURE_TTL_MS }
-      if (Object.keys(fallback).length > 0) return fallback
-      throw new Error('WazirX ticker feed unavailable')
-    } finally {
-      globalAny.__crossfinWazirxTickersInFlight = null
-    }
-  })()
-
-  globalAny.__crossfinWazirxTickersInFlight = promise
-  return promise
 }
 
 // Fetch price for a coin on a regional fiat exchange (KRW/JPY/INR).
@@ -7075,7 +6450,7 @@ async function findOptimalRoute(
       const totalCostPct = ((inputValueUsd - outputValueUsdForCost) / inputValueUsd) * 100
       const totalTimeMinutes = transferTime + 1 // +1 min for trade execution
 
-      const { action, confidence, reason } = computeRouteAction(
+      const { indicator, signalStrength, reason } = computeRouteAction(
         totalCostPct,
         buySlippagePct,
         transferTime,
@@ -7104,12 +6479,12 @@ async function findOptimalRoute(
         return `${formatAmountByCurrency(feeAmountUsd, 'USD')} (${totalCostPctRounded}%)`
       })()
 
-      const finalAction: Route['action'] = action
+      const finalIndicator: Route['indicator'] = indicator
       const finalReason = reason
       const recommendation: Route['summary']['recommendation'] =
-        finalAction === 'EXECUTE'
+        finalIndicator === 'FAVORABLE'
           ? (totalCostPct < 1 ? 'GOOD_DEAL' : 'PROCEED')
-          : finalAction === 'WAIT'
+          : finalIndicator === 'NEUTRAL'
             ? 'PROCEED'
             : totalCostPct < 5
               ? 'EXPENSIVE'
@@ -7163,8 +6538,8 @@ async function findOptimalRoute(
         estimatedInput: amount,
         estimatedOutput,
         bridgeCoin,
-        action: finalAction,
-        confidence: Math.round(confidence * 100) / 100,
+        indicator: finalIndicator,
+        signalStrength: Math.round(signalStrength * 100) / 100,
         reason: finalReason,
       }
 
@@ -7224,554 +6599,6 @@ async function findOptimalRoute(
 // END ROUTING ENGINE CORE
 // ============================================================
 
-async function fetchUsdFxRates(): Promise<Record<'KRW' | 'JPY' | 'INR', number>> {
-  const FX_RATE_SUCCESS_TTL_MS = 5 * 60_000
-  const FX_RATE_FAILURE_TTL_MS = 60_000
-
-  type CachedRates = { value: Record<'KRW' | 'JPY' | 'INR', number>; expiresAt: number }
-  const globalAny = globalThis as unknown as {
-    __crossfinUsdFxRatesCache?: CachedRates
-    __crossfinUsdFxRatesInFlight?: Promise<Record<'KRW' | 'JPY' | 'INR', number>> | null
-  }
-
-  const now = Date.now()
-  const cached = globalAny.__crossfinUsdFxRatesCache
-  if (cached && now < cached.expiresAt) return cached.value
-  if (globalAny.__crossfinUsdFxRatesInFlight) return globalAny.__crossfinUsdFxRatesInFlight
-
-  const fallback = cached?.value ?? { KRW: 1450, JPY: 150, INR: 85 }
-  const promise = (async () => {
-    try {
-      const res = await fetch('https://open.er-api.com/v6/latest/USD')
-      if (!res.ok) throw new Error(`FX rate fetch failed (${res.status})`)
-      const data = await res.json() as { rates?: Record<string, number> }
-
-      const krw = Number(data.rates?.KRW)
-      const jpy = Number(data.rates?.JPY)
-      const inr = Number(data.rates?.INR)
-      if (!Number.isFinite(krw) || krw < 500 || krw > 5000) throw new Error('Invalid KRW FX rate')
-      if (!Number.isFinite(jpy) || jpy < 50 || jpy > 300) throw new Error('Invalid JPY FX rate')
-      if (!Number.isFinite(inr) || inr < 20 || inr > 200) throw new Error('Invalid INR FX rate')
-
-      const rates = { KRW: krw, JPY: jpy, INR: inr }
-      globalAny.__crossfinUsdFxRatesCache = { value: rates, expiresAt: now + FX_RATE_SUCCESS_TTL_MS }
-      return rates
-    } catch {
-      globalAny.__crossfinUsdFxRatesCache = { value: fallback, expiresAt: now + FX_RATE_FAILURE_TTL_MS }
-      return fallback
-    } finally {
-      globalAny.__crossfinUsdFxRatesInFlight = null
-    }
-  })()
-
-  globalAny.__crossfinUsdFxRatesInFlight = promise
-  return promise
-}
-
-async function fetchKrwRate(): Promise<number> {
-  const rates = await fetchUsdFxRates()
-  return rates.KRW
-}
-
-async function fetchBithumbAll(): Promise<Record<string, Record<string, string>>> {
-  // Cache to avoid hammering Bithumb on high-traffic dashboards.
-  const BITHUMB_ALL_SUCCESS_TTL_MS = 10_000
-  const BITHUMB_ALL_FAILURE_TTL_MS = 2_000
-
-  type CachedBithumbAll = { value: Record<string, Record<string, string>>; expiresAt: number }
-  const globalAny = globalThis as unknown as {
-    __crossfinBithumbAllCache?: CachedBithumbAll
-    __crossfinBithumbAllInFlight?: Promise<Record<string, Record<string, string>>> | null
-  }
-
-  const now = Date.now()
-  const cached = globalAny.__crossfinBithumbAllCache
-  if (cached && now < cached.expiresAt) return cached.value
-  if (globalAny.__crossfinBithumbAllInFlight) return globalAny.__crossfinBithumbAllInFlight
-
-  const fallback = cached?.value ?? {}
-
-  const promise = (async () => {
-    try {
-      const res = await fetch('https://api.bithumb.com/public/ticker/ALL_KRW')
-      if (!res.ok) throw new Error(`Bithumb API unavailable (${res.status})`)
-      const data: unknown = await res.json()
-      if (!isRecord(data) || typeof data.status !== 'string' || !isRecord(data.data)) {
-        throw new Error('Bithumb API invalid response')
-      }
-      if (data.status !== '0000') throw new Error('Bithumb API unavailable')
-
-      const parsed = data.data as Record<string, Record<string, string>>
-      if (!isRecord(parsed.BTC) && !isRecord(parsed.ETH)) {
-        throw new Error('Bithumb API returned no tickers')
-      }
-
-      globalAny.__crossfinBithumbAllCache = { value: parsed, expiresAt: now + BITHUMB_ALL_SUCCESS_TTL_MS }
-      return parsed
-    } catch {
-      globalAny.__crossfinBithumbAllCache = { value: fallback, expiresAt: now + BITHUMB_ALL_FAILURE_TTL_MS }
-      if (Object.keys(fallback).length > 0) return fallback
-      throw new HTTPException(502, { message: 'Bithumb API unavailable' })
-    } finally {
-      globalAny.__crossfinBithumbAllInFlight = null
-    }
-  })()
-
-  globalAny.__crossfinBithumbAllInFlight = promise
-  return promise
-}
-
-const GLOBAL_PRICES_SUCCESS_TTL_MS = 10_000
-const GLOBAL_PRICES_FAILURE_TTL_MS = 5_000
-
-type CachedGlobalPrices = { value: Record<string, number>; expiresAt: number; source: string }
-type CachedExchangePriceFeed = { value: Record<string, number>; expiresAt: number; source: string }
-type ExchangePrices = Record<string, Record<string, number>>
-
-async function fetchBinancePrices(): Promise<Record<string, number>> {
-  const globalAny = globalThis as unknown as {
-    __crossfinBinancePricesCache?: CachedExchangePriceFeed
-    __crossfinBinancePricesInFlight?: Promise<Record<string, number>> | null
-  }
-
-  const now = Date.now()
-  const cached = globalAny.__crossfinBinancePricesCache
-  if (cached && now < cached.expiresAt && Object.keys(cached.value).length > 0) return cached.value
-  if (globalAny.__crossfinBinancePricesInFlight) return globalAny.__crossfinBinancePricesInFlight
-
-  const fallback = cached?.value ?? {}
-  const symbols = Array.from(new Set(Object.values(TRACKED_PAIRS)))
-  const query = encodeURIComponent(JSON.stringify(symbols))
-  const BINANCE_BASE_URLS = [
-    'https://data-api.binance.vision',
-    'https://api.binance.com',
-    'https://api1.binance.com',
-    'https://api2.binance.com',
-    'https://api3.binance.com',
-  ]
-
-  const promise = (async () => {
-    for (const baseUrl of BINANCE_BASE_URLS) {
-      try {
-        const url = `${baseUrl}/api/v3/ticker/price?symbols=${query}`
-        const res = await fetch(url)
-        if (!res.ok) throw new Error(`Binance price feed unavailable (${res.status})`)
-        const data: unknown = await res.json()
-        if (!Array.isArray(data)) throw new Error('Binance price feed invalid response')
-
-        const prices: Record<string, number> = {}
-        for (const row of data) {
-          if (!isRecord(row)) continue
-          const symbol = typeof row.symbol === 'string' ? row.symbol.trim().toUpperCase() : ''
-          const priceRaw = typeof row.price === 'string' ? row.price.trim() : ''
-          const price = Number(priceRaw)
-          if (!symbol || !Number.isFinite(price) || price <= 0) continue
-          prices[symbol] = price
-        }
-
-        const btcSymbol = TRACKED_PAIRS.BTC
-        const btc = btcSymbol ? prices[btcSymbol] : undefined
-        if (typeof btc === 'number' && Number.isFinite(btc) && btc > 1000) {
-          const hostname = new URL(baseUrl).hostname
-          globalAny.__crossfinBinancePricesCache = {
-            value: prices,
-            expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS,
-            source: `binance:${hostname}`,
-          }
-          return prices
-        }
-      } catch {
-        // Try next base URL
-      }
-    }
-
-    globalAny.__crossfinBinancePricesCache = {
-      value: fallback,
-      expiresAt: now + GLOBAL_PRICES_FAILURE_TTL_MS,
-      source: cached?.source ?? 'binance:cached',
-    }
-    if (Object.keys(fallback).length > 0) return fallback
-    throw new Error('Binance price feed unavailable')
-  })()
-
-  globalAny.__crossfinBinancePricesInFlight = promise
-  return promise.finally(() => {
-    globalAny.__crossfinBinancePricesInFlight = null
-  })
-}
-
-async function fetchOkxPrices(): Promise<Record<string, number>> {
-  const globalAny = globalThis as unknown as {
-    __crossfinOkxPricesCache?: CachedExchangePriceFeed
-    __crossfinOkxPricesInFlight?: Promise<Record<string, number>> | null
-  }
-
-  const now = Date.now()
-  const cached = globalAny.__crossfinOkxPricesCache
-  if (cached && now < cached.expiresAt && Object.keys(cached.value).length > 0) return cached.value
-  if (globalAny.__crossfinOkxPricesInFlight) return globalAny.__crossfinOkxPricesInFlight
-
-  const fallback = cached?.value ?? {}
-  const trackedSymbols = new Set(Object.values(TRACKED_PAIRS))
-
-  const promise = (async () => {
-    try {
-      const res = await fetch('https://www.okx.com/api/v5/market/tickers?instType=SPOT')
-      if (!res.ok) throw new Error(`OKX price feed unavailable (${res.status})`)
-      const data: unknown = await res.json()
-      if (!isRecord(data) || data.code !== '0' || !Array.isArray(data.data)) {
-        throw new Error('OKX price feed invalid response')
-      }
-
-      const prices: Record<string, number> = {}
-      for (const row of data.data) {
-        if (!isRecord(row)) continue
-        const instId = typeof row.instId === 'string' ? row.instId.trim().toUpperCase() : ''
-        const lastRaw = typeof row.last === 'string' ? row.last.trim() : ''
-        if (!instId.endsWith('-USDT')) continue
-        const symbol = instId.replace('-', '')
-        if (!trackedSymbols.has(symbol)) continue
-        const price = Number(lastRaw)
-        if (!Number.isFinite(price) || price <= 0) continue
-        prices[symbol] = price
-      }
-
-      const btcSymbol = TRACKED_PAIRS.BTC
-      const btc = btcSymbol ? prices[btcSymbol] : undefined
-      if (typeof btc !== 'number' || !Number.isFinite(btc) || btc <= 1000) {
-        throw new Error('OKX price feed returned no valid BTCUSDT')
-      }
-
-      globalAny.__crossfinOkxPricesCache = {
-        value: prices,
-        expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS,
-        source: 'okx',
-      }
-      return prices
-    } catch {
-      globalAny.__crossfinOkxPricesCache = {
-        value: fallback,
-        expiresAt: now + GLOBAL_PRICES_FAILURE_TTL_MS,
-        source: cached?.source ?? 'okx:cached',
-      }
-      if (Object.keys(fallback).length > 0) return fallback
-      throw new Error('OKX price feed unavailable')
-    }
-  })()
-
-  globalAny.__crossfinOkxPricesInFlight = promise
-  return promise.finally(() => {
-    globalAny.__crossfinOkxPricesInFlight = null
-  })
-}
-
-async function fetchBybitPrices(): Promise<Record<string, number>> {
-  const globalAny = globalThis as unknown as {
-    __crossfinBybitPricesCache?: CachedExchangePriceFeed
-    __crossfinBybitPricesInFlight?: Promise<Record<string, number>> | null
-  }
-
-  const now = Date.now()
-  const cached = globalAny.__crossfinBybitPricesCache
-  if (cached && now < cached.expiresAt && Object.keys(cached.value).length > 0) return cached.value
-  if (globalAny.__crossfinBybitPricesInFlight) return globalAny.__crossfinBybitPricesInFlight
-
-  const fallback = cached?.value ?? {}
-  const trackedSymbols = new Set(Object.values(TRACKED_PAIRS))
-
-  const promise = (async () => {
-    try {
-      const res = await fetch('https://api.bybit.com/v5/market/tickers?category=spot')
-      if (!res.ok) throw new Error(`Bybit price feed unavailable (${res.status})`)
-      const data: unknown = await res.json()
-      if (!isRecord(data) || data.retCode !== 0 || !isRecord(data.result) || !Array.isArray(data.result.list)) {
-        throw new Error('Bybit price feed invalid response')
-      }
-
-      const prices: Record<string, number> = {}
-      for (const row of data.result.list) {
-        if (!isRecord(row)) continue
-        const symbol = typeof row.symbol === 'string' ? row.symbol.trim().toUpperCase() : ''
-        const lastPriceRaw = typeof row.lastPrice === 'string' ? row.lastPrice.trim() : ''
-        if (!trackedSymbols.has(symbol)) continue
-        const price = Number(lastPriceRaw)
-        if (!Number.isFinite(price) || price <= 0) continue
-        prices[symbol] = price
-      }
-
-      const btcSymbol = TRACKED_PAIRS.BTC
-      const btc = btcSymbol ? prices[btcSymbol] : undefined
-      if (typeof btc !== 'number' || !Number.isFinite(btc) || btc <= 1000) {
-        throw new Error('Bybit price feed returned no valid BTCUSDT')
-      }
-
-      globalAny.__crossfinBybitPricesCache = {
-        value: prices,
-        expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS,
-        source: 'bybit',
-      }
-      return prices
-    } catch {
-      globalAny.__crossfinBybitPricesCache = {
-        value: fallback,
-        expiresAt: now + GLOBAL_PRICES_FAILURE_TTL_MS,
-        source: cached?.source ?? 'bybit:cached',
-      }
-      if (Object.keys(fallback).length > 0) return fallback
-      throw new Error('Bybit price feed unavailable')
-    }
-  })()
-
-  globalAny.__crossfinBybitPricesInFlight = promise
-  return promise.finally(() => {
-    globalAny.__crossfinBybitPricesInFlight = null
-  })
-}
-
-function getExchangePrice(exchange: string, symbol: string): number | undefined {
-  const ex = exchange.trim().toLowerCase()
-  const sym = symbol.trim().toUpperCase()
-  if (!ex || !sym) return undefined
-  const globalAny = globalThis as unknown as {
-    __crossfinExchangePricesCache?: ExchangePrices
-    __crossfinExchangePrices?: ExchangePrices
-  }
-  const cache = globalAny.__crossfinExchangePricesCache ?? globalAny.__crossfinExchangePrices
-  const price = cache?.[ex]?.[sym]
-  return typeof price === 'number' && Number.isFinite(price) && price > 0 ? price : undefined
-}
-
-async function fetchGlobalPrices(db?: D1Database): Promise<Record<string, number>> {
-  // Cache to avoid rate-limits on upstream price providers.
-  const globalAny = globalThis as unknown as {
-    __crossfinGlobalPricesCache?: CachedGlobalPrices
-    __crossfinGlobalPricesInFlight?: Promise<Record<string, number>> | null
-    __crossfinExchangePricesCache?: ExchangePrices
-    __crossfinExchangePrices?: ExchangePrices
-  }
-
-  const now = Date.now()
-  const cached = globalAny.__crossfinGlobalPricesCache
-  if (cached && now < cached.expiresAt && Object.keys(cached.value).length > 0) return cached.value
-  if (globalAny.__crossfinGlobalPricesInFlight) return globalAny.__crossfinGlobalPricesInFlight
-
-  const fallback = cached?.value ?? {}
-
-  const promise = (async () => {
-    const isValidPrices = (prices: Record<string, number>): boolean => {
-      const btcSymbol = TRACKED_PAIRS.BTC
-      if (!btcSymbol) return false
-      const btc = prices[btcSymbol]
-      if (typeof btc !== 'number' || !Number.isFinite(btc) || btc <= 1000) return false
-      return Object.keys(prices).length >= 1
-    }
-
-    const [binanceSet, okxSet, bybitSet] = await Promise.allSettled([
-      fetchBinancePrices(),
-      fetchOkxPrices(),
-      fetchBybitPrices(),
-    ])
-
-    const exchangePrices: ExchangePrices = {
-      binance: binanceSet.status === 'fulfilled' ? binanceSet.value : {},
-      okx: okxSet.status === 'fulfilled' ? okxSet.value : {},
-      bybit: bybitSet.status === 'fulfilled' ? bybitSet.value : {},
-    }
-
-    const mergedPrices: Record<string, number> = {
-      ...exchangePrices.binance,
-    }
-    const okxPrices: Record<string, number> = exchangePrices.okx ?? {}
-    const bybitPrices: Record<string, number> = exchangePrices.bybit ?? {}
-    for (const [symbol, price] of Object.entries(okxPrices)) {
-      if (!(symbol in mergedPrices)) mergedPrices[symbol] = price
-    }
-    for (const [symbol, price] of Object.entries(bybitPrices)) {
-      if (!(symbol in mergedPrices)) mergedPrices[symbol] = price
-    }
-
-    if (isValidPrices(mergedPrices)) {
-      const sourceParts: string[] = []
-      if (binanceSet.status === 'fulfilled') sourceParts.push('binance')
-      if (okxSet.status === 'fulfilled') sourceParts.push('okx')
-      if (bybitSet.status === 'fulfilled') sourceParts.push('bybit')
-      const source = sourceParts.length > 0 ? sourceParts.join('+') : 'global'
-
-      globalAny.__crossfinExchangePricesCache = exchangePrices
-      globalAny.__crossfinExchangePrices = exchangePrices
-      globalAny.__crossfinGlobalPricesCache = {
-        value: mergedPrices,
-        expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS,
-        source,
-      }
-      return mergedPrices
-    }
-
-    // 2) CryptoCompare fallback (no key) — detect 200/ERROR payloads
-    try {
-      const coins = Object.keys(TRACKED_PAIRS).join(',')
-      const res = await fetch(
-        `https://min-api.cryptocompare.com/data/pricemulti?fsyms=${coins}&tsyms=USD`,
-      )
-      if (!res.ok) throw new Error(`CryptoCompare price feed unavailable (${res.status})`)
-
-      const data: unknown = await res.json()
-      if (!isRecord(data)) throw new Error('CryptoCompare price feed invalid response')
-
-      const responseField = typeof data.Response === 'string' ? data.Response.toLowerCase() : ''
-      if (responseField === 'error') throw new Error('CryptoCompare price feed returned error payload')
-
-      const prices: Record<string, number> = {}
-      for (const [coin, binanceSymbol] of Object.entries(TRACKED_PAIRS)) {
-        const row = data[coin]
-        if (!isRecord(row)) continue
-        const price = row.USD
-        if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) continue
-        prices[binanceSymbol] = price
-      }
-
-      if (isValidPrices(prices)) {
-        globalAny.__crossfinGlobalPricesCache = { value: prices, expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS, source: 'cryptocompare' }
-        return prices
-      }
-    } catch {
-      // Continue to fallback
-    }
-
-    // 3) CoinGecko fallback (simple price)
-    try {
-      const COINGECKO_IDS: Record<string, string> = {
-        BTC: 'bitcoin',
-        ETH: 'ethereum',
-        XRP: 'ripple',
-        KAIA: 'kaia',
-        SOL: 'solana',
-        DOGE: 'dogecoin',
-        ADA: 'cardano',
-        DOT: 'polkadot',
-        LINK: 'chainlink',
-        AVAX: 'avalanche-2',
-        TRX: 'tron',
-      }
-
-      const ids = Array.from(new Set(Object.values(COINGECKO_IDS))).join(',')
-      const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids)}&vs_currencies=usd`
-      const res = await fetch(url)
-      if (!res.ok) throw new Error(`CoinGecko price feed unavailable (${res.status})`)
-      const data: unknown = await res.json()
-      if (!isRecord(data)) throw new Error('CoinGecko price feed invalid response')
-
-      const prices: Record<string, number> = {}
-      for (const [coin, binanceSymbol] of Object.entries(TRACKED_PAIRS)) {
-        const id = COINGECKO_IDS[coin]
-        if (!id) continue
-        const row = data[id]
-        if (!isRecord(row)) continue
-        const price = row.usd
-        if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) continue
-        prices[binanceSymbol] = price
-      }
-
-      if (isValidPrices(prices)) {
-        globalAny.__crossfinGlobalPricesCache = { value: prices, expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS, source: 'coingecko' }
-        return prices
-      }
-    } catch {
-      // Continue to fallback
-    }
-
-    // 4) D1 snapshot fallback (last persisted kimchi_snapshots).
-    // This keeps paid endpoints and routing usable even when upstream feeds rate-limit or block Workers egress.
-    if (db) {
-      try {
-        type SnapshotRow = { coin: string; binanceUsd: number | string; createdAt: string }
-        const sql = `
-          WITH ranked AS (
-            SELECT
-              coin,
-              binance_usd AS binanceUsd,
-              created_at AS createdAt,
-              ROW_NUMBER() OVER (PARTITION BY coin ORDER BY datetime(created_at) DESC) AS rn
-            FROM kimchi_snapshots
-            WHERE created_at >= datetime('now', '-7 day')
-              AND binance_usd IS NOT NULL
-          )
-          SELECT coin, binanceUsd, createdAt
-          FROM ranked
-          WHERE rn = 1
-        `
-
-        const res = await db.prepare(sql).all<SnapshotRow>()
-        const rows = res.results ?? []
-
-        const prices: Record<string, number> = {}
-        for (const row of rows) {
-          const coin = String(row.coin ?? '').trim().toUpperCase()
-          const symbol = TRACKED_PAIRS[coin]
-          if (!symbol) continue
-          const price = Number(row.binanceUsd ?? NaN)
-          if (!Number.isFinite(price) || price <= 0) continue
-          prices[symbol] = price
-        }
-
-        if (isValidPrices(prices)) {
-          globalAny.__crossfinGlobalPricesCache = { value: prices, expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS, source: 'snapshot:d1' }
-          return prices
-        }
-      } catch {
-        // Continue to cached fallback
-      }
-    }
-
-    globalAny.__crossfinGlobalPricesCache = { value: fallback, expiresAt: now + GLOBAL_PRICES_FAILURE_TTL_MS, source: cached?.source ?? 'cached' }
-    if (isRecord(fallback) && Object.keys(fallback).length > 0) return fallback
-    throw new HTTPException(502, { message: 'Price feed unavailable' })
-  })()
-
-  const gapFill = promise.then(async (prices) => {
-    const missing = Object.entries(TRACKED_PAIRS).filter(([, sym]) => !(sym in prices))
-    if (missing.length === 0) return prices
-
-    const BINANCE_INDIVIDUAL_URLS = [
-      'https://data-api.binance.vision',
-      'https://api.binance.com',
-      'https://api1.binance.com',
-    ]
-
-    await Promise.allSettled(missing.map(async ([, symbol]) => {
-      for (const baseUrl of BINANCE_INDIVIDUAL_URLS) {
-        try {
-          const res = await fetch(`${baseUrl}/api/v3/ticker/price?symbol=${symbol}`)
-          if (!res.ok) { await res.body?.cancel(); continue }
-          const data = await res.json() as { symbol?: string; price?: string }
-          const price = Number(data.price ?? NaN)
-          if (Number.isFinite(price) && price > 0) {
-            prices[symbol] = price
-            return
-          }
-        } catch { continue }
-      }
-    }))
-
-    if (globalAny.__crossfinGlobalPricesCache) {
-      globalAny.__crossfinGlobalPricesCache.value = prices
-    }
-    return prices
-  })
-
-  globalAny.__crossfinGlobalPricesInFlight = gapFill
-  return gapFill.finally(() => {
-    globalAny.__crossfinGlobalPricesInFlight = null
-  })
-}
-
-async function fetchBithumbOrderbook(pair: string): Promise<{ bids: unknown[]; asks: unknown[] }> {
-  const res = await fetch(`https://api.bithumb.com/public/orderbook/${pair}_KRW`)
-  const data = await res.json() as { status: string; data: { bids: unknown[]; asks: unknown[] } }
-  if (data.status !== '0000') throw new HTTPException(400, { message: `Invalid pair: ${pair}` })
-  return data.data
-}
-
 function requireSymbol(value: string, label: string): string {
   const raw = value.trim().toUpperCase()
   if (!raw) throw new HTTPException(400, { message: `${label} is required` })
@@ -7786,9 +6613,6 @@ function requireUpbitMarket(value: string): string {
   return raw
 }
 
-function round2(value: number): number {
-  return Math.round(value * 100) / 100
-}
 
 function parseCoinsQueryParam(raw: string | undefined): string[] {
   const allowed = new Set(Object.keys(TRACKED_PAIRS))
@@ -7843,38 +6667,6 @@ type CrossExchangeDomesticArbitrage = {
   spreadPct: number
 } | null
 
-async function fetchUpbitTicker(market: string) {
-  const res = await fetch(`https://api.upbit.com/v1/ticker?markets=${encodeURIComponent(market)}`)
-  if (!res.ok) throw new HTTPException(502, { message: 'Upbit API unavailable' })
-  const data: unknown = await res.json()
-  if (!Array.isArray(data) || data.length === 0 || !isRecord(data[0])) {
-    throw new HTTPException(502, { message: 'Upbit API invalid response' })
-  }
-  return data[0]
-}
-
-async function fetchUpbitOrderbook(market: string) {
-  const res = await fetch(`https://api.upbit.com/v1/orderbook?markets=${encodeURIComponent(market)}`)
-  if (!res.ok) throw new HTTPException(502, { message: 'Upbit API unavailable' })
-  const data: unknown = await res.json()
-  if (!Array.isArray(data) || data.length === 0 || !isRecord(data[0])) {
-    throw new HTTPException(502, { message: 'Upbit API invalid response' })
-  }
-  return data[0]
-}
-
-async function fetchCoinoneTicker(currency: string) {
-  const res = await fetch(`https://api.coinone.co.kr/public/v2/ticker_new/KRW/${encodeURIComponent(currency)}`)
-  if (!res.ok) throw new HTTPException(502, { message: 'Coinone API unavailable' })
-  const data: unknown = await res.json()
-  if (!isRecord(data) || data.result !== 'success' || !Array.isArray(data.tickers) || data.tickers.length === 0) {
-    throw new HTTPException(502, { message: 'Coinone API invalid response' })
-  }
-  const first = data.tickers[0]
-  if (!isRecord(first)) throw new HTTPException(502, { message: 'Coinone API invalid response' })
-  return first
-}
-
 function stripCdata(value: string): string {
   return value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
 }
@@ -7900,37 +6692,6 @@ function splitPublisherFromTitle(title: string): { title: string; publisher: str
   return { title: head, publisher: pub }
 }
 
-function calcPremiums(
-  bithumbData: Record<string, Record<string, string>>,
-  binancePrices: Record<string, number>,
-  krwRate: number,
-) {
-  const premiums = []
-  for (const [coin, binanceSymbol] of Object.entries(TRACKED_PAIRS)) {
-    const bithumb = bithumbData[coin]
-    const binancePrice = binancePrices[binanceSymbol]
-    if (!bithumb?.closing_price || !binancePrice) continue
-
-    const bithumbKrw = parseFloat(bithumb.closing_price)
-    const bithumbUsd = bithumbKrw / krwRate
-    const premiumPct = ((bithumbUsd - binancePrice) / binancePrice) * 100
-    const volume24hKrw = parseFloat(bithumb.acc_trade_value_24H || '0')
-    const change24hPct = parseFloat(bithumb.fluctate_rate_24H || '0')
-
-    premiums.push({
-      coin,
-      bithumbKrw,
-      bithumbUsd: Math.round(bithumbUsd * 100) / 100,
-      binanceUsd: binancePrice,
-      premiumPct: Math.round(premiumPct * 100) / 100,
-      volume24hKrw,
-      volume24hUsd: Math.round(volume24hKrw / krwRate),
-      change24hPct,
-    })
-  }
-  return premiums.sort((a, b) => Math.abs(b.premiumPct) - Math.abs(a.premiumPct))
-}
-
 // === Route Spread (paid $0.05) ===
 
 app.get('/api/premium/arbitrage/kimchi', async (c) => {
@@ -7953,6 +6714,7 @@ app.get('/api/premium/arbitrage/kimchi', async (c) => {
     avgPremiumPct: avg,
     topPremium: premiums[0] ?? null,
     premiums,
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8030,6 +6792,7 @@ app.get('/api/premium/arbitrage/kimchi/history', async (c) => {
     },
     snapshots,
     count: snapshots.length,
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8044,18 +6807,19 @@ app.get('/api/premium/arbitrage/opportunities', async (c) => {
   ])
 
   const premiums = calcPremiums(bithumbData, binancePrices, krwRate)
-  const totalFeesPct = BITHUMB_FEES_PCT + BINANCE_FEES_PCT
+  const tradingFeesPct = BITHUMB_FEES_PCT + BINANCE_FEES_PCT
 
-  // Fetch orderbooks and premium trends in parallel for decision layer
+  // Fetch orderbooks, premium trends, and withdrawal suspensions in parallel
   const orderbookPromises = premiums.map((p) =>
     fetchBithumbOrderbook(p.coin).catch(() => ({ bids: [], asks: [] })),
   )
   const trendPromises = premiums.map((p) =>
     getPremiumTrend(c.env.DB, p.coin, 6),
   )
-  const [orderbooks, trends] = await Promise.all([
+  const [orderbooks, trends, suspensions] = await Promise.all([
     Promise.all(orderbookPromises),
     Promise.all(trendPromises),
+    getWithdrawalSuspensions(c.env.DB),
   ])
 
   const TRADE_SIZE_KRW = 15_000_000 // ~$10,000 reference trade
@@ -8063,29 +6827,60 @@ app.get('/api/premium/arbitrage/opportunities', async (c) => {
   const opportunities = premiums
     .map((p, i) => {
       const absPremiumPct = Math.abs(p.premiumPct)
-      const netProfitPct = absPremiumPct - totalFeesPct
       const direction = p.premiumPct > 0 ? 'buy-global-sell-korea' : 'buy-korea-sell-global'
       const marketSideLabel = p.premiumPct >= 0 ? 'Korea premium setup (buy global -> sell Korea)' : 'Korea discount setup (buy Korea -> sell global)'
       const riskScore = p.volume24hUsd < 100000 ? 'high' : p.volume24hUsd < 1000000 ? 'medium' : 'low'
+
+      // Fix 1: Include withdrawal fee as percentage of trade size
+      const sourceExchange = direction === 'buy-global-sell-korea' ? 'binance' : 'bithumb'
+      const withdrawalFeeCoins = getWithdrawalFee(sourceExchange, p.coin)
+      const coinPriceKrw = p.bithumbKrw
+      const withdrawalFeePct = coinPriceKrw > 0 ? (withdrawalFeeCoins * coinPriceKrw) / TRADE_SIZE_KRW * 100 : 0
+      const totalFeesPct = tradingFeesPct + withdrawalFeePct
+
+      const netProfitPct = absPremiumPct - totalFeesPct
       const profitPer10kUsd = Math.round(netProfitPct * 100) // cents per $10,000 traded
 
-      // Decision layer
+      // Fix 3: Check withdrawal suspension
+      const withdrawalSuspended = !!(suspensions[sourceExchange]?.has(p.coin))
+
+      // Fix 2: Use correct orderbook side for slippage estimation
       const ob = orderbooks[i] ?? { bids: [], asks: [] }
-      const asks = (ob.asks as Array<{ price: string; quantity: string }>).slice(0, 10)
-      const slippageEstimatePct = estimateSlippage(asks, TRADE_SIZE_KRW)
+      const orderbookSide = direction === 'buy-korea-sell-global'
+        ? (ob.bids as Array<{ price: string; quantity: string }>).slice(0, 10)
+        : (ob.asks as Array<{ price: string; quantity: string }>).slice(0, 10)
+      const slippageEstimatePct = estimateSlippage(orderbookSide, TRADE_SIZE_KRW)
       const transferTimeMin = getTransferTime(p.coin)
       const trendData = trends[i] ?? { trend: 'stable' as const, volatilityPct: 0 }
       const { trend: premiumTrend, volatilityPct } = trendData
-      const { action, confidence, reason: baseReason } = computeAction(
-        netProfitPct, slippageEstimatePct, transferTimeMin, volatilityPct,
-      )
-      const reason = `${baseReason}. ${marketSideLabel}; gross edge ${round2(absPremiumPct)}% before fees.`
+
+      // Fix 5: Feed riskScore into computeAction — high volume risk multiplies premiumRisk
+      const adjustedVolatility = riskScore === 'high' ? volatilityPct * 1.5 : volatilityPct
+
+      // Fix 3 continued: If withdrawals suspended, force UNFAVORABLE
+      let indicator: 'FAVORABLE' | 'NEUTRAL' | 'UNFAVORABLE'
+      let signalStrength: number
+      let baseReason: string
+      if (withdrawalSuspended) {
+        indicator = 'UNFAVORABLE'
+        signalStrength = 0.1
+        baseReason = `Withdrawals suspended on ${sourceExchange} for ${p.coin} — transfer not possible`
+      } else {
+        const result = computeAction(netProfitPct, slippageEstimatePct, transferTimeMin, adjustedVolatility)
+        indicator = result.indicator
+        signalStrength = result.signalStrength
+        baseReason = result.reason
+      }
+      const reason = `${baseReason}. ${marketSideLabel}; gross edge ${round2(absPremiumPct)}% before fees (trading ${round2(tradingFeesPct)}% + withdrawal ${round2(withdrawalFeePct)}%).`
 
       return {
         coin: p.coin,
         direction,
         grossPremiumPct: p.premiumPct,
-        estimatedFeesPct: totalFeesPct,
+        estimatedFeesPct: round2(totalFeesPct),
+        tradingFeesPct: round2(tradingFeesPct),
+        withdrawalFeePct: round2(withdrawalFeePct),
+        withdrawalSuspended,
         netProfitPct: Math.round(netProfitPct * 100) / 100,
         profitPer10kUsd,
         volume24hUsd: p.volume24hUsd,
@@ -8097,17 +6892,17 @@ app.get('/api/premium/arbitrage/opportunities', async (c) => {
         slippageEstimatePct: round2(slippageEstimatePct),
         transferTimeMin,
         premiumTrend,
-        action,
-        confidence,
+        indicator,
+        signalStrength,
         reason,
       }
     })
     .sort((a, b) => b.netProfitPct - a.netProfitPct)
 
   const profitable = opportunities.filter((o) => o.profitable)
-  const executeCandidates = opportunities.filter((o) => o.action === 'EXECUTE').length
+  const favorableCandidates = opportunities.filter((o) => o.indicator === 'FAVORABLE').length
   const marketCondition: 'favorable' | 'neutral' | 'unfavorable' =
-    executeCandidates >= 3 ? 'favorable' : executeCandidates >= 1 ? 'neutral' : 'unfavorable'
+    favorableCandidates >= 3 ? 'favorable' : favorableCandidates >= 1 ? 'neutral' : 'unfavorable'
 
   return c.json({
     paid: true,
@@ -8115,11 +6910,12 @@ app.get('/api/premium/arbitrage/opportunities', async (c) => {
     krwUsdRate: krwRate,
     totalOpportunities: opportunities.length,
     profitableCount: profitable.length,
-    executeCandidates,
+    favorableCandidates,
     marketCondition,
-    estimatedFeesNote: `Bithumb ${BITHUMB_FEES_PCT}% + Binance ${BINANCE_FEES_PCT}% = ${totalFeesPct}% total`,
+    estimatedFeesNote: `Trading ${round2(tradingFeesPct)}% + per-coin withdrawal fees included`,
     bestOpportunity: profitable[0] ?? null,
     opportunities,
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8153,6 +6949,7 @@ app.get('/api/premium/bithumb/orderbook', async (c) => {
     bestBidUsd: Math.round(bestBid / krwRate * 100) / 100,
     bestAskUsd: Math.round(bestAsk / krwRate * 100) / 100,
     depth: { bids, asks },
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8227,6 +7024,7 @@ app.get('/api/premium/bithumb/volume-analysis', async (c) => {
     volumeWeightedChangePct,
     unusualVolume,
     topByVolume: sortedByVolume.slice(0, 15).map((c) => withShare(c)),
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8281,6 +7079,7 @@ app.get('/api/premium/market/korea', async (c) => {
     topLosers,
     topVolume,
     krwUsdRate: krwRate,
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8292,6 +7091,7 @@ app.get('/api/premium/market/fx/usdkrw', async (c) => {
     service: 'crossfin-usdkrw',
     usdKrw: krwRate,
     source: 'open.er-api.com',
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8321,6 +7121,7 @@ app.get('/api/premium/market/upbit/ticker', async (c) => {
     volume24hKrw,
     volume24hUsd: Math.round(volume24hKrw / krwRate),
     krwUsdRate: krwRate,
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8362,6 +7163,7 @@ app.get('/api/premium/market/upbit/orderbook', async (c) => {
     bestAskUsd: Math.round(bestAskKrw / krwRate * 100) / 100,
     units,
     krwUsdRate: krwRate,
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8477,6 +7279,7 @@ app.get('/api/premium/market/upbit/signals', async (c) => {
       neutralCount,
       overallSentiment,
     },
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8506,6 +7309,7 @@ app.get('/api/premium/market/coinone/ticker', async (c) => {
     volume24hKrw,
     volume24hUsd: Math.round(volume24hKrw / krwRate),
     krwUsdRate: krwRate,
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8547,6 +7351,7 @@ app.get('/api/premium/market/korea/indices', async (c) => {
     kospi: parseIndex(kospiRawValue),
     kosdaq: parseIndex(kosdaqRawValue),
     source: 'naver-finance',
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8586,6 +7391,7 @@ app.get('/api/premium/market/korea/indices/history', async (c) => {
     days: history.length,
     history,
     source: 'naver-finance',
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8639,6 +7445,7 @@ app.get('/api/premium/market/korea/stocks/momentum', async (c) => {
     topGainers: toRecordArray(upData.stocks).map(parseStock),
     topLosers: toRecordArray(downData.stocks).map(parseStock),
     source: 'naver-finance',
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8672,6 +7479,7 @@ app.get('/api/premium/market/korea/investor-flow', async (c) => {
     days: flow.length,
     flow,
     source: 'naver-finance',
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8699,6 +7507,7 @@ app.get('/api/premium/market/korea/index-flow', async (c) => {
     institutionNetBuyBillionKrw: raw.institutionalValue ?? null,
     individualNetBuyBillionKrw: raw.personalValue ?? null,
     source: 'naver-finance',
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8783,6 +7592,7 @@ app.get('/api/premium/crypto/korea/5exchange', async (c) => {
     exchanges,
     spread: { minPriceKrw: minPrice, maxPriceKrw: maxPrice, spreadPct },
     source: 'upbit+bithumb+coinone+gopax',
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8817,6 +7627,7 @@ app.get('/api/premium/crypto/korea/exchange-status', async (c) => {
     disabledCount,
     coins,
     source: 'bithumb-public-api',
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8861,6 +7672,7 @@ app.get('/api/premium/market/korea/stock-detail', async (c) => {
     } : null,
     industryPeers,
     source: 'naver-finance',
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8887,6 +7699,7 @@ app.get('/api/premium/market/korea/stock-news', async (c) => {
       return { id: it.id, title: it.title, body: it.body, publisher: it.officeName, datetime: it.datetime }
     }),
     source: 'naver-finance',
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8915,6 +7728,7 @@ app.get('/api/premium/market/korea/themes', async (c) => {
       }
     }),
     source: 'naver-finance',
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -8938,6 +7752,7 @@ app.get('/api/premium/market/korea/disclosure', async (c) => {
       datetime: toStringValue(d.datetime),
     })),
     source: 'naver-finance',
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -9103,6 +7918,7 @@ app.get('/api/premium/market/korea/stock-brief', async (c) => {
     news,
     investorFlow,
     disclosures,
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at,
   })
 })
@@ -9132,6 +7948,7 @@ app.get('/api/premium/crypto/korea/fx-rate', async (c) => {
     high52w: toNumberValue(quote.high52wPrice),
     low52w: toNumberValue(quote.low52wPrice),
     source: 'upbit-crix',
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -9170,6 +7987,7 @@ app.get('/api/premium/market/korea/etf', async (c) => {
       marketCap: toNumberValue(e.marketSum),
     })),
     source: 'naver-finance',
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -9203,6 +8021,7 @@ app.get('/api/premium/crypto/korea/upbit-candles', async (c) => {
       tradeAmount: toNumberValue(r.candle_acc_trade_price),
     })),
     source: 'upbit',
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -9240,6 +8059,7 @@ app.get('/api/premium/market/global/indices-chart', async (c) => {
       volume: toNumberValue(r.accumulatedTradingVolume),
     })),
     source: 'naver-finance',
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -9273,6 +8093,7 @@ app.get('/api/premium/news/korea/headlines', async (c) => {
     feed: 'google-news-rss',
     url: feedUrl,
     items,
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -9471,6 +8292,7 @@ app.get('/api/premium/crypto/snapshot', async (c) => {
     },
     exchanges,
     volumeAnalysis,
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at,
   })
 })
@@ -9544,7 +8366,7 @@ app.get('/api/premium/kimchi/stats', async (c) => {
       const current = await currentTask
       const premiums = current.premiums
       if (premiums.length === 0) {
-        return { coin: '', premiumPct: 0, action: 'SKIP' as const, confidence: 0.1, reason: 'No premium data available' }
+        return { coin: '', premiumPct: 0, indicator: 'UNFAVORABLE' as const, signalStrength: 0.1, reason: 'No premium data available' }
       }
 
       const topPremium = premiums.reduce((best, p) => (p.premiumPct > best.premiumPct ? p : best), premiums[0]!)
@@ -9567,7 +8389,7 @@ app.get('/api/premium/kimchi/stats', async (c) => {
       const transferTimeMin = getTransferTime(coin)
       const volatilityPct = trendSet.status === 'fulfilled' ? trendSet.value.volatilityPct : 0
 
-      const { action, confidence, reason: baseReason } = computeAction(
+      const { indicator, signalStrength, reason: baseReason } = computeAction(
         netProfitPct,
         slippageEstimatePct,
         transferTimeMin,
@@ -9575,9 +8397,9 @@ app.get('/api/premium/kimchi/stats', async (c) => {
       )
       const reason = `${baseReason}. ${premiumPct >= 0 ? 'Korea premium setup (buy global -> sell Korea)' : 'Korea discount setup (buy Korea -> sell global)'}; gross edge ${round2(absPremiumPct)}% before fees.`
 
-      return { coin, premiumPct, action, confidence, reason }
+      return { coin, premiumPct, indicator, signalStrength, reason }
     } catch {
-      return { coin: '', premiumPct: 0, action: 'SKIP' as const, confidence: 0.1, reason: 'Failed to compute opportunity' }
+      return { coin: '', premiumPct: 0, indicator: 'UNFAVORABLE' as const, signalStrength: 0.1, reason: 'Failed to compute opportunity' }
     }
   })()
 
@@ -9654,7 +8476,7 @@ app.get('/api/premium/kimchi/stats', async (c) => {
 
   const bestOpportunity = opportunitySet.status === 'fulfilled'
     ? opportunitySet.value
-    : { coin: '', premiumPct: 0, action: 'SKIP' as const, confidence: 0.1, reason: 'Failed to compute opportunity' }
+    : { coin: '', premiumPct: 0, indicator: 'UNFAVORABLE' as const, signalStrength: 0.1, reason: 'Failed to compute opportunity' }
 
   const crossExchangeSpread = spreadSet.status === 'fulfilled'
     ? spreadSet.value
@@ -9676,6 +8498,7 @@ app.get('/api/premium/kimchi/stats', async (c) => {
     fxRate: {
       usdKrw: round2(current.usdKrw),
     },
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at,
   })
 })
@@ -9859,6 +8682,7 @@ app.get('/api/premium/morning/brief', async (c) => {
     indices,
     momentum,
     headlines,
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at,
   })
 })
@@ -9988,11 +8812,11 @@ app.get('/api/premium/market/cross-exchange', async (c) => {
       }
 
       // Decision layer for domestic arbitrage
-      let action: 'ARBITRAGE' | 'HOLD' | 'MONITOR' = 'HOLD'
+      let indicator: 'SPREAD_OPPORTUNITY' | 'NEUTRAL_SIGNAL' | 'MONITORING' = 'NEUTRAL_SIGNAL'
       if (domesticArbitrage && domesticArbitrage.spreadPct > 0.5) {
-        action = 'ARBITRAGE'
+        indicator = 'SPREAD_OPPORTUNITY'
       } else if (domesticArbitrage && domesticArbitrage.spreadPct > 0.2) {
-        action = 'MONITOR'
+        indicator = 'MONITORING'
       }
 
       return {
@@ -10003,7 +8827,7 @@ app.get('/api/premium/market/cross-exchange', async (c) => {
         bestBuyExchange: domesticArbitrage?.lowestExchange ?? null,
         bestSellExchange: domesticArbitrage?.highestExchange ?? null,
         spreadPct: domesticArbitrage?.spreadPct ?? 0,
-        action,
+        indicator,
       }
     }),
   )
@@ -10015,31 +8839,32 @@ app.get('/api/premium/market/cross-exchange', async (c) => {
     ? round2(avgPremiums.reduce((s, p) => s + p, 0) / avgPremiums.length)
     : 0
 
-  const arbitrageCandidates = rows
+  const spreadOpportunityCandidates = rows
     .filter((r) => r.domesticArbitrage !== null)
     .map((r) => ({
       coin: r.coin,
       buy: r.domesticArbitrage!.lowestExchange,
       sell: r.domesticArbitrage!.highestExchange,
       spreadPct: r.domesticArbitrage!.spreadPct,
-      action: r.action,
+      indicator: r.indicator,
     }))
     .sort((a, b) => b.spreadPct - a.spreadPct)
 
-  const arbitrageCandidateCount = rows.filter((r) => r.action === 'ARBITRAGE').length
+  const spreadOpportunityCount = rows.filter((r) => r.indicator === 'SPREAD_OPPORTUNITY').length
 
   return c.json({
     paid: true,
     service: 'crossfin-cross-exchange',
     coinsCompared: coins.length,
     krwUsdRate: round2(krwRate),
-    arbitrageCandidateCount,
+    spreadOpportunityCount,
     coins: rows,
     summary: {
       avgKimchiPremium,
-      arbitrageCandidateCount,
-      bestDomesticArbitrage: arbitrageCandidates[0] ?? null,
+      spreadOpportunityCount,
+      bestDomesticSpread: spreadOpportunityCandidates[0] ?? null,
     },
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -10060,8 +8885,8 @@ async function getArbitrageDemoPayload(db: D1Database): Promise<Record<string, u
         premiumPct: absPremiumPct,
         direction: p.premiumPct >= 0 ? 'Korea premium' : 'Korea discount',
         decision: {
-          action: decision.action,
-          confidence: decision.confidence,
+          indicator: decision.indicator,
+          signalStrength: decision.signalStrength,
           reason: `${decision.reason}. ${p.premiumPct >= 0 ? 'Korea premium setup (buy global -> sell Korea)' : 'Korea discount setup (buy Korea -> sell global)'}; gross edge ${round2(absPremiumPct)}% before fees.`,
         },
       }
@@ -10079,7 +8904,7 @@ async function getArbitrageDemoPayload(db: D1Database): Promise<Record<string, u
 
     const preview = buildPreview(premiums)
     const avgPremium = Math.round(premiums.reduce((s, p) => s + p.premiumPct, 0) / premiums.length * 100) / 100
-    const executeCandidates = preview.filter((p) => p.decision.action === 'EXECUTE').length
+    const favorableCandidates = preview.filter((p) => p.decision.indicator === 'FAVORABLE').length
 
     return {
       demo: true,
@@ -10091,8 +8916,9 @@ async function getArbitrageDemoPayload(db: D1Database): Promise<Record<string, u
       totalPairsAvailable: premiums.length,
       preview,
       avgPremiumPct: avgPremium,
-      executeCandidates,
-      marketCondition: executeCandidates >= 2 ? 'favorable' : executeCandidates === 1 ? 'neutral' : 'unfavorable',
+      favorableCandidates,
+      marketCondition: favorableCandidates >= 2 ? 'favorable' : favorableCandidates === 1 ? 'neutral' : 'unfavorable',
+      _disclaimer: CROSSFIN_DISCLAIMER,
       at: new Date().toISOString(),
     }
   } catch {
@@ -10140,7 +8966,7 @@ async function getArbitrageDemoPayload(db: D1Database): Promise<Record<string, u
 
     const krwUsdRate = premiums.find((p) => Number.isFinite(p.krwUsdRate))?.krwUsdRate ?? 1450
     const preview = buildPreview(premiums)
-    const executeCandidates = preview.filter((p) => p.decision.action === 'EXECUTE').length
+    const favorableCandidates = preview.filter((p) => p.decision.indicator === 'FAVORABLE').length
     const snapshotAt = premiums[0]?.createdAt ?? null
 
     if (preview.length === 0) {
@@ -10161,8 +8987,9 @@ async function getArbitrageDemoPayload(db: D1Database): Promise<Record<string, u
         totalPairsAvailable: fallbackPremiums.length,
         preview: fallbackPreview,
         avgPremiumPct: 0,
-        executeCandidates: 0,
+        favorableCandidates: 0,
         marketCondition: 'unfavorable',
+        _disclaimer: CROSSFIN_DISCLAIMER,
         at: new Date().toISOString(),
       }
     }
@@ -10177,8 +9004,9 @@ async function getArbitrageDemoPayload(db: D1Database): Promise<Record<string, u
       totalPairsAvailable: premiums.length,
       preview,
       avgPremiumPct: avgPremium,
-      executeCandidates,
-      marketCondition: executeCandidates >= 2 ? 'favorable' : executeCandidates === 1 ? 'neutral' : 'unfavorable',
+      favorableCandidates,
+      marketCondition: favorableCandidates >= 2 ? 'favorable' : favorableCandidates === 1 ? 'neutral' : 'unfavorable',
+      _disclaimer: CROSSFIN_DISCLAIMER,
       snapshotAt,
       at: new Date().toISOString(),
     }
@@ -10658,7 +9486,7 @@ app.post('/api/deposits', agentAuth, async (c) => {
     ).bind(depositId, agentId, txHash, amountUsd, fromAddress).run()
   }
 
-  await logAutonomousAction(c.env.DB, agentId, 'DEPOSIT_VERIFY', null, 'EXECUTE', 1.0, amountUsd, null, {
+  await logAutonomousAction(c.env.DB, agentId, 'DEPOSIT_VERIFY', null, 'FAVORABLE', 1.0, amountUsd, null, {
     txHash,
     amountUsd,
     fromAddress,
@@ -10857,6 +9685,7 @@ app.get('/api/premium/report', async (c) => {
       status: String(row.status ?? ''),
       count: Number(row.count ?? 0),
     })),
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })
@@ -10869,6 +9698,7 @@ app.get('/api/premium/enterprise', async (c) => {
     priceUsd: 20,
     network: requireCaip2(c.env.X402_NETWORK),
     receiptId: crypto.randomUUID(),
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: now,
   })
 })
@@ -11290,6 +10120,7 @@ app.get('/api/premium/route/find', async (c) => {
     optimal,
     alternatives,
     meta,
+    _disclaimer: CROSSFIN_DISCLAIMER,
   })
 })
 
@@ -11412,7 +10243,7 @@ app.get('/api/route/exchanges', async (c) => {
     supportedCoins: Object.keys(withdrawalFees[ex] ?? WITHDRAWAL_FEES[ex] ?? {}),
     type: isGlobalRoutingExchange(ex) ? 'global' : isKoreanRoutingExchange(ex) ? 'korean' : 'regional',
   }))
-  return c.json({ service: 'crossfin-route-exchanges', exchanges, at: new Date().toISOString() })
+  return c.json({ service: 'crossfin-route-exchanges', exchanges, _disclaimer: CROSSFIN_DISCLAIMER, at: new Date().toISOString() })
 })
 
 async function getRouteFeesPayload(db: D1Database, coinRaw: string | null | undefined): Promise<Record<string, unknown>> {
@@ -11437,7 +10268,7 @@ async function getRouteFeesPayload(db: D1Database, coinRaw: string | null | unde
     }
   })
 
-  return { service: 'crossfin-route-fees', coin: coin ?? 'all', fees, at: new Date().toISOString() }
+  return { service: 'crossfin-route-fees', coin: coin ?? 'all', fees, _disclaimer: CROSSFIN_DISCLAIMER, at: new Date().toISOString() }
 }
 
 async function getRoutePairsPayload(db: D1Database, coinRaw?: string | null): Promise<Record<string, unknown>> {
@@ -11477,6 +10308,7 @@ async function getRoutePairsPayload(db: D1Database, coinRaw?: string | null): Pr
     coin: coin || 'all',
     krwUsdRate: krwRate,
     pairs,
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   }
 }
@@ -11543,6 +10375,7 @@ async function getRouteStatusPayload(db: D1Database): Promise<Record<string, unk
       status: globalFeedOnline ? 'online' : 'offline',
       symbol: btcSymbol,
     },
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   }
 }
@@ -11649,8 +10482,8 @@ type AcpRouteSnapshot = {
   totalTimeMinutes: number
   estimatedInput: number
   estimatedOutput: number
-  action: Route['action']
-  confidence: number
+  indicator: Route['indicator']
+  signalStrength: number
   reason: string
   summary: Route['summary'] | null
 }
@@ -11734,8 +10567,8 @@ function toAcpRouteSnapshot(route: Route): AcpRouteSnapshot {
     totalTimeMinutes: route.totalTimeMinutes,
     estimatedInput: route.estimatedInput,
     estimatedOutput: route.estimatedOutput,
-    action: route.action,
-    confidence: route.confidence,
+    indicator: route.indicator,
+    signalStrength: route.signalStrength,
     reason: route.reason,
     summary: route.summary ?? null,
   }
@@ -11905,8 +10738,8 @@ app.post('/api/acp/quote', async (c) => {
     totalTimeMinutes: optimal.totalTimeMinutes,
     estimatedInput: optimal.estimatedInput,
     estimatedOutput: optimal.estimatedOutput,
-    action: optimal.action,
-    confidence: optimal.confidence,
+    indicator: optimal.indicator,
+    signalStrength: optimal.signalStrength,
     reason: optimal.reason,
     summary: optimal.summary ?? null,
   } : null
@@ -11975,6 +10808,7 @@ app.post('/api/acp/quote', async (c) => {
       execute: { method: 'POST', url: '/api/acp/execute', note: 'Start tracked execution orchestration from this quote_id' },
       execution_status: { method: 'GET', url: '/api/acp/executions/{execution_id}' },
     },
+    _disclaimer: CROSSFIN_DISCLAIMER,
   })
 })
 
@@ -12306,7 +11140,7 @@ app.post('/api/telegram/webhook', async (c) => {
           `Output: ${outputText}`,
           `Total cost: ${optimal.totalCostPct.toFixed(3)}%`,
           `ETA: ${optimal.totalTimeMinutes.toFixed(1)} min`,
-          `Decision: ${optimal.action} (${Math.round(optimal.confidence * 100)}% confidence)`,
+          `Indicator: ${optimal.indicator} (${Math.round(optimal.signalStrength * 100)}% signal strength)`,
           `${optimal.reason}`,
           `Alternatives evaluated: ${altCount}`,
         ].join('\n')
@@ -12398,8 +11232,8 @@ app.post('/api/telegram/webhook', async (c) => {
           const coin = String(row.coin ?? '')
           const premiumPct = Number(row.premiumPct ?? 0)
           const decision = isRecord(row.decision) ? row.decision : {}
-          const action = String(decision.action ?? 'WAIT')
-          return `${coin}: ${premiumPct.toFixed(2)}% (${action})`
+          const indicator = String(decision.indicator ?? 'NEUTRAL')
+          return `${coin}: ${premiumPct.toFixed(2)}% (${indicator})`
         })
 
         const reply = [
@@ -12826,31 +11660,67 @@ export default {
     }
 
     if (isEnabledFlag(env.CROSSFIN_GUARDIAN_ENABLED)) {
-      // 2. Autonomous arbitrage scan — log decisions (optional, behind feature flag)
-      const BITHUMB_FEES = 0.25
-      for (const p of premiums.slice(0, 10)) {
-        const netProfit = Math.abs(p.premiumPct) - BITHUMB_FEES - 0.1
-        const transferTime = 5
-        const slippage = 0.15
-        const volatility = Math.abs(p.premiumPct) * 0.3
+      // 2. Autonomous arbitrage scan — uses same computeAction as the API endpoint
+      const tradingFeesPct = BITHUMB_FEES_PCT + BINANCE_FEES_PCT
+      const TRADE_SIZE_KRW = 15_000_000
+      const [suspensions, ...obAndTrends] = await Promise.all([
+        getWithdrawalSuspensions(env.DB),
+        ...premiums.slice(0, 10).flatMap((p) => [
+          fetchBithumbOrderbook(p.coin).catch(() => ({ bids: [], asks: [] })),
+          getPremiumTrend(env.DB, p.coin, 6),
+        ]),
+      ])
+      const guardianSuspensions = suspensions as Record<string, Set<string>>
 
-        const adjustedProfit = netProfit - slippage
-        const premiumRisk = volatility * Math.sqrt(transferTime / 60)
-        const score = adjustedProfit - premiumRisk
+      for (let idx = 0; idx < Math.min(10, premiums.length); idx++) {
+        const p = premiums[idx]!
+        const direction = p.premiumPct > 0 ? 'buy-global-sell-korea' : 'buy-korea-sell-global'
+        const sourceExchange = direction === 'buy-global-sell-korea' ? 'binance' : 'bithumb'
+
+        // Include withdrawal fee
+        const withdrawalFeeCoins = getWithdrawalFee(sourceExchange, p.coin)
+        const withdrawalFeePct = p.bithumbKrw > 0 ? (withdrawalFeeCoins * p.bithumbKrw) / TRADE_SIZE_KRW * 100 : 0
+        const totalFeesPct = tradingFeesPct + withdrawalFeePct
+        const netProfit = Math.abs(p.premiumPct) - totalFeesPct
+
+        // Real orderbook slippage
+        const ob = obAndTrends[idx * 2] as { bids: Array<{ price: string; quantity: string }>; asks: Array<{ price: string; quantity: string }> }
+        const orderbookSide = direction === 'buy-korea-sell-global'
+          ? (ob.bids ?? []).slice(0, 10)
+          : (ob.asks ?? []).slice(0, 10)
+        const slippage = estimateSlippage(orderbookSide, TRADE_SIZE_KRW)
+
+        const transferTime = getTransferTime(p.coin)
+        const trendData = obAndTrends[idx * 2 + 1] as { trend: string; volatilityPct: number }
+        const volatility = trendData?.volatilityPct ?? 0
+        const riskScore = p.volume24hUsd < 100000 ? 'high' : p.volume24hUsd < 1000000 ? 'medium' : 'low'
+        const adjustedVolatility = riskScore === 'high' ? volatility * 1.5 : volatility
+
+        // Withdrawal suspension check
+        const withdrawalSuspended = !!(guardianSuspensions[sourceExchange]?.has(p.coin))
 
         let decision: string
         let confidence: number
-        if (score > 1.0) { decision = 'EXECUTE'; confidence = Math.min(0.95, 0.8 + score * 0.05) }
-        else if (score > 0) { decision = 'WAIT'; confidence = 0.5 + score * 0.3 }
-        else { decision = 'SKIP'; confidence = Math.max(0.1, 0.5 + score * 0.2) }
+        let reason: string
+        if (withdrawalSuspended) {
+          decision = 'UNFAVORABLE'
+          confidence = 0.1
+          reason = `Withdrawals suspended on ${sourceExchange} for ${p.coin}`
+        } else {
+          const result = computeAction(netProfit, slippage, transferTime, adjustedVolatility)
+          decision = result.indicator
+          confidence = result.signalStrength
+          reason = result.reason
+        }
 
         await env.DB.prepare(
           'INSERT INTO autonomous_actions (id, agent_id, action_type, service_id, decision, confidence, cost_usd, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
         ).bind(
           crypto.randomUUID(), null, 'ARBITRAGE_SCAN', null, decision, confidence, 0,
           JSON.stringify({
-            coin: p.coin, premiumPct: p.premiumPct, netProfit, score,
-            reason: decision === 'EXECUTE' ? `${p.coin} spread ${p.premiumPct.toFixed(2)}% exceeds threshold` : `${p.coin} score ${score.toFixed(2)} below threshold`,
+            coin: p.coin, premiumPct: p.premiumPct, netProfit: round2(netProfit),
+            slippage: round2(slippage), transferTime, withdrawalSuspended,
+            reason,
           }),
         ).run()
       }
