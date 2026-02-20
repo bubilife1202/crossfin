@@ -29,7 +29,11 @@
     { "path": "/api/route/exchanges", "label": "Route Exchanges" },
     { "path": "/api/route/fees", "label": "Route Fees" },
     { "path": "/api/route/status", "label": "Route Status" },
-    { "path": "/api/acp/status", "label": "ACP Status" }
+    { "path": "/api/acp/status", "label": "ACP Status" },
+    { "path": "/api/docs/guide", "label": "Agent Guide" },
+    { "path": "/api/registry/search", "label": "Registry Search" },
+    { "path": "/api/routing/optimal", "label": "Optimal Route" },
+    { "path": "/api/route/pairs", "label": "Exchange Prices" }
   ],
   "paidEndpoints": [
     {

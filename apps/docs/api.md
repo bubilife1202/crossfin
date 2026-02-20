@@ -99,15 +99,27 @@ Base URL: `https://crossfin.dev` — 9 exchanges: Bithumb, Upbit, Coinone, GoPax
   { method: 'GET', path: '/api/registry', description: 'All services', price: 'Free' },
   { method: 'GET', path: '/api/registry/search?q=', description: 'Full-text search', price: 'Free' },
   { method: 'GET', path: '/api/registry/categories', description: 'Categories with counts', price: 'Free' },
-  { method: 'GET', path: '/.well-known/crossfin.json', description: 'Agent auto-discovery', price: 'Free' },
-  { method: 'GET', path: '/.well-known/x402.json', description: 'x402 discovery metadata', price: 'Free' },
   { method: 'GET', path: '/api/openapi.json', description: 'OpenAPI 3.1 spec', price: 'Free' },
   { method: 'GET', path: '/api/docs/guide', description: 'Structured agent guide', price: 'Free' },
 ]" />
 
 ---
 
-## 9. Utility Paid APIs
+## 9. Agent Discovery
+
+Well-known endpoints for agent frameworks and LLM toolchains to auto-discover CrossFin capabilities.
+
+<ApiTable :endpoints="[
+  { method: 'GET', path: '/.well-known/ai-plugin.json', description: 'OpenAI plugin manifest', price: 'Free' },
+  { method: 'GET', path: '/.well-known/agent.json', description: 'A2A Agent Card (Google Agent-to-Agent protocol)', price: 'Free' },
+  { method: 'GET', path: '/.well-known/x402.json', description: 'x402 payment discovery (network, token, payTo address)', price: 'Free' },
+  { method: 'GET', path: '/.well-known/crossfin.json', description: 'CrossFin metadata (MCP, API, registry links)', price: 'Free' },
+  { method: 'GET', path: '/llms.txt', description: 'LLM-friendly service description in plain text', price: 'Free' },
+]" />
+
+---
+
+## 10. Utility Paid APIs
 
 <ApiTable :endpoints="[
   { method: 'GET', path: '/api/premium/report', description: 'Premium report (agents/wallets/transactions summary)', price: '$0.001' },
