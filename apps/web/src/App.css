@@ -2645,42 +2645,221 @@
   border: 0;
 }
 
-/* ═══ RouteGraph Responsive ═══ */
+/* ═══ Route Showcase ═══ */
 
-.rgControlsGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.rgControlsGrid select,
-.rgControlsGrid input {
-  width: 100%;
-  min-width: 0;
-}
-
-.rgInfoGrid {
+.routeShowcase {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: var(--shadow2);
+  padding: 32px;
   display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  align-items: center;
+}
+
+.routeShowcaseVisual {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.routeFlowDiagram {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.routeFlowNode {
+  flex: 1;
+  padding: 16px;
+  border-radius: 14px;
+  text-align: center;
+}
+
+.routeFlowNodeSource {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 12%, white),
+    color-mix(in srgb, var(--accent) 6%, white)
+  );
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
+}
+
+.routeFlowNodeDest {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent2) 6%, white),
+    color-mix(in srgb, var(--accent2) 12%, white)
+  );
+  border: 1px solid color-mix(in srgb, var(--accent2) 25%, var(--border));
+}
+
+.routeFlowNodeLabel {
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.routeFlowNodeExchanges {
+  font-weight: 650;
+  font-size: 0.82rem;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.routeFlowArrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  flex-shrink: 0;
+}
+
+.routeFlowArrowLine {
+  width: 24px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  border-radius: 999px;
+}
+
+.routeFlowArrowBridge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(16, 24, 40, 0.04);
+}
+
+.routeFlowLayers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.routeFlowLayer {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(16, 24, 40, 0.04);
+  border: 1px solid rgba(16, 24, 40, 0.06);
+  font-size: 0.76rem;
+  font-weight: 650;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+}
+
+.routeShowcaseInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.routeShowcaseTitle {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.routeShowcaseDesc {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.routeShowcaseStats {
+  display: flex;
+  gap: 20px;
+}
+
+.routeShowcaseStat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.routeShowcaseStatValue {
+  font-weight: 750;
+  font-size: 1.4rem;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.routeShowcaseStatLabel {
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--muted2);
+}
+
+.routeShowcaseCtas {
+  display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
-@media (max-width: 768px) {
-  .rgControlsGrid {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-@media (max-width: 640px) {
-  .rgInfoGrid {
+@media (max-width: 900px) {
+  .routeShowcase {
     grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 24px;
   }
 }
 
 @media (max-width: 480px) {
-  .rgControlsGrid {
-    grid-template-columns: 1fr;
+  .routeShowcase {
+    padding: 16px;
+    gap: 20px;
+  }
+
+  .routeFlowDiagram {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .routeFlowArrow {
+    flex-direction: row;
+    padding: 6px 0;
+  }
+
+  .routeFlowArrowLine {
+    width: 2px;
+    height: 16px;
+  }
+
+  .routeFlowNode {
+    padding: 12px;
+  }
+
+  .routeShowcaseStats {
+    gap: 16px;
+  }
+
+  .routeShowcaseTitle {
+    font-size: 1.1rem;
+  }
+
+  .routeShowcaseCtas {
+    flex-direction: column;
+  }
+
+  .routeShowcaseCtas .button {
+    width: 100%;
   }
 }
 

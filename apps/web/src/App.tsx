@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import './App.css'
-import RouteGraph from './components/RouteGraph'
 import {
   fetchAnalytics,
   fetchFunnelOverview,
@@ -574,7 +573,69 @@ function App() {
             </p>
           </div>
 
-          <RouteGraph />
+          <div className="routeShowcase">
+            <div className="routeShowcaseVisual">
+              <div className="routeFlowDiagram">
+                <div className="routeFlowNode routeFlowNodeSource">
+                  <div className="routeFlowNodeLabel">Source</div>
+                  <div className="routeFlowNodeExchanges">Bithumb / Upbit / Coinone / GoPax</div>
+                </div>
+                <div className="routeFlowArrow">
+                  <div className="routeFlowArrowLine" />
+                  <div className="routeFlowArrowBridge">11 Bridge Coins</div>
+                  <div className="routeFlowArrowLine" />
+                </div>
+                <div className="routeFlowNode routeFlowNodeDest">
+                  <div className="routeFlowNodeLabel">Destination</div>
+                  <div className="routeFlowNodeExchanges">Binance / OKX / Bybit / bitFlyer / WazirX</div>
+                </div>
+              </div>
+
+              <div className="routeFlowLayers">
+                <div className="routeFlowLayer">Trading Fees</div>
+                <div className="routeFlowLayer">Withdrawal Fees</div>
+                <div className="routeFlowLayer">Slippage</div>
+                <div className="routeFlowLayer">Transfer Time</div>
+                <div className="routeFlowLayer">FX Rate</div>
+              </div>
+            </div>
+
+            <div className="routeShowcaseInfo">
+              <h3 className="routeShowcaseTitle">Compare routes across 9 exchanges, 11 bridge coins</h3>
+              <p className="routeShowcaseDesc">
+                CrossFin evaluates every possible cross-border path in real-time, aggregating 5 cost layers
+                into a single comparable number per route. Find the cheapest way to move crypto between
+                Korean, Japanese, Indian, and global exchanges.
+              </p>
+              <div className="routeShowcaseStats">
+                <div className="routeShowcaseStat">
+                  <span className="routeShowcaseStatValue">99+</span>
+                  <span className="routeShowcaseStatLabel">Routes evaluated</span>
+                </div>
+                <div className="routeShowcaseStat">
+                  <span className="routeShowcaseStatValue">5</span>
+                  <span className="routeShowcaseStatLabel">Cost layers</span>
+                </div>
+                <div className="routeShowcaseStat">
+                  <span className="routeShowcaseStatValue">&lt;2s</span>
+                  <span className="routeShowcaseStatLabel">Analysis time</span>
+                </div>
+              </div>
+              <div className="routeShowcaseCtas">
+                <a
+                  className="button primary"
+                  href="https://live.crossfin.dev"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open Live Demo
+                </a>
+                <button type="button" className="button" onClick={() => switchTab('developers')}>
+                  View API Docs
+                </button>
+              </div>
+            </div>
+          </div>
         </section>
         )}
 
