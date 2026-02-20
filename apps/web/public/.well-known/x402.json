@@ -19,7 +19,7 @@
     "maxTimeoutSeconds": 300
   },
   "endpoints": [
-    { "resource": "https://crossfin.dev/api/premium/arbitrage/kimchi", "method": "GET", "price": "$0.05", "description": "Real-time Kimchi Premium Index — Korean vs global exchange price spread for 11 crypto pairs" },
+    { "resource": "https://crossfin.dev/api/premium/arbitrage/kimchi", "method": "GET", "price": "$0.05", "description": "Real-time Route Spread Index — Korean vs global exchange price spread for 11 crypto pairs" },
     { "resource": "https://crossfin.dev/api/premium/arbitrage/opportunities", "method": "GET", "price": "$0.10", "description": "AI-ready arbitrage decisions: EXECUTE/WAIT/SKIP with confidence scores" },
     { "resource": "https://crossfin.dev/api/premium/route/find", "method": "GET", "price": "$0.10", "description": "Optimal crypto transfer route across 9 exchanges using 11 bridge coins" },
     { "resource": "https://crossfin.dev/api/premium/bithumb/orderbook", "method": "GET", "price": "$0.02", "description": "Live Bithumb orderbook depth (30 levels)" },
@@ -29,14 +29,14 @@
     { "resource": "https://crossfin.dev/api/premium/market/fx/usdkrw", "method": "GET", "price": "$0.01", "description": "USD/KRW exchange rate" },
     { "resource": "https://crossfin.dev/api/premium/market/korea", "method": "GET", "price": "$0.03", "description": "Korean market sentiment overview" },
     { "resource": "https://crossfin.dev/api/premium/crypto/korea/5exchange", "method": "GET", "price": "$0.08", "description": "4-exchange Korean crypto price comparison" },
-    { "resource": "https://crossfin.dev/api/premium/morning/brief", "method": "GET", "price": "$0.20", "description": "Morning Brief bundle: kimchi premium + FX + KOSPI/KOSDAQ + headlines" },
-    { "resource": "https://crossfin.dev/api/premium/crypto/snapshot", "method": "GET", "price": "$0.15", "description": "Crypto Snapshot: 5-exchange prices + kimchi + volume + FX" },
+    { "resource": "https://crossfin.dev/api/premium/morning/brief", "method": "GET", "price": "$0.20", "description": "Morning Brief bundle: route spread + FX + KOSPI/KOSDAQ + headlines" },
+    { "resource": "https://crossfin.dev/api/premium/crypto/snapshot", "method": "GET", "price": "$0.15", "description": "Crypto Snapshot: 5-exchange prices + route spread + volume + FX" },
     { "resource": "https://crossfin.dev/api/premium/market/korea/indices", "method": "GET", "price": "$0.03", "description": "KOSPI & KOSDAQ real-time indices" },
     { "resource": "https://crossfin.dev/api/premium/market/korea/investor-flow", "method": "GET", "price": "$0.05", "description": "Stock investor flow: foreign/institutional/individual" },
     { "resource": "https://crossfin.dev/api/premium/market/korea/stocks/momentum", "method": "GET", "price": "$0.05", "description": "Top gainers/losers/market cap" }
   ],
   "free": [
-    { "resource": "https://crossfin.dev/api/arbitrage/demo", "method": "GET", "description": "Free kimchi premium preview (top 3 pairs)" },
+    { "resource": "https://crossfin.dev/api/arbitrage/demo", "method": "GET", "description": "Free route spread preview (top 3 pairs)" },
     { "resource": "https://crossfin.dev/api/route/exchanges", "method": "GET", "description": "Supported exchanges and coins" },
     { "resource": "https://crossfin.dev/api/route/fees", "method": "GET", "description": "Fee comparison table" },
     { "resource": "https://crossfin.dev/api/route/pairs", "method": "GET", "description": "Trading pairs with live prices" },

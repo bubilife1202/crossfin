@@ -29,7 +29,7 @@ npx -y crossfin-mcp
 ## What your agent can do
 
 - **"빗썸에서 바이낸스로 500만원 USDC 만들려면?"** → `find_optimal_route` evaluates 11 bridge coins, returns cheapest path
-- **"한국-글로벌 스프레드 얼마야?"** → `get_kimchi_premium` returns free demo spread (top 3 pairs)
+- **"한국-글로벌 스프레드 얼마야?"** → `get_kimchi_premium` returns free route spread preview (top 3 pairs)
 - **"거래소별 XRP 가격 비교해줘"** → `compare_exchange_prices` compares Bithumb KRW vs Binance USD
 - **"한국 시장 브리핑해줘"** → `call_paid_service` calls Morning Brief bundle
 
@@ -40,7 +40,7 @@ npx -y crossfin-mcp
 | `find_optimal_route` | $0.10 | Optimal crypto transfer path across 9 exchanges (11 bridge coins) |
 | `list_exchange_fees` | Free | Trading + withdrawal fee comparison |
 | `compare_exchange_prices` | Free | Live Bithumb KRW vs Binance USD comparison |
-| `get_kimchi_premium` | Free | Korean vs. global price spread preview |
+| `get_kimchi_premium` | Free | Korean vs. global route spread preview |
 | `call_paid_service` | Varies | Call any of 35 paid APIs with automatic x402 payment |
 | `search_services` | Free | Search registered services |
 | `list_services` | Free | Browse service catalog |

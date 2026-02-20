@@ -44,7 +44,7 @@ Restart your MCP client. Done. 16 tools available immediately.
 **For developers/agents:**
 
 - `find_optimal_route` — cheapest/fastest/balanced path across Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit using 11 bridge coins (BTC, ETH, XRP, SOL, DOGE, ADA, DOT, LINK, AVAX, TRX, KAIA)
-- `get_kimchi_premium` — real-time Korean vs. global price spread
+- `get_kimchi_premium` — real-time Korean vs. global route spread
 - `compare_exchange_prices` — live Bithumb KRW vs Binance USD price comparison
 - `call_paid_service` — call any of 35 paid APIs with automatic x402 USDC payment
 
@@ -90,7 +90,7 @@ Supports bidirectional routing: Korea → Global and Global → Korea.
 | `find_optimal_route` | Optimal crypto transfer path across 9 exchanges (paid, $0.10) |
 | `list_exchange_fees` | Trading + withdrawal fee comparison |
 | `compare_exchange_prices` | Live Bithumb KRW vs Binance USD comparison |
-| `get_kimchi_premium` | Korean vs. global price spread (free preview) |
+| `get_kimchi_premium` | Korean vs. global route spread (free preview) |
 | `search_services` | Search registered services |
 | `get_guide` | Full agent guide (services, payment flow, examples) |
 | `call_paid_service` | Call any paid API with automatic x402 payment |

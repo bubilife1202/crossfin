@@ -59,7 +59,7 @@
       "category": "korea-crypto",
       "path": "/api/premium/arbitrage/kimchi",
       "price": "$0.05",
-      "tags": ["korea", "crypto", "arbitrage", "kimchi-premium"],
+      "tags": ["korea", "crypto", "arbitrage", "route-spread"],
       "playgroundLabel": "Route Spread"
     },
     {
@@ -70,7 +70,7 @@
       "path": "/api/premium/arbitrage/kimchi/history",
       "sampleQuery": "hours=24",
       "price": "$0.05",
-      "tags": ["korea", "crypto", "arbitrage", "kimchi-premium", "history"],
+      "tags": ["korea", "crypto", "arbitrage", "route-spread", "history"],
       "playgroundLabel": "Route Spread History"
     },
     {
@@ -374,7 +374,7 @@
       "category": "korea-bundle",
       "path": "/api/premium/kimchi/stats",
       "price": "$0.15",
-      "tags": ["korea", "crypto", "bundle", "kimchi-premium", "arbitrage", "agent-ready"],
+      "tags": ["korea", "crypto", "bundle", "route-spread", "arbitrage", "agent-ready"],
       "playgroundLabel": "Route Spread Stats"
     },
     {

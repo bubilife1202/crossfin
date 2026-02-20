@@ -398,7 +398,7 @@ const CROSSFIN_TELEGRAM_TOOLS: GlmTool[] = [
     type: 'function',
     function: {
       name: 'get_kimchi_premium',
-      description: 'Get the Korea-vs-global route spread. Use when user asks about price spread, arbitrage, or Korea/global premium.',
+      description: 'Get the Korea-vs-global route spread. Use when user asks about route spread, arbitrage, or Korea/global price difference.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -1225,7 +1225,7 @@ app.get('/api/docs/guide', (c) => {
         { name: 'list_services', description: 'List services with optional category filter' },
         { name: 'get_service', description: 'Get details for a specific service' },
         { name: 'list_categories', description: 'List all categories with counts' },
-        { name: 'get_kimchi_premium', description: 'Free route spread preview' },
+        { name: 'get_kimchi_premium', description: 'Free route spread preview (top 3 pairs)' },
         { name: 'get_analytics', description: 'Gateway usage analytics' },
         { name: 'get_guide', description: 'Get the full CrossFin agent guide' },
         { name: 'create_wallet', description: 'Create a wallet in local ledger' },
@@ -1319,7 +1319,7 @@ app.get('/.well-known/x402.json', (c) => {
       docs: 'https://docs.crossfin.dev',
       github: 'https://github.com/bubilife1202/crossfin',
       categories: ['crypto-routing', 'korean-market-data', 'arbitrage', 'exchange-data', 'defi'],
-      tags: ['kimchi-premium', 'cross-exchange', 'korean-crypto', 'bithumb', 'upbit', 'binance', 'okx', 'bybit', 'mcp', 'ai-agent'],
+      tags: ['route-spread', 'cross-exchange', 'korean-crypto', 'bithumb', 'upbit', 'binance', 'okx', 'bybit', 'mcp', 'ai-agent'],
     },
     payment: {
       network,
@@ -1861,7 +1861,7 @@ app.get('/api/openapi.json', (c) => {
           tags: ['Paid — x402'],
           responses: {
             '200': {
-              description: 'Kimchi stats bundle response',
+              description: 'Route Spread stats bundle response',
               content: {
                 'application/json': {
                   schema: {
@@ -2132,7 +2132,7 @@ app.get('/api/openapi.json', (c) => {
         post: {
           operationId: 'telegramWebhook',
           summary: 'Telegram bot webhook endpoint',
-          description: 'Receives Telegram updates and executes /route, /price, /status, /spread, /fees commands (/kimchi remains as legacy alias). If TELEGRAM_BOT_TOKEN is configured, X-Telegram-Bot-Api-Secret-Token must match TELEGRAM_WEBHOOK_SECRET.',
+          description: 'Receives Telegram updates and executes /route, /price, /status, /spread, /fees commands. If TELEGRAM_BOT_TOKEN is configured, X-Telegram-Bot-Api-Secret-Token must match TELEGRAM_WEBHOOK_SECRET.',
           tags: ['Telegram'],
           parameters: [
             {
