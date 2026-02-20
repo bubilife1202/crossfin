@@ -80,7 +80,7 @@
     {
       "id": "crossfin_arbitrage_opportunities",
       "name": "CrossFin Arbitrage Decision Service",
-      "description": "AI-ready arbitrage decision service with EXECUTE/WAIT/SKIP recommendations.",
+      "description": "AI-ready arbitrage decision service with FAVORABLE/NEUTRAL/UNFAVORABLE indicators.",
       "category": "korea-crypto",
       "path": "/api/premium/arbitrage/opportunities",
       "price": "$0.10",
@@ -174,7 +174,7 @@
     {
       "id": "crossfin_cross_exchange",
       "name": "CrossFin Cross-Exchange Decision Service",
-      "description": "Cross-exchange decision service with ARBITRAGE/HOLD/MONITOR signals.",
+      "description": "Cross-exchange decision service with SPREAD_OPPORTUNITY/NEUTRAL_SIGNAL/MONITORING indicators.",
       "category": "korea-crypto",
       "path": "/api/premium/market/cross-exchange",
       "price": "$0.08",
