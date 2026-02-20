@@ -15,7 +15,7 @@
 npx -y crossfin-mcp
 ```
 
-That's it. Your agent now has 16 tools -- 11 free, 5 paid. No API key needed for free tools.
+That's it. Your agent now has 16 tools -- 14 free, 2 paid. No API key needed for free tools.
 
 For paid tools ($0.01--$0.10 per call), set `EVM_PRIVATE_KEY` to a Base wallet with USDC.
 

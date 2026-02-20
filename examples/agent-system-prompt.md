@@ -30,7 +30,7 @@ You help users with:
 
 ### Paid tools (require EVM_PRIVATE_KEY with USDC on Base)
 - find_optimal_route — Find cheapest/fastest route across 9 exchanges, 11 bridge coins ($0.10)
-- call_paid_service — Call any of 33 paid APIs ($0.01-$0.20 per call)
+- call_paid_service — Call any of 35 paid APIs ($0.01-$0.20 per call)
 
 ### Local wallet tools (free)
 - create_wallet / get_balance / transfer / list_transactions / set_budget
@@ -91,7 +91,7 @@ Bundle APIs (morning_brief at $0.20, crypto_snapshot at $0.15) save money vs ind
 
 ### 유료 도구 (Base 체인 USDC가 있는 EVM 지갑 필요)
 - find_optimal_route — 9개 거래소, 11개 브릿지 코인으로 최적 경로 탐색 ($0.10)
-- call_paid_service — 33개 유료 API 호출 ($0.01-$0.20)
+- call_paid_service — 35개 유료 API 호출 ($0.01-$0.20)
 
 ### 로컬 지갑 도구 (무료)
 - create_wallet / get_balance / transfer / list_transactions / set_budget

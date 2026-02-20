@@ -1,10 +1,6 @@
 import { Hono, type Context, type MiddlewareHandler } from 'hono'
 import { cors } from 'hono/cors'
 import { HTTPException } from 'hono/http-exception'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
-import { z } from 'zod/v4'
-
 import { paymentMiddleware, x402ResourceServer } from '@x402/hono'
 import { ExactEvmScheme } from '@x402/evm/exact/server'
 import { HTTPFacilitatorClient } from '@x402/core/server'
@@ -16,7 +12,7 @@ import {
   CROSSFIN_PAID_PRICING,
   withSampleQuery,
 } from './catalog'
-import type { Bindings, Env, Caip2 } from './types'
+import type { Bindings, Env } from './types'
 import {
   requireCaip2,
   timingSafeEqual,
@@ -44,6 +40,7 @@ import {
   ROUTING_EXCHANGE_COUNTRY,
   BRIDGE_COINS,
   GLOBAL_PRICES_SUCCESS_TTL_MS,
+  CORS_ALLOWED_ORIGINS,
 } from './constants'
 import type {
   RoutingExchange,
@@ -53,8 +50,6 @@ import {
   cloneDefaultTradingFees,
   cloneDefaultWithdrawalFees,
   getWithdrawalFee,
-  invalidateFeeCaches,
-  ensureFeeTables,
   getExchangeTradingFees,
   getExchangeWithdrawalFees,
   getWithdrawalSuspensions,
@@ -77,6 +72,11 @@ import {
   computeAction,
   computeRouteAction,
 } from './lib/engine'
+import { audit, ensurePremiumPaymentsTable } from './lib/helpers'
+import adminRoutes from './routes/admin'
+import mcpRoutes from './routes/mcp'
+import a2aRoutes from './routes/a2a'
+import statusRoutes from './routes/status'
 
 const TELEGRAM_ROUTE_USAGE = [
   '라우팅 명령 형식:',
@@ -581,11 +581,13 @@ function getPublicRateLimitRouteKey(path: string): string | null {
     normalized === '/api/acp/quote' ||
     normalized === '/api/acp/execute' ||
     normalized === '/api/mcp' ||
-    normalized === '/api/telegram/webhook'
+    normalized === '/api/telegram/webhook' ||
+    normalized === '/api/status'
   ) {
     return normalized
   }
 
+  if (normalized.startsWith('/api/a2a/')) return '/api/a2a'
   if (normalized.startsWith('/api/acp/executions/')) return '/api/acp/executions/:executionId'
   if (normalized.startsWith('/api/registry/')) return '/api/registry/:id'
   if (normalized.startsWith('/api/analytics/services/')) return '/api/analytics/services/:serviceId'
@@ -679,16 +681,6 @@ const publicRateLimit: MiddlewareHandler<Env> = async (c, next) => {
   await next()
 }
 
-const CORS_ALLOWED_ORIGINS = new Set([
-  'https://crossfin.dev',
-  'https://www.crossfin.dev',
-  'https://live.crossfin.dev',
-  'https://crossfin.pages.dev',
-  'https://crossfin-live.pages.dev',
-  'http://localhost:5173',
-  'http://localhost:5174',
-])
-
 app.use('*', cors({
   origin: (requestOrigin) => CORS_ALLOWED_ORIGINS.has(requestOrigin) ? requestOrigin : '',
   allowHeaders: ['Content-Type', 'Authorization', 'X-Agent-Key', 'X-CrossFin-Admin-Token', 'X-CrossFin-Internal', 'PAYMENT-SIGNATURE'],
@@ -700,7 +692,6 @@ app.use('/api/*', publicRateLimit)
 
 let endpointCallsTableReady: Promise<void> | null = null
 let agentRegistrationAttemptsTableReady: Promise<void> | null = null
-let premiumPaymentsTableReady: Promise<void> | null = null
 type EndpointTrafficSource = 'external' | 'internal' | 'dashboard'
 
 async function ensureEndpointCallsTable(db: D1Database): Promise<void> {
@@ -773,34 +764,6 @@ async function ensureAgentRegistrationAttemptsTable(db: D1Database): Promise<voi
   }
 
   await agentRegistrationAttemptsTableReady
-}
-
-async function ensurePremiumPaymentsTable(db: D1Database): Promise<void> {
-  if (!premiumPaymentsTableReady) {
-    premiumPaymentsTableReady = db.batch([
-      db.prepare(
-        `CREATE TABLE IF NOT EXISTS premium_payments (
-           id TEXT PRIMARY KEY,
-           payer TEXT NOT NULL,
-           tx_hash TEXT NOT NULL,
-           network TEXT NOT NULL,
-           endpoint TEXT NOT NULL,
-           amount TEXT NOT NULL,
-           asset TEXT NOT NULL,
-           scheme TEXT NOT NULL,
-           created_at TEXT NOT NULL DEFAULT (datetime('now'))
-         )`
-      ),
-      db.prepare('CREATE INDEX IF NOT EXISTS idx_premium_payments_payer ON premium_payments(payer)'),
-      db.prepare('CREATE INDEX IF NOT EXISTS idx_premium_payments_created ON premium_payments(created_at)'),
-      db.prepare('CREATE INDEX IF NOT EXISTS idx_premium_payments_endpoint ON premium_payments(endpoint, created_at)'),
-    ]).then(() => undefined).catch((err) => {
-      premiumPaymentsTableReady = null
-      throw err
-    })
-  }
-
-  await premiumPaymentsTableReady
 }
 
 function maskIpForAudit(ip: string): string {
@@ -1039,7 +1002,7 @@ app.get('/api/docs/guide', (c) => {
         { id: 'crossfin_kimchi_premium_history', endpoint: '/api/premium/arbitrage/kimchi/history', price: '$0.05', description: 'Hourly snapshots of route spread data from D1 database, up to 7 days lookback. Query by coin and time range.' },
         { id: 'crossfin_arbitrage_opportunities', endpoint: '/api/premium/arbitrage/opportunities', price: '$0.10', description: 'AI-ready market condition indicators: FAVORABLE/NEUTRAL/UNFAVORABLE with slippage, premium trends, transfer time risk, and signal strength scores.' },
         { id: 'crossfin_cross_exchange', endpoint: '/api/premium/market/cross-exchange', price: '$0.08', description: 'Compare prices across 4 Korean exchanges with SPREAD_OPPORTUNITY/NEUTRAL_SIGNAL/MONITORING indicators and best buy/sell routing.' },
-        { id: 'crossfin_5exchange', endpoint: '/api/premium/crypto/korea/5exchange?coin=BTC', price: '$0.08', description: 'Compare crypto prices across 4 Korean exchanges (Upbit, Bithumb, Coinone, GoPax) for any coin.' },
+        { id: 'crossfin_crypto_korea_5exchange', endpoint: '/api/premium/crypto/korea/5exchange?coin=BTC', price: '$0.08', description: 'Compare crypto prices across 4 Korean exchanges (Upbit, Bithumb, Coinone, GoPax) for any coin.' },
       ],
       exchange_data: [
         { id: 'crossfin_bithumb_orderbook', endpoint: '/api/premium/bithumb/orderbook?pair=BTC', price: '$0.02', description: 'Live 30-level orderbook depth from Bithumb for any KRW trading pair.' },
@@ -1049,7 +1012,7 @@ app.get('/api/docs/guide', (c) => {
         { id: 'crossfin_upbit_signals', endpoint: '/api/premium/market/upbit/signals', price: '$0.05', description: 'Trading signals for major KRW markets on Upbit — momentum, relative volume, volatility, and combined bullish/bearish/neutral call.' },
         { id: 'crossfin_upbit_candles', endpoint: '/api/premium/crypto/korea/upbit-candles?coin=BTC&type=days', price: '$0.02', description: 'Upbit OHLCV candle data (1m, 5m, 15m, 1h, 4h, daily, weekly, monthly). Up to 200 candles.' },
         { id: 'crossfin_coinone_ticker', endpoint: '/api/premium/market/coinone/ticker?currency=BTC', price: '$0.02', description: 'Coinone spot ticker data for any KRW pair.' },
-        { id: 'crossfin_exchange_status', endpoint: '/api/premium/crypto/korea/exchange-status', price: '$0.03', description: 'Bithumb deposit/withdrawal status for all coins — check before transferring.' },
+        { id: 'crossfin_crypto_korea_exchange_status', endpoint: '/api/premium/crypto/korea/exchange-status', price: '$0.03', description: 'Bithumb deposit/withdrawal status for all coins — check before transferring.' },
       ],
       market_sentiment: [
         { id: 'crossfin_korea_sentiment', endpoint: '/api/premium/market/korea', price: '$0.03', description: 'Korean crypto market sentiment — top gainers, losers, volume leaders, and overall market mood (bullish/bearish/neutral).' },
@@ -1057,7 +1020,7 @@ app.get('/api/docs/guide', (c) => {
       ],
       fx_rates: [
         { id: 'crossfin_usdkrw', endpoint: '/api/premium/market/fx/usdkrw', price: '$0.01', description: 'USD/KRW exchange rate for converting Korean exchange prices.' },
-        { id: 'crossfin_fx_rate', endpoint: '/api/premium/crypto/korea/fx-rate', price: '$0.01', description: 'Real-time KRW/USD exchange rate from Upbit CRIX with 52-week high/low context.' },
+        { id: 'crossfin_crypto_korea_fx_rate', endpoint: '/api/premium/crypto/korea/fx-rate', price: '$0.01', description: 'Real-time KRW/USD exchange rate from Upbit CRIX with 52-week high/low context.' },
       ],
       korean_stocks: [
         { id: 'crossfin_korea_indices', endpoint: '/api/premium/market/korea/indices', price: '$0.03', description: 'KOSPI & KOSDAQ real-time index (price, change, direction, market status).' },
@@ -5349,91 +5312,6 @@ app.get('/api/registry/reseed', async (c) => {
   })
 })
 
-app.put('/api/admin/fees', async (c) => {
-  requireAdmin(c)
-
-  let body: unknown
-  try {
-    body = await c.req.json()
-  } catch {
-    throw new HTTPException(400, { message: 'Invalid JSON body' })
-  }
-
-  if (!isRecord(body)) {
-    throw new HTTPException(400, { message: 'JSON object body is required' })
-  }
-
-  const exchange = typeof body.exchange === 'string' ? body.exchange.trim().toLowerCase() : ''
-  if (!ROUTING_EXCHANGES.includes(exchange as RoutingExchange)) {
-    throw new HTTPException(400, { message: `exchange must be one of: ${ROUTING_EXCHANGES.join(', ')}` })
-  }
-
-  const hasTradingFee = body.tradingFee !== undefined
-  const hasWithdrawalFee = body.withdrawalFee !== undefined
-  if (!hasTradingFee && !hasWithdrawalFee) {
-    throw new HTTPException(400, { message: 'Provide tradingFee or withdrawalFee' })
-  }
-
-  await ensureFeeTables(c.env.DB)
-
-  let updatedTradingFee: number | null = null
-  let updatedWithdrawalFee: { coin: string; fee: number } | null = null
-
-  if (hasTradingFee) {
-    const tradingFee = Number(body.tradingFee)
-    if (!Number.isFinite(tradingFee) || tradingFee < 0) {
-      throw new HTTPException(400, { message: 'tradingFee must be a non-negative number' })
-    }
-
-    await c.env.DB.prepare(
-      `INSERT INTO exchange_trading_fees (exchange, fee_pct, updated_at)
-       VALUES (?, ?, datetime('now'))
-       ON CONFLICT(exchange) DO UPDATE SET fee_pct = excluded.fee_pct, updated_at = datetime('now')`
-    ).bind(exchange, tradingFee).run()
-    updatedTradingFee = tradingFee
-  }
-
-  if (hasWithdrawalFee) {
-    const coin = typeof body.coin === 'string' ? body.coin.trim().toUpperCase() : ''
-    if (!coin) {
-      throw new HTTPException(400, { message: 'coin is required when updating withdrawalFee' })
-    }
-
-    const withdrawalFee = Number(body.withdrawalFee)
-    if (!Number.isFinite(withdrawalFee) || withdrawalFee < 0) {
-      throw new HTTPException(400, { message: 'withdrawalFee must be a non-negative number' })
-    }
-
-    await c.env.DB.prepare(
-      `INSERT INTO exchange_withdrawal_fees (exchange, coin, fee, updated_at)
-       VALUES (?, ?, ?, datetime('now'))
-       ON CONFLICT(exchange, coin) DO UPDATE SET fee = excluded.fee, updated_at = datetime('now')`
-    ).bind(exchange, coin, withdrawalFee).run()
-
-    updatedWithdrawalFee = { coin, fee: withdrawalFee }
-  }
-
-  invalidateFeeCaches()
-
-  await audit(
-    c.env.DB,
-    null,
-    'admin.fees.update',
-    'exchange_fees',
-    exchange,
-    'success',
-    `tradingFee=${updatedTradingFee ?? 'unchanged'} withdrawal=${updatedWithdrawalFee ? `${updatedWithdrawalFee.coin}:${updatedWithdrawalFee.fee}` : 'unchanged'}`,
-  )
-
-  return c.json({
-    ok: true,
-    exchange,
-    tradingFee: updatedTradingFee,
-    withdrawalFee: updatedWithdrawalFee,
-    at: new Date().toISOString(),
-  })
-})
-
 app.get('/api/registry/:id', async (c) => {
   await ensureRegistrySeeded(c.env.DB, c.env.PAYMENT_RECEIVER_ADDRESS)
 
@@ -7518,7 +7396,7 @@ app.get('/api/premium/crypto/korea/5exchange', async (c) => {
   const [upbitRes, bithumbRes, coinoneRes, gopaxRes] = await Promise.allSettled([
     fetch(`https://api.upbit.com/v1/ticker?markets=KRW-${coin}`).then(r => r.json()),
     fetch(`https://api.bithumb.com/public/ticker/${coin}_KRW`).then(r => r.json()),
-    fetch(`https://api.coinone.co.kr/ticker?currency=${coin.toLowerCase()}`).then(r => r.json()),
+    fetch(`https://api.coinone.co.kr/public/v2/ticker_new/KRW/${encodeURIComponent(coin)}`).then(r => r.json()),
     fetch(`https://api.gopax.co.kr/trading-pairs/${coin}-KRW/ticker`).then(r => r.json()),
   ])
 
@@ -7554,15 +7432,19 @@ app.get('/api/premium/crypto/korea/5exchange', async (c) => {
   }
 
   if (coinoneRes.status === 'fulfilled' && isRecord(coinoneRes.value)) {
-    const d = coinoneRes.value
-    const price = toNumberValue(d.last, Number.NaN)
-    if (Number.isFinite(price) && price > 0) {
-      exchanges.push({
-        exchange: 'Coinone',
-        priceKrw: price,
-        volume24h: toNumberValue(d.volume),
-        change24hPct: null,
-      })
+    const coinoneData = coinoneRes.value
+    // v2 API: { result: 'success', tickers: [{ last: ..., target_volume: ... }] }
+    const ticker = Array.isArray(coinoneData.tickers) && isRecord(coinoneData.tickers[0]) ? coinoneData.tickers[0] : null
+    if (ticker) {
+      const price = toNumberValue(ticker.last, Number.NaN)
+      if (Number.isFinite(price) && price > 0) {
+        exchanges.push({
+          exchange: 'Coinone',
+          priceKrw: price,
+          volume24h: toNumberValue(ticker.target_volume),
+          change24hPct: null,
+        })
+      }
     }
   }
 
@@ -10125,110 +10007,6 @@ app.get('/api/premium/route/find', async (c) => {
   })
 })
 
-// GET /api/admin/payments — List x402 premium payment records (admin-only)
-app.get('/api/admin/payments', async (c) => {
-  requireAdmin(c)
-  await ensurePremiumPaymentsTable(c.env.DB)
-
-  const limit = Math.min(Math.max(Number(c.req.query('limit')) || 50, 1), 200)
-  const offset = Math.max(Number(c.req.query('offset')) || 0, 0)
-  const payer = c.req.query('payer')?.trim()
-  const endpoint = c.req.query('endpoint')?.trim()
-
-  let sql = 'SELECT * FROM premium_payments'
-  const conditions: string[] = []
-  const params: string[] = []
-
-  if (payer) {
-    conditions.push('payer = ?')
-    params.push(payer)
-  }
-  if (endpoint) {
-    conditions.push('endpoint = ?')
-    params.push(endpoint)
-  }
-  if (conditions.length) {
-    sql += ` WHERE ${conditions.join(' AND ')}`
-  }
-  sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?'
-
-  const stmt = c.env.DB.prepare(sql)
-  const { results } = await stmt.bind(...params, limit, offset).all()
-
-  const countSql = conditions.length
-    ? `SELECT COUNT(*) as total FROM premium_payments WHERE ${conditions.join(' AND ')}`
-    : 'SELECT COUNT(*) as total FROM premium_payments'
-  const countStmt = c.env.DB.prepare(countSql)
-  const row = conditions.length
-    ? await countStmt.bind(...params).first<{ total: number }>()
-    : await countStmt.first<{ total: number }>()
-
-  return c.json({ payments: results, total: row?.total ?? 0, limit, offset })
-})
-
-// POST /api/admin/telegram/setup-webhook — Register Telegram webhook using stored secrets (admin-only)
-app.post('/api/admin/telegram/setup-webhook', async (c) => {
-  requireAdmin(c)
-
-  const botToken = (c.env.TELEGRAM_BOT_TOKEN ?? '').trim()
-  const webhookSecret = (c.env.TELEGRAM_WEBHOOK_SECRET ?? '').trim()
-  if (!botToken || !webhookSecret) {
-    throw new HTTPException(500, { message: 'TELEGRAM_BOT_TOKEN or TELEGRAM_WEBHOOK_SECRET not configured' })
-  }
-
-  const webhookUrl = 'https://crossfin.dev/api/telegram/webhook'
-
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      url: webhookUrl,
-      secret_token: webhookSecret,
-      allowed_updates: ['message'],
-    }),
-  })
-
-  const result = await response.json()
-  return c.json({ ok: true, webhook_url: webhookUrl, telegram_response: result })
-})
-
-// GET /api/admin/telegram/webhook-info — Check current Telegram webhook status (admin-only)
-app.get('/api/admin/telegram/webhook-info', async (c) => {
-  requireAdmin(c)
-
-  const botToken = (c.env.TELEGRAM_BOT_TOKEN ?? '').trim()
-  if (!botToken) {
-    throw new HTTPException(500, { message: 'TELEGRAM_BOT_TOKEN not configured' })
-  }
-
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/getWebhookInfo`)
-  const result = await response.json()
-  return c.json(result)
-})
-
-// POST /api/admin/telegram/test-typing — Send a test typing indicator to TELEGRAM_ADMIN_CHAT_ID (admin-only)
-app.post('/api/admin/telegram/test-typing', async (c) => {
-  requireAdmin(c)
-
-  const botToken = (c.env.TELEGRAM_BOT_TOKEN ?? '').trim()
-  const adminChatId = (c.env.TELEGRAM_ADMIN_CHAT_ID ?? '').trim()
-  if (!botToken) {
-    throw new HTTPException(500, { message: 'TELEGRAM_BOT_TOKEN not configured' })
-  }
-  if (!adminChatId) {
-    throw new HTTPException(500, { message: 'TELEGRAM_ADMIN_CHAT_ID not configured' })
-  }
-
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendChatAction`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ chat_id: adminChatId, action: 'typing' }),
-  })
-
-  const result = await response.json()
-  return c.json({ ok: response.ok, status: response.status, chat_id: adminChatId, telegram_response: result })
-})
-
 // GET /api/route/exchanges — List supported exchanges (free)
 app.get('/api/route/exchanges', async (c) => {
   const [tradingFees, withdrawalFees] = await Promise.all([
@@ -11435,75 +11213,14 @@ app.post('/api/telegram/webhook', async (c) => {
 // END ROUTING + ACP (registered before app.route to bypass agentAuth)
 // ============================================================
 
-// ============================================================
-// MCP Streamable HTTP Endpoint (registered before app.route to bypass agentAuth)
-// ============================================================
-
-app.all('/api/mcp', async (c) => {
-  const requestOrigin = (c.req.header('origin') ?? '').trim()
-  const allowedOrigin = CORS_ALLOWED_ORIGINS.has(requestOrigin) ? requestOrigin : ''
-  if (c.req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: {
-      ...(allowedOrigin ? { 'Access-Control-Allow-Origin': allowedOrigin } : {}),
-      'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Accept, mcp-session-id, Last-Event-ID, mcp-protocol-version',
-      'Access-Control-Expose-Headers': 'mcp-session-id, mcp-protocol-version',
-    }})
-  }
-
-  const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true })
-  const server = new McpServer({ name: 'crossfin', version: CROSSFIN_API_VERSION })
-  const BASE = new URL(c.req.url).origin
-
-  async function proxy(path: string): Promise<{ content: Array<{ type: 'text'; text: string }>, isError?: boolean }> {
-    try {
-      const res = await fetch(`${BASE}${path}`)
-      if (!res.ok) throw new Error(`API ${res.status}`)
-      return { content: [{ type: 'text', text: await res.text() }] }
-    } catch (e) {
-      return { content: [{ type: 'text', text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }
-    }
-  }
-
-  const LOCAL_ONLY = { content: [{ type: 'text' as const, text: 'This tool requires local installation. Run: npx crossfin-mcp (set EVM_PRIVATE_KEY for paid tools). See: https://crossfin.dev/api/docs/guide' }] }
-
-  server.registerTool('get_kimchi_premium', { description: 'Free preview of Route Spread — real-time price spread between Korean and global crypto exchanges (top 3 pairs)', inputSchema: z.object({}) }, async () => proxy('/api/arbitrage/demo'))
-  server.registerTool('list_exchange_fees', { description: 'Trading fees, withdrawal fees, and transfer times for all supported exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit)', inputSchema: z.object({}) }, async () => proxy('/api/route/fees'))
-  server.registerTool('compare_exchange_prices', { description: 'Compare Bithumb KRW prices vs Binance USD prices for tracked coins with transfer-time estimates', inputSchema: z.object({ coin: z.string().optional().describe('Coin symbol (e.g. BTC, XRP). Omit for all.') }) }, async ({ coin }) => {
-    const qs = coin?.trim() ? `?coin=${encodeURIComponent(coin.trim().toUpperCase())}` : ''
-    return proxy(`/api/route/pairs${qs}`)
-  })
-  server.registerTool('search_services', { description: 'Search the CrossFin service registry (184 services) by keyword', inputSchema: z.object({ query: z.string().describe('Search keyword') }) }, async ({ query }) => proxy(`/api/registry/search?q=${encodeURIComponent(query)}`))
-  server.registerTool('list_services', { description: 'List services from the CrossFin registry with optional category filter', inputSchema: z.object({ category: z.string().optional(), limit: z.number().int().min(1).max(100).optional() }) }, async ({ category, limit }) => {
-    const qs = new URLSearchParams()
-    if (category?.trim()) qs.set('category', category.trim())
-    if (typeof limit === 'number') qs.set('limit', String(limit))
-    return proxy(`/api/registry${qs.size ? `?${qs}` : ''}`)
-  })
-  server.registerTool('get_service', { description: 'Get detailed information about a specific service by ID', inputSchema: z.object({ serviceId: z.string() }) }, async ({ serviceId }) => proxy(`/api/registry/${encodeURIComponent(serviceId)}`))
-  server.registerTool('list_categories', { description: 'List all service categories with counts', inputSchema: z.object({}) }, async () => proxy('/api/registry/categories'))
-  server.registerTool('get_analytics', { description: 'CrossFin gateway usage analytics — total calls, top services, recent activity', inputSchema: z.object({}) }, async () => proxy('/api/analytics/overview'))
-  server.registerTool('get_guide', { description: 'Complete CrossFin API guide — services, pricing, x402 payment flow, code examples', inputSchema: z.object({}) }, async () => proxy('/api/docs/guide'))
-  server.registerTool('find_optimal_route', { description: 'Find cheapest/fastest path across 9 exchanges using 11 bridge coins. Paid: $0.10 via x402. Requires local install with EVM_PRIVATE_KEY.', inputSchema: z.object({ from: z.string().describe('Source (e.g. bithumb:KRW)'), to: z.string().describe('Destination (e.g. binance:USDC)'), amount: z.number(), strategy: z.enum(['cheapest', 'fastest', 'balanced']).optional() }) }, async () => LOCAL_ONLY)
-  server.registerTool('call_paid_service', { description: 'Call any CrossFin paid API with automatic x402 USDC payment. Requires local install with EVM_PRIVATE_KEY.', inputSchema: z.object({ serviceId: z.string().optional(), url: z.string().optional(), params: z.record(z.string(), z.string()).optional() }) }, async () => LOCAL_ONLY)
-  server.registerTool('create_wallet', { description: 'Create a wallet in the local CrossFin ledger. Requires local install.', inputSchema: z.object({ label: z.string(), initialDepositKrw: z.number().optional() }) }, async () => LOCAL_ONLY)
-  server.registerTool('get_balance', { description: 'Get wallet balance (KRW). Requires local install.', inputSchema: z.object({ walletId: z.string() }) }, async () => LOCAL_ONLY)
-  server.registerTool('transfer', { description: 'Transfer funds between wallets (KRW). Requires local install.', inputSchema: z.object({ fromWalletId: z.string(), toWalletId: z.string(), amountKrw: z.number() }) }, async () => LOCAL_ONLY)
-  server.registerTool('list_transactions', { description: 'List transactions. Requires local install.', inputSchema: z.object({ walletId: z.string().optional(), limit: z.number().optional() }) }, async () => LOCAL_ONLY)
-  server.registerTool('set_budget', { description: 'Set daily spend limit (KRW). Requires local install.', inputSchema: z.object({ dailyLimitKrw: z.number().nullable() }) }, async () => LOCAL_ONLY)
-
-  await server.server.connect(transport)
-  const res = await transport.handleRequest(c.req.raw)
-  return new Response(res.body, { status: res.status, headers: {
-    ...Object.fromEntries(res.headers.entries()),
-    ...(allowedOrigin ? { 'Access-Control-Allow-Origin': allowedOrigin } : {}),
-    'Access-Control-Expose-Headers': 'mcp-session-id, mcp-protocol-version',
-  }})
-})
-
+app.route('/api/admin', adminRoutes)
+app.route('/api/mcp', mcpRoutes)
+app.route('/api/a2a', a2aRoutes)
+app.route('/api/status', statusRoutes)
 app.route('/api', api)
 
 // === Guardian Rules Engine ===
+// evaluateGuardian and recordSpend are used by the guardian-enabled proxy flow (not yet wired).
 
 async function evaluateGuardian(
   db: D1Database,
@@ -11618,20 +11335,8 @@ async function recordSpend(db: D1Database, agentId: string, amountUsd: number, s
     'INSERT INTO agent_spend (id, agent_id, amount_usd, service_id, tx_hash) VALUES (?, ?, ?, ?, ?)'
   ).bind(crypto.randomUUID(), agentId, amountUsd, serviceId, txHash).run()
 }
-
-async function audit(
-  db: D1Database,
-  agentId: string | null,
-  action: string,
-  resource: string,
-  resourceId: string | null,
-  result: 'success' | 'blocked' | 'error',
-  detail?: string,
-) {
-  await db.prepare(
-    'INSERT INTO audit_logs (id, agent_id, action, resource, resource_id, detail, result) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).bind(crypto.randomUUID(), agentId, action, resource, resourceId, detail ?? null, result).run()
-}
+void evaluateGuardian
+void recordSpend
 
 export default {
   fetch: app.fetch,

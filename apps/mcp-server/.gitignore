@@ -6,3 +6,6 @@ dist
 
 # Local ledger file (default path lives in user home, but keep safe)
 ledger.json
+
+# Build artifacts
+mcp-publisher

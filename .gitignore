@@ -6,6 +6,12 @@
 *.log
 *.local
 
+# Environment files
+.env
+.env.*
+**/.env
+**/.env.*
+
 .sisyphus/
 .smithery/
 .mcpregistry_*

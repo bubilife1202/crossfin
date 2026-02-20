@@ -300,7 +300,7 @@ Agent steps:
 | `crossfin_kimchi_premium_history` | $0.05 | Hourly spread snapshots (up to 7 days) |
 | `crossfin_arbitrage_opportunities` | $0.10 | FAVORABLE/NEUTRAL/UNFAVORABLE indicators with signalStrength |
 | `crossfin_cross_exchange` | $0.08 | 4 Korean exchange price comparison |
-| `crossfin_5exchange` | $0.08 | Multi-exchange coin comparison |
+| `crossfin_crypto_korea_5exchange` | $0.08 | Multi-exchange coin comparison |
 | `crossfin_bithumb_orderbook` | $0.02 | Live 30-level orderbook |
 | `crossfin_bithumb_volume` | $0.03 | 24h volume analysis |
 | `crossfin_upbit_ticker` | $0.02 | Upbit spot ticker |
@@ -308,11 +308,11 @@ Agent steps:
 | `crossfin_upbit_signals` | $0.05 | Trading signals (momentum, volume, volatility) |
 | `crossfin_upbit_candles` | $0.02 | OHLCV candle data |
 | `crossfin_coinone_ticker` | $0.02 | Coinone spot ticker |
-| `crossfin_exchange_status` | $0.03 | Deposit/withdrawal status |
+| `crossfin_crypto_korea_exchange_status` | $0.03 | Deposit/withdrawal status |
 | `crossfin_korea_sentiment` | $0.03 | Market sentiment (gainers, losers, mood) |
 | `crossfin_korea_headlines` | $0.03 | Korean crypto/finance news |
 | `crossfin_usdkrw` | $0.01 | USD/KRW exchange rate |
-| `crossfin_fx_rate` | $0.01 | KRW/USD with 52-week context |
+| `crossfin_crypto_korea_fx_rate` | $0.01 | KRW/USD with 52-week context |
 | `crossfin_korea_indices` | $0.03 | KOSPI & KOSDAQ real-time |
 | `crossfin_korea_indices_history` | $0.05 | KOSPI/KOSDAQ daily OHLC (60 days) |
 | `crossfin_korea_stocks_momentum` | $0.05 | Top stocks by momentum |
@@ -329,3 +329,5 @@ Agent steps:
 | `crossfin_kimchi_stats` | $0.15 | Spread stats + trend + signal |
 | `crossfin_stock_brief` | $0.10 | Single stock comprehensive brief |
 | `crossfin_route_find` | $0.10 | Optimal cross-exchange route |
+| `crossfin_premium_report` | $0.001 | Premium report (x402 payment check) |
+| `crossfin_premium_enterprise` | $20.00 | Enterprise receipt/proof endpoint |

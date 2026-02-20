@@ -98,3 +98,13 @@ export type CachedExchangePriceFeed = { value: Record<string, number>; expiresAt
 export type ExchangePrices = Record<string, Record<string, number>>
 
 export type RoutingStrategy = 'cheapest' | 'fastest' | 'balanced'
+
+export const CORS_ALLOWED_ORIGINS = new Set([
+  'https://crossfin.dev',
+  'https://www.crossfin.dev',
+  'https://live.crossfin.dev',
+  'https://crossfin.pages.dev',
+  'https://crossfin-live.pages.dev',
+  'http://localhost:5173',
+  'http://localhost:5174',
+])

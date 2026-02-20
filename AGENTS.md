@@ -18,8 +18,12 @@ apps/
 
 ## Key Files
 
-- `apps/api/src/index.ts` — All API routes (~12500 lines, single file)
-- `apps/api/src/catalog.ts` — Service catalog metadata
+- `apps/api/src/index.ts` — All API routes (~11500 lines)
+- `apps/api/src/constants.ts` — Exchange fees, bridge coins, routing config
+- `apps/api/src/types.ts` — Type definitions and utility functions
+- `apps/api/src/lib/fetchers.ts` — Exchange data fetchers
+- `apps/api/src/lib/engine.ts` — Routing engine logic
+- `apps/api/src/catalog.ts` — Service catalog metadata (from catalog/crossfin-catalog.json)
 - `apps/mcp-server/src/index.ts` — MCP server with 16 tools
 - `apps/mcp-server/src/ledgerStore.ts` — Local JSON ledger for agent wallets
 

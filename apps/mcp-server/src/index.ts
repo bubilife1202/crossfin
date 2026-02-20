@@ -310,7 +310,7 @@ server.registerTool(
     title: 'Get service',
     description: 'Get detailed information about a specific service by ID',
     inputSchema: z.object({
-      serviceId: z.string().describe('Service ID (e.g. "svc_route_spread")'),
+      serviceId: z.string().describe('Service ID (e.g. "crossfin_kimchi_premium")'),
     }),
   },
   async ({ serviceId }): Promise<CallToolResult> => {

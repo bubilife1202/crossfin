@@ -40,7 +40,7 @@ paths:
       description: >
         Free preview of the route spread index. Shows top 3 crypto pairs
         by premium percentage between Korean (Bithumb) and global (Binance)
-        exchanges. Includes action signal (EXECUTE/WAIT/SKIP) and market condition.
+        exchanges. Includes indicator (FAVORABLE/NEUTRAL/UNFAVORABLE) and market condition.
       responses:
         "200":
           description: Route spread preview
@@ -71,9 +71,9 @@ paths:
                         decision:
                           type: object
                           properties:
-                            action:
+                            indicator:
                               type: string
-                            confidence:
+                            signalStrength:
                               type: number
                             reason:
                               type: string

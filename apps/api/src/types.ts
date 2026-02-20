@@ -1,4 +1,4 @@
-import type { Context, MiddlewareHandler } from 'hono'
+import type { Context } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 
 export type Bindings = {

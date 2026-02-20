@@ -1,0 +1,33 @@
+{
+  "name": "@crossfin/sdk",
+  "version": "1.8.8",
+  "description": "TypeScript SDK for the CrossFin API — Korean crypto market data, routing, and x402 agent services",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bubilife1202/crossfin.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://crossfin.dev",
+  "bugs": {
+    "url": "https://github.com/bubilife1202/crossfin/issues"
+  },
+  "keywords": ["crossfin", "crypto", "korea", "arbitrage", "x402", "agent", "sdk"],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

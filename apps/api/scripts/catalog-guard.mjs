@@ -68,7 +68,7 @@ function buildWellKnown(catalog) {
       },
       tools: catalog.mcpTools,
     },
-    updatedAt: '2026-02-17T00:00:00.000Z',
+    updatedAt: '2026-02-21T00:00:00.000Z',
   }
 }
 
