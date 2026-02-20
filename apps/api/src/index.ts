@@ -1156,7 +1156,7 @@ app.get('/api/docs/guide', (c) => {
       {
         name: 'Route Spread Monitor',
         description: 'Agent that monitors route spread and alerts when arbitrage opportunity appears.',
-        flow: '1. Poll /api/premium/arbitrage/opportunities ($0.10) every 15 minutes. 2. When signal=EXECUTE, call /api/premium/route/find ($0.10) for optimal route. 3. Alert user with route details.',
+        flow: '1. Poll /api/premium/arbitrage/opportunities ($0.10) every 15 minutes. 2. When indicator=FAVORABLE, call /api/premium/route/find ($0.10) for optimal route. 3. Alert user with route details.',
         cost: '~$10/day (polling every 15m)',
       },
       {
@@ -1383,7 +1383,7 @@ app.get('/.well-known/agent.json', (c) => {
       {
         id: 'route-spread',
         name: 'Route Spread / Kimchi Premium Index',
-        description: 'Real-time price spread between Korean and global crypto exchanges for 11 pairs with EXECUTE/WAIT/SKIP decisions.',
+        description: 'Real-time price spread between Korean and global crypto exchanges for 11 pairs with FAVORABLE/NEUTRAL/UNFAVORABLE indicators.',
         tags: ['arbitrage', 'spread', 'kimchi-premium', 'signals'],
         examples: ['What is the current kimchi premium?', 'Show route spread for BTC'],
       },
@@ -1437,7 +1437,7 @@ app.get('/.well-known/ai-plugin.json', (c) => {
     name_for_human: 'CrossFin',
     name_for_model: 'crossfin',
     description_for_human: 'Korean and global crypto exchange routing, arbitrage signals, and market data for AI agents.',
-    description_for_model: 'CrossFin provides: (1) optimal crypto routing across 9 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit) with 11 bridge coins, (2) real-time route spread (kimchi premium) index with EXECUTE/WAIT/SKIP signals, (3) Korean market data including KOSPI/KOSDAQ, ETFs, investor flow, and crypto prices, (4) USD/KRW exchange rates. Free endpoints available. Paid endpoints use x402 USDC micropayments on Base.',
+    description_for_model: 'CrossFin provides: (1) optimal crypto routing across 9 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit) with 11 bridge coins, (2) real-time route spread (kimchi premium) index with FAVORABLE/NEUTRAL/UNFAVORABLE indicators, (3) Korean market data including KOSPI/KOSDAQ, ETFs, investor flow, and crypto prices, (4) USD/KRW exchange rates. Free endpoints available. Paid endpoints use x402 USDC micropayments on Base.',
     auth: { type: 'none' },
     api: {
       type: 'openapi',
@@ -1996,7 +1996,7 @@ app.get('/api/openapi.json', (c) => {
         get: {
           operationId: 'kimchiStats',
           summary: 'Route Spread Stats bundle — $0.15 USDC',
-          description: 'Comprehensive route spread analysis combining current premiums, 24h trend from D1 snapshots, top arbitrage signal (EXECUTE/WAIT/SKIP), and cross-exchange BTC spread across Korean exchanges. Payment: $0.15 USDC on Base via x402.',
+          description: 'Comprehensive route spread analysis combining current premiums, 24h trend from D1 snapshots, top arbitrage indicator (FAVORABLE/NEUTRAL/UNFAVORABLE), and cross-exchange BTC spread across Korean exchanges. Payment: $0.15 USDC on Base via x402.',
           tags: ['Paid — x402'],
           responses: {
             '200': {
@@ -6847,8 +6847,8 @@ app.get('/api/premium/arbitrage/opportunities', async (c) => {
       // Fix 2: Use correct orderbook side for slippage estimation
       const ob = orderbooks[i] ?? { bids: [], asks: [] }
       const orderbookSide = direction === 'buy-korea-sell-global'
-        ? (ob.bids as Array<{ price: string; quantity: string }>).slice(0, 10)
-        : (ob.asks as Array<{ price: string; quantity: string }>).slice(0, 10)
+        ? (ob.asks as Array<{ price: string; quantity: string }>).slice(0, 10)
+        : (ob.bids as Array<{ price: string; quantity: string }>).slice(0, 10)
       const slippageEstimatePct = estimateSlippage(orderbookSide, TRADE_SIZE_KRW)
       const transferTimeMin = getTransferTime(p.coin)
       const trendData = trends[i] ?? { trend: 'stable' as const, volatilityPct: 0 }
@@ -11686,8 +11686,8 @@ export default {
         // Real orderbook slippage
         const ob = obAndTrends[idx * 2] as { bids: Array<{ price: string; quantity: string }>; asks: Array<{ price: string; quantity: string }> }
         const orderbookSide = direction === 'buy-korea-sell-global'
-          ? (ob.bids ?? []).slice(0, 10)
-          : (ob.asks ?? []).slice(0, 10)
+          ? (ob.asks ?? []).slice(0, 10)
+          : (ob.bids ?? []).slice(0, 10)
         const slippage = estimateSlippage(orderbookSide, TRADE_SIZE_KRW)
 
         const transferTime = getTransferTime(p.coin)

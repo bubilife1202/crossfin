@@ -237,14 +237,14 @@
     },
     {
       "id": "crossfin_crypto_korea_5exchange",
-      "name": "CrossFin Korea 4-Exchange Price Compare",
+      "name": "CrossFin Korea 5-Exchange Price Compare",
       "description": "Compare coin prices across Upbit, Bithumb, Coinone, and GoPax.",
       "category": "korea-crypto",
       "path": "/api/premium/crypto/korea/5exchange",
       "sampleQuery": "coin=BTC",
       "price": "$0.08",
       "tags": ["korea", "crypto", "exchange", "arbitrage"],
-      "playgroundLabel": "Korea 4-Exchange Compare"
+      "playgroundLabel": "Korea 5-Exchange Compare"
     },
     {
       "id": "crossfin_crypto_korea_exchange_status",
