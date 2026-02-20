@@ -16,6 +16,14 @@ zone_name = "crossfin.dev"
 pattern = "www.crossfin.dev/api/*"
 zone_name = "crossfin.dev"
 
+[[routes]]
+pattern = "crossfin.dev/.well-known/*"
+zone_name = "crossfin.dev"
+
+[[routes]]
+pattern = "crossfin.dev/llms.txt"
+zone_name = "crossfin.dev"
+
 [vars]
 FACILITATOR_URL = "https://facilitator.payai.network"
 X402_NETWORK = "eip155:8453"
