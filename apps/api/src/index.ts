@@ -304,7 +304,7 @@ async function telegramSendTypingSafe(botToken: string, chatId: string | number)
 function startTelegramTypingLoop(
   botToken: string,
   chatId: string | number,
-  intervalMs: number = 3000,
+  intervalMs: number = 4000,
 ): () => void {
   let stopped = false
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -317,20 +317,16 @@ function startTelegramTypingLoop(
     }
   }
 
-  try {
-    void telegramSendTypingSafe(botToken, chatId)
-    const tick = () => {
+  void telegramSendTypingSafe(botToken, chatId)
+  const tick = () => {
+    if (stopped) return
+    timer = setTimeout(() => {
       if (stopped) return
-      timer = setTimeout(() => {
-        if (stopped) return
-        void telegramSendTypingSafe(botToken, chatId)
-        tick()
-      }, intervalMs)
-    }
-    tick()
-  } catch (err) {
-    console.warn('[telegram] typing loop init failed', err)
+      void telegramSendTypingSafe(botToken, chatId)
+      tick()
+    }, intervalMs)
   }
+  tick()
 
   return stop
 }
@@ -681,8 +677,11 @@ const publicRateLimit: MiddlewareHandler<Env> = async (c, next) => {
 }
 
 const CORS_ALLOWED_ORIGINS = new Set([
-  'https://crossfin.xyz',
-  'https://live.crossfin.xyz',
+  'https://crossfin.dev',
+  'https://www.crossfin.dev',
+  'https://live.crossfin.dev',
+  'https://crossfin.pages.dev',
+  'https://crossfin-live.pages.dev',
   'http://localhost:5173',
   'http://localhost:5174',
 ])
@@ -11326,6 +11325,46 @@ app.get('/api/admin/payments', async (c) => {
     : await countStmt.first<{ total: number }>()
 
   return c.json({ payments: results, total: row?.total ?? 0, limit, offset })
+})
+
+// POST /api/admin/telegram/setup-webhook — Register Telegram webhook using stored secrets (admin-only)
+app.post('/api/admin/telegram/setup-webhook', async (c) => {
+  requireAdmin(c)
+
+  const botToken = (c.env.TELEGRAM_BOT_TOKEN ?? '').trim()
+  const webhookSecret = (c.env.TELEGRAM_WEBHOOK_SECRET ?? '').trim()
+  if (!botToken || !webhookSecret) {
+    throw new HTTPException(500, { message: 'TELEGRAM_BOT_TOKEN or TELEGRAM_WEBHOOK_SECRET not configured' })
+  }
+
+  const webhookUrl = 'https://crossfin.dev/api/telegram/webhook'
+
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      url: webhookUrl,
+      secret_token: webhookSecret,
+      allowed_updates: ['message'],
+    }),
+  })
+
+  const result = await response.json()
+  return c.json({ ok: true, webhook_url: webhookUrl, telegram_response: result })
+})
+
+// GET /api/admin/telegram/webhook-info — Check current Telegram webhook status (admin-only)
+app.get('/api/admin/telegram/webhook-info', async (c) => {
+  requireAdmin(c)
+
+  const botToken = (c.env.TELEGRAM_BOT_TOKEN ?? '').trim()
+  if (!botToken) {
+    throw new HTTPException(500, { message: 'TELEGRAM_BOT_TOKEN not configured' })
+  }
+
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/getWebhookInfo`)
+  const result = await response.json()
+  return c.json(result)
 })
 
 // GET /api/route/exchanges — List supported exchanges (free)
