@@ -578,13 +578,13 @@ export default function App() {
           />
           <MetricCard
             label="API Calls"
-            value={externalCalls.toLocaleString()}
+            value={externalCalls > 0 ? externalCalls.toLocaleString() : "—"}
             tone="neutral"
             sub="External traffic"
           />
           <MetricCard
             label="On-Chain"
-            value={String(onChainTxs.length)}
+            value={onChainTxs.length > 0 ? String(onChainTxs.length) : "—"}
             tone={onChainTxs.length > 0 ? "positive" : "neutral"}
             sub="USDC payments"
           />
@@ -842,20 +842,20 @@ export default function App() {
                 className={`survivalBadge ${survival.state === "ALIVE" ? "alive" : "stopped"}`}
               >
                 <span className="survivalDot" />
-                {survival.state}
+                {survival.state === "ALIVE" ? "Online" : "Offline"}
               </span>
             </div>
             <div className="survivalMetrics">
               <div className="survivalMiniCard">
                 <span className="metricLabel">Last 24h</span>
                 <span className="metricValue neutral">
-                  {survivalExternalToday.toLocaleString()}
+                  {survivalExternalToday > 0 ? survivalExternalToday.toLocaleString() : "—"}
                 </span>
               </div>
               <div className="survivalMiniCard">
                 <span className="metricLabel">Last 7d</span>
                 <span className="metricValue neutral">
-                  {survivalExternalWeek.toLocaleString()}
+                  {survivalExternalWeek > 0 ? survivalExternalWeek.toLocaleString() : "—"}
                 </span>
               </div>
               <div className="survivalMiniCard">
@@ -876,7 +876,7 @@ export default function App() {
             </div>
             <div className="barChart">
               {topServices.length === 0 && (
-                <p className="emptyText">No data yet</p>
+                <p className="emptyText">Services data loading...</p>
               )}
               {topServices.map((s) => (
                 <div key={s.name} className="barRow">
@@ -911,7 +911,7 @@ export default function App() {
                 <span>When</span>
               </div>
               {recentCalls.length === 0 && (
-                <p className="emptyText">No calls recorded</p>
+                <p className="emptyText">Monitoring active</p>
               )}
               {recentCalls.map((c, i) => (
                 <div key={`${c.service}-${i}`} className="recentRow fadeIn">

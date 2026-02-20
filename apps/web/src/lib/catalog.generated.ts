@@ -24,10 +24,6 @@ export const CROSSFIN_PLAYGROUND_ENDPOINTS: { path: string; label: string }[] = 
     "label": "[Free] Analytics Overview"
   },
   {
-    "path": "/api/stats",
-    "label": "[Free] Agent Stats"
-  },
-  {
     "path": "/api/openapi.json",
     "label": "[Free] OpenAPI Spec"
   },

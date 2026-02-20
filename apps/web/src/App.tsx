@@ -2,26 +2,22 @@ import { useCallback, useEffect, useState } from 'react'
 
 import './App.css'
 import {
-  fetchAnalytics,
-  fetchFunnelOverview,
   fetchRegistryCategories,
   fetchRegistryServices,
   fetchRegistryStats,
   getApiBaseUrl,
   searchRegistryServices,
-  type AnalyticsOverview,
   type FunnelEventName,
-  type FunnelOverview,
   type RegistryCategory,
   type RegistryService,
   trackFunnelEvent,
 } from './lib/api'
 import { CROSSFIN_PLAYGROUND_ENDPOINTS } from './lib/catalog.generated'
 
-type TabId = 'routing' | 'services' | 'developers' | 'activity'
+type TabId = 'routing' | 'services' | 'developers'
 
-const TAB_IDS: readonly TabId[] = ['routing', 'services', 'developers', 'activity'] as const
-const tabLabels: Record<TabId, string> = { routing: 'Routing', services: 'Services', developers: 'Developers', activity: 'Activity' }
+const TAB_IDS: readonly TabId[] = ['routing', 'services', 'developers'] as const
+const tabLabels: Record<TabId, string> = { routing: 'Routing', services: 'Services', developers: 'Developers' }
 const MCP_NPX_COMMAND = 'npx -y crossfin-mcp'
 const MCP_ENV_SNIPPET = `CROSSFIN_API_URL=https://crossfin.dev
 EVM_PRIVATE_KEY=0x...`
@@ -68,8 +64,6 @@ function App() {
   const [crossfinOnly, setCrossfinOnly] = useState<boolean>(false)
   const [query, setQuery] = useState<string>('')
 
-  const [analytics, setAnalytics] = useState<LoadState<AnalyticsOverview>>({ status: 'loading' })
-  const [funnel, setFunnel] = useState<LoadState<FunnelOverview>>({ status: 'loading' })
   const [codeTab, setCodeTab] = useState<'curl' | 'python' | 'javascript'>('curl')
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [showMcpConfig, setShowMcpConfig] = useState<boolean>(false)
@@ -163,28 +157,6 @@ function App() {
       }
     })()
 
-    void (async () => {
-      try {
-        const a = await fetchAnalytics(ctrl.signal)
-        setAnalytics({ status: 'success', data: a })
-      } catch (e) {
-        if (ctrl.signal.aborted) return
-        const msg = e instanceof Error ? e.message : 'Failed to load analytics'
-        setAnalytics({ status: 'error', message: msg })
-      }
-    })()
-
-    void (async () => {
-      try {
-        const f = await fetchFunnelOverview(ctrl.signal)
-        setFunnel({ status: 'success', data: f })
-      } catch (e) {
-        if (ctrl.signal.aborted) return
-        const msg = e instanceof Error ? e.message : 'Failed to load funnel analytics'
-        setFunnel({ status: 'error', message: msg })
-      }
-    })()
-
     return () => ctrl.abort()
   }, [])
 
@@ -234,28 +206,6 @@ function App() {
 
 
 
-  function relativeTime(dateStr: string): string {
-    const now = Date.now()
-    const utcStr = dateStr.includes('T') || dateStr.endsWith('Z') ? dateStr : dateStr.replace(' ', 'T') + 'Z'
-    const then = new Date(utcStr).getTime()
-    const diff = now - then
-    if (Number.isNaN(diff) || diff < 0) return 'just now'
-    const seconds = Math.floor(diff / 1000)
-    if (seconds < 60) return `${seconds}s ago`
-    const minutes = Math.floor(seconds / 60)
-    if (minutes < 60) return `${minutes}m ago`
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours}h ago`
-    const days = Math.floor(hours / 24)
-    return `${days}d ago`
-  }
-
-  function responseTimeClass(ms: number): string {
-    if (ms < 200) return 'rtFast'
-    if (ms < 500) return 'rtMedium'
-    return 'rtSlow'
-  }
-
   function copyToClipboard(id: string, text: string) {
     void navigator.clipboard.writeText(text)
       .then(() => {
@@ -267,22 +217,6 @@ function App() {
         setTimeout(() => setCopiedId((prev) => (prev === 'copy-failed' ? null : prev)), 2500)
       })
   }
-
-  const analyticsData = analytics.status === 'success' ? analytics.data : null
-  const hasAnalyticsData = analyticsData !== null && analyticsData.totalCalls > 0
-  const successRate = analyticsData
-    ? analyticsData.recentCalls.length > 0
-      ? Math.round((analyticsData.recentCalls.filter((c) => c.status === 'success').length / analyticsData.recentCalls.length) * 100)
-      : 0
-    : 0
-  const avgResponseTime = analyticsData
-    ? analyticsData.recentCalls.length > 0
-      ? Math.round(analyticsData.recentCalls.reduce((sum, c) => sum + c.responseTimeMs, 0) / analyticsData.recentCalls.length)
-      : 0
-    : 0
-  const topServiceName = analyticsData && analyticsData.topServices.length > 0 ? analyticsData.topServices[0].serviceName : '—'
-  const maxTopServiceCalls = analyticsData ? Math.max(...analyticsData.topServices.map((s) => s.calls), 1) : 1
-  const funnelData = funnel.status === 'success' ? funnel.data : null
 
   async function verifyMcpSetup() {
     setMcpVerify({ status: 'loading' })
@@ -589,132 +523,6 @@ function App() {
               </div>
             </div>
           </div>
-        </section>
-        )}
-
-        {activeTab === 'activity' && (
-        <section id="activity" className="section">
-          <div className="sectionHeader">
-            <h2>Activity</h2>
-            <p className="sectionSub">API calls and service usage</p>
-          </div>
-
-          {analytics.status === 'loading' ? (
-            <div className="panelLoading" aria-live="polite">Loading analytics…</div>
-          ) : analytics.status === 'error' ? (
-            <div className="activityEmpty">
-              <div className="activityEmptyIcon">📊</div>
-              <div className="activityEmptyTitle">No API calls yet</div>
-              <div className="activityEmptyDesc">Start by calling a service endpoint.</div>
-            </div>
-          ) : !hasAnalyticsData ? (
-            <div className="activityEmpty">
-              <div className="activityEmptyIcon">📊</div>
-              <div className="activityEmptyTitle">No API calls yet</div>
-              <div className="activityEmptyDesc">Start by calling a service endpoint.</div>
-            </div>
-          ) : (
-            <>
-              <div className="analyticsStatsGrid">
-                <div className="statCard">
-                  <div className="statLabel">Total Calls</div>
-                  <div className="statValue">{analyticsData.totalCalls.toLocaleString()}</div>
-                  <div className="statMeta">{analyticsData.totalServices} services used</div>
-                </div>
-                <div className="statCard">
-                  <div className="statLabel">Success Rate</div>
-                  <div className="statValue">{successRate}%</div>
-                  <div className="statMeta">{analyticsData.recentCalls.filter((c) => c.status === 'success').length} / {analyticsData.recentCalls.length} recent</div>
-                </div>
-                <div className="statCard">
-                  <div className="statLabel">Top Service</div>
-                  <div className="statValue statValueSmall">{topServiceName}</div>
-                  <div className="statMeta">{analyticsData.topServices.length > 0 ? `${analyticsData.topServices[0].calls} calls` : '—'}</div>
-                </div>
-                <div className="statCard">
-                  <div className="statLabel">Avg Response</div>
-                  <div className="statValue">{avgResponseTime}<span className="statUnit">ms</span></div>
-                  <div className="statMeta">across recent calls</div>
-                </div>
-              </div>
-
-              {funnelData ? (
-                <div className="funnelStatsGrid">
-                  <div className="statCard">
-                    <div className="statLabel">QuickStart Views (7d)</div>
-                    <div className="statValue">{funnelData.counts.mcp_quickstart_view.toLocaleString()}</div>
-                    <div className="statMeta">{funnelData.uniqueVisitors.toLocaleString()} unique visitors</div>
-                  </div>
-                  <div className="statCard">
-                    <div className="statLabel">Command Copy</div>
-                    <div className="statValue">{funnelData.conversion.commandCopyPct}%</div>
-                    <div className="statMeta">{funnelData.counts.mcp_command_copy.toLocaleString()} copies</div>
-                  </div>
-                  <div className="statCard">
-                    <div className="statLabel">Config Copy</div>
-                    <div className="statValue">{funnelData.conversion.configCopyPct}%</div>
-                    <div className="statMeta">{funnelData.counts.mcp_config_copy.toLocaleString()} copies</div>
-                  </div>
-                  <div className="statCard">
-                    <div className="statLabel">Guide Open</div>
-                    <div className="statValue">{funnelData.conversion.guideOpenPct}%</div>
-                    <div className="statMeta">{funnelData.counts.mcp_guide_open.toLocaleString()} opens</div>
-                  </div>
-                </div>
-              ) : funnel.status === 'error' ? (
-                <div className="analyticsHint">Funnel analytics unavailable: {funnel.message}</div>
-              ) : (
-                <div className="analyticsHint">Loading conversion funnel…</div>
-              )}
-
-              <div className="analyticsColumns">
-                <div className="analyticsPanel">
-                  <div className="analyticsPanelTitle">Recent API Calls</div>
-                  <div className="recentCallsList">
-                    <div className="recentCallsHeader">
-                      <span>Service</span>
-                      <span>Status</span>
-                      <span>Time</span>
-                      <span>When</span>
-                    </div>
-                    {analyticsData.recentCalls.map((call, i) => (
-                      <div key={`${call.serviceId}-${call.createdAt}-${i}`} className="recentCallRow">
-                        <span className="recentCallService">{call.serviceName}</span>
-                        <span className="recentCallStatus">
-                          <span className={`statusDot ${call.status === 'success' ? 'statusSuccess' : 'statusError'}`} />
-                          {call.status}
-                        </span>
-                        <span className={`recentCallTime ${responseTimeClass(call.responseTimeMs)}`}>
-                          {call.responseTimeMs}ms
-                        </span>
-                        <span className="recentCallWhen">{relativeTime(call.createdAt)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="analyticsPanel">
-                  <div className="analyticsPanelTitle">Top Services</div>
-                  <div className="topServicesList">
-                    {analyticsData.topServices.map((svc) => (
-                      <div key={svc.serviceId} className="topServiceRow">
-                        <div className="topServiceInfo">
-                          <span className="topServiceName">{svc.serviceName}</span>
-                          <span className="topServiceCalls">{svc.calls.toLocaleString()} calls</span>
-                        </div>
-                        <div className="topServiceBar">
-                          <div
-                            className="topServiceBarFill"
-                            style={{ width: `${Math.round((svc.calls / maxTopServiceCalls) * 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
         </section>
         )}
 

@@ -23,7 +23,7 @@ Current capabilities:
   - `GET /api/premium/kimchi/stats` ($0.15) — Kimchi premium deep analysis (current + trend + arbitrage signal + cross-exchange)
   - `GET /api/premium/market/korea/stock-brief?stock=005930` ($0.10) — Stock analysis (fundamentals + news + investor flow + disclosures)
 - Routing Engine (v1.8.1):
-- `GET /api/premium/route/find` ($0.10) — optimal transfer route across 7 exchanges (bridge coin comparison, slippage, fees)
+- `GET /api/premium/route/find` ($0.10) — optimal transfer route across 9 exchanges (bridge coin comparison, slippage, fees)
   - `GET /api/route/exchanges` — supported exchanges list (free)
   - `GET /api/route/fees` — fee comparison table (free)
   - `GET /api/route/pairs` — trading pairs with live prices (free)

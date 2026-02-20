@@ -10,7 +10,7 @@ CrossFin is a financial router for AI agents. It finds the cheapest path to move
 
 ## Install in 30 seconds
 
-Add this to your MCP client config (e.g. `claude_desktop_config.json`, Cursor settings, etc.):
+Add this to your MCP client config:
 
 ```json
 {
@@ -128,7 +128,7 @@ All paid via x402 (USDC on Base). No API key needed.
 | `/api/premium/arbitrage/kimchi/history` | $0.05 | Route spread history (7 days) |
 | `/api/premium/bithumb/volume-analysis` | $0.03 | Bithumb volume analysis |
 | `/api/premium/market/upbit/signals` | $0.05 | Upbit trading signals |
-| `/api/premium/crypto/korea/5exchange` | $0.08 | 4-exchange price comparison |
+| `/api/premium/crypto/korea/5exchange` | $0.08 | Cross-exchange price comparison |
 | `/api/premium/crypto/korea/exchange-status` | $0.03 | Deposit/withdrawal status |
 | `/api/premium/crypto/korea/fx-rate` | $0.01 | Real-time KRW/USD (Upbit CRIX) |
 | `/api/premium/crypto/korea/upbit-candles` | $0.02 | Upbit OHLCV candles |

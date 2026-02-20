@@ -923,9 +923,20 @@ export default function RouteGraph() {
             {([
               ['Routes evaluated', String(data?.meta.routesEvaluated ?? 0)],
               ['Price source', data?.meta.priceAge?.globalPrices?.source ?? 'n/a'],
-              ['Price age', `${data?.meta.priceAge?.globalPrices?.ageMs ?? 0}ms`],
-              ['Data status', data?.meta.dataFreshness ?? 'n/a'],
-              ['Fee source', data?.meta.feesSource ?? 'n/a'],
+              ['Price age', (() => {
+                const ageMs = data?.meta.priceAge?.globalPrices?.ageMs;
+                if (ageMs == null) return 'n/a';
+                if (ageMs < 1000) return 'just now';
+                if (ageMs < 60_000) return `${Math.round(ageMs / 1000)}s ago`;
+                return `${Math.round(ageMs / 60_000)}m ago`;
+              })()],
+              ['Data status', (() => {
+                const status = data?.meta.dataFreshness;
+                if (status === 'live') return 'Live';
+                if (status === 'cached') return 'Cached';
+                if (status === 'stale') return 'Stale';
+                return 'n/a';
+              })()],
             ] as const).map(([label, value]) => (
               <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: 'var(--muted)', fontSize: '0.86rem' }}>{label}</span>
@@ -937,7 +948,7 @@ export default function RouteGraph() {
 
         {/* Exchange Fees */}
         <div className="rg-card rg-full">
-          <div className="rg-lbl">Exchange Fees (D1)</div>
+          <div className="rg-lbl">Exchange Fees</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
               <div style={{ fontSize: '0.76rem', fontWeight: 650, color: 'var(--amber)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Trading</div>

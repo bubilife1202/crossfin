@@ -36,7 +36,7 @@ No EVM key? Free tools work without one. Paid tools require a Base wallet with U
   { name: 'find_optimal_route', description: 'Optimal path across 9 exchanges', price: '$0.10' },
   { name: 'list_exchange_fees', description: 'Trading + withdrawal fees', price: 'Free' },
   { name: 'compare_exchange_prices', description: 'Bithumb KRW vs Binance USD', price: 'Free' },
-  { name: 'get_kimchi_premium', description: 'Route spread demo (top 3 pairs)', price: 'Free' },
+  { name: 'get_kimchi_premium', description: 'Route spread data — Korean vs. global price spread (top 3 pairs)', price: 'Free' },
   { name: 'call_paid_service', description: 'Call any paid API with x402', price: 'Varies' },
   { name: 'search_services', description: 'Search registered services', price: 'Free' },
   { name: 'list_services', description: 'Browse service catalog', price: 'Free' },
