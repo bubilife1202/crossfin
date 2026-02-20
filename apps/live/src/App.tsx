@@ -439,9 +439,9 @@ export default function App() {
       <header className="header">
         <div className="headerInner">
           <div className="headerLeft">
-            <span className="logo">
+            <a href="https://crossfin.dev" className="logo" style={{ textDecoration: 'none', color: 'inherit' }}>
               <span className="logoMark">⬡</span> CrossFin
-            </span>
+            </a>
             <span className="subtitle">Asia Crypto Router for AI Agents</span>
           </div>
           <div className="headerRight">
