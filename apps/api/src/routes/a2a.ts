@@ -10,6 +10,10 @@ import type { Env } from '../types'
 
 const a2a = new Hono<Env>()
 
+const A2A_MAX_BODY_BYTES = 8 * 1024
+const A2A_MAX_MESSAGE_CHARS = 2_000
+const A2A_MAX_SKILL_CHARS = 64
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -113,19 +117,52 @@ async function fetchInternal(url: string): Promise<SkillResult> {
 // ---------------------------------------------------------------------------
 
 a2a.post('/tasks', async (c) => {
+  const contentLengthHeader = c.req.header('content-length')
+  if (contentLengthHeader) {
+    const contentLength = Number(contentLengthHeader)
+    if (!Number.isFinite(contentLength) || contentLength < 0) {
+      throw new HTTPException(400, { message: 'Invalid Content-Length header' })
+    }
+    if (contentLength > A2A_MAX_BODY_BYTES) {
+      throw new HTTPException(413, { message: 'Request body too large' })
+    }
+  }
+
+  let rawBody = ''
+  try {
+    rawBody = await c.req.text()
+  } catch {
+    throw new HTTPException(400, { message: 'Invalid request body' })
+  }
+
+  const bodyBytes = new TextEncoder().encode(rawBody).length
+  if (bodyBytes > A2A_MAX_BODY_BYTES) {
+    throw new HTTPException(413, { message: 'Request body too large' })
+  }
+
   let body: Record<string, unknown>
   try {
-    body = await c.req.json() as Record<string, unknown>
+    body = JSON.parse(rawBody) as Record<string, unknown>
   } catch {
     throw new HTTPException(400, { message: 'Invalid JSON body' })
+  }
+
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new HTTPException(400, { message: 'JSON body must be an object' })
   }
 
   const message = typeof body.message === 'string' ? body.message.trim() : ''
   if (!message) {
     throw new HTTPException(400, { message: 'message is required (string)' })
   }
+  if (message.length > A2A_MAX_MESSAGE_CHARS) {
+    throw new HTTPException(413, { message: `message is too long (max ${A2A_MAX_MESSAGE_CHARS} chars)` })
+  }
 
   const skill = typeof body.skill === 'string' ? body.skill.trim() : undefined
+  if (skill && skill.length > A2A_MAX_SKILL_CHARS) {
+    throw new HTTPException(400, { message: `skill is too long (max ${A2A_MAX_SKILL_CHARS} chars)` })
+  }
   const origin = new URL(c.req.url).origin
 
   await ensureA2aTable(c.env.DB)
