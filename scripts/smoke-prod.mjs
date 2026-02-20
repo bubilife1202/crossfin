@@ -276,7 +276,7 @@ async function runOnce(baseUrl, liveUrl, timeoutMs, runId) {
   const routeExchanges = await ok200Json(`${baseUrl}/api/route/exchanges`, timeoutMs)
   assert(isRecord(routeExchanges) && Array.isArray(routeExchanges.exchanges), 'route/exchanges must include exchanges array')
   const routeExchangeIds = (routeExchanges.exchanges ?? []).map((e) => (isRecord(e) ? String(e.id ?? '') : '')).filter(Boolean)
-  const expectedExchanges = ['bithumb', 'upbit', 'coinone', 'gopax', 'binance', 'okx', 'bybit']
+  const expectedExchanges = ['bithumb', 'upbit', 'coinone', 'gopax', 'bitflyer', 'wazirx', 'binance', 'okx', 'bybit']
   assert(routeExchangeIds.length === expectedExchanges.length, `route/exchanges must return ${expectedExchanges.length} exchanges`)
   for (const ex of expectedExchanges) {
     assert(routeExchangeIds.includes(ex), `route/exchanges must include ${ex}`)
