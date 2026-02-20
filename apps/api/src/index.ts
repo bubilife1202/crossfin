@@ -26,6 +26,7 @@ type Bindings = {
   CROSSFIN_GUARDIAN_ENABLED?: string
   TELEGRAM_BOT_TOKEN?: string
   TELEGRAM_WEBHOOK_SECRET?: string
+  TELEGRAM_ADMIN_CHAT_ID?: string
   ZAI_API_KEY?: string
   CROSSFIN_AGENT_SIGNUP_TOKEN?: string
 }
@@ -697,6 +698,7 @@ app.use('/api/*', publicRateLimit)
 
 let endpointCallsTableReady: Promise<void> | null = null
 let agentRegistrationAttemptsTableReady: Promise<void> | null = null
+let premiumPaymentsTableReady: Promise<void> | null = null
 type EndpointTrafficSource = 'external' | 'internal' | 'dashboard'
 
 async function ensureEndpointCallsTable(db: D1Database): Promise<void> {
@@ -769,6 +771,34 @@ async function ensureAgentRegistrationAttemptsTable(db: D1Database): Promise<voi
   }
 
   await agentRegistrationAttemptsTableReady
+}
+
+async function ensurePremiumPaymentsTable(db: D1Database): Promise<void> {
+  if (!premiumPaymentsTableReady) {
+    premiumPaymentsTableReady = db.batch([
+      db.prepare(
+        `CREATE TABLE IF NOT EXISTS premium_payments (
+           id TEXT PRIMARY KEY,
+           payer TEXT NOT NULL,
+           tx_hash TEXT NOT NULL,
+           network TEXT NOT NULL,
+           endpoint TEXT NOT NULL,
+           amount TEXT NOT NULL,
+           asset TEXT NOT NULL,
+           scheme TEXT NOT NULL,
+           created_at TEXT NOT NULL DEFAULT (datetime('now'))
+         )`
+      ),
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_premium_payments_payer ON premium_payments(payer)'),
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_premium_payments_created ON premium_payments(created_at)'),
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_premium_payments_endpoint ON premium_payments(endpoint, created_at)'),
+    ]).then(() => undefined).catch((err) => {
+      premiumPaymentsTableReady = null
+      throw err
+    })
+  }
+
+  await premiumPaymentsTableReady
 }
 
 function maskIpForAudit(ip: string): string {
@@ -2330,6 +2360,28 @@ app.use(
     const resourceServer = new x402ResourceServer(facilitatorClient)
       .register(network, new ExactEvmScheme())
       .registerExtension(bazaarResourceServerExtension)
+      .onAfterSettle(async (ctx) => {
+        if (!ctx.result.success) return
+        try {
+          await ensurePremiumPaymentsTable(c.env.DB)
+          const id = crypto.randomUUID()
+          await c.env.DB.prepare(
+            `INSERT INTO premium_payments (id, payer, tx_hash, network, endpoint, amount, asset, scheme)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+          ).bind(
+            id,
+            ctx.result.payer ?? 'unknown',
+            ctx.result.transaction,
+            ctx.result.network,
+            c.req.path,
+            ctx.requirements.amount,
+            ctx.requirements.asset,
+            ctx.requirements.scheme,
+          ).run()
+        } catch (err) {
+          console.error('Failed to record premium payment', err)
+        }
+      })
 
     const middleware = paymentMiddleware(
       {
@@ -11085,6 +11137,47 @@ app.get('/api/premium/route/find', async (c) => {
   })
 })
 
+// GET /api/admin/payments — List x402 premium payment records (admin-only)
+app.get('/api/admin/payments', async (c) => {
+  requireAdmin(c)
+  await ensurePremiumPaymentsTable(c.env.DB)
+
+  const limit = Math.min(Math.max(Number(c.req.query('limit')) || 50, 1), 200)
+  const offset = Math.max(Number(c.req.query('offset')) || 0, 0)
+  const payer = c.req.query('payer')?.trim()
+  const endpoint = c.req.query('endpoint')?.trim()
+
+  let sql = 'SELECT * FROM premium_payments'
+  const conditions: string[] = []
+  const params: string[] = []
+
+  if (payer) {
+    conditions.push('payer = ?')
+    params.push(payer)
+  }
+  if (endpoint) {
+    conditions.push('endpoint = ?')
+    params.push(endpoint)
+  }
+  if (conditions.length) {
+    sql += ` WHERE ${conditions.join(' AND ')}`
+  }
+  sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?'
+
+  const stmt = c.env.DB.prepare(sql)
+  const { results } = await stmt.bind(...params, limit, offset).all()
+
+  const countSql = conditions.length
+    ? `SELECT COUNT(*) as total FROM premium_payments WHERE ${conditions.join(' AND ')}`
+    : 'SELECT COUNT(*) as total FROM premium_payments'
+  const countStmt = c.env.DB.prepare(countSql)
+  const row = conditions.length
+    ? await countStmt.bind(...params).first<{ total: number }>()
+    : await countStmt.first<{ total: number }>()
+
+  return c.json({ payments: results, total: row?.total ?? 0, limit, offset })
+})
+
 // GET /api/route/exchanges — List supported exchanges (free)
 app.get('/api/route/exchanges', async (c) => {
   const [tradingFees, withdrawalFees] = await Promise.all([
@@ -12549,6 +12642,60 @@ export default {
       await env.DB.prepare(
         'INSERT INTO audit_logs (id, agent_id, action, resource, resource_id, detail, result) VALUES (?, ?, ?, ?, ?, ?, ?)'
       ).bind(crypto.randomUUID(), null, 'scheduled.snapshot_kimchi', 'kimchi_snapshots', null, `snapshots=${statements.length}`, 'success').run()
+    }
+
+    // 3. Uptime check
+    const uptimeUrl = 'https://crossfin.dev/api/health'
+    let uptimeStatus: 'up' | 'down' = 'down'
+    let httpStatus: number | null = null
+    let latencyMs: number | null = null
+    let uptimeError: string | null = null
+
+    const startMs = Date.now()
+    try {
+      const res = await fetch(uptimeUrl, { signal: AbortSignal.timeout(10_000) })
+      latencyMs = Date.now() - startMs
+      httpStatus = res.status
+      if (res.ok) {
+        const body = await res.json<{ status?: string }>().catch(() => null)
+        uptimeStatus = body?.status === 'ok' ? 'up' : 'down'
+        if (uptimeStatus === 'down') uptimeError = `unexpected body: status=${body?.status ?? 'missing'}`
+      } else {
+        uptimeError = `http_${res.status}`
+      }
+    } catch (err) {
+      latencyMs = Date.now() - startMs
+      uptimeError = err instanceof Error ? err.message : String(err)
+    }
+
+    await env.DB.prepare(
+      'INSERT INTO uptime_checks (id, status, http_status, latency_ms, error, created_at) VALUES (?, ?, ?, ?, ?, datetime(\'now\'))'
+    ).bind(crypto.randomUUID(), uptimeStatus, httpStatus, latencyMs, uptimeError).run()
+
+    // Alert on state transitions (up→down or down→up)
+    const botToken = (env.TELEGRAM_BOT_TOKEN ?? '').trim()
+    const adminChatId = (env.TELEGRAM_ADMIN_CHAT_ID ?? '').trim()
+    if (botToken && adminChatId) {
+      const prevCheck = await env.DB.prepare(
+        'SELECT status FROM uptime_checks ORDER BY created_at DESC LIMIT 1 OFFSET 1'
+      ).first<{ status: string }>()
+      const prevStatus = prevCheck?.status ?? 'up'
+
+      if (prevStatus !== uptimeStatus) {
+        if (uptimeStatus === 'down') {
+          await telegramSendMessage(
+            botToken,
+            adminChatId,
+            `🔴 CrossFin API is DOWN\nURL: ${uptimeUrl}\nError: ${uptimeError ?? 'unknown'}\nHTTP: ${httpStatus ?? 'N/A'}\nLatency: ${latencyMs ?? 'N/A'}ms`,
+          )
+        } else {
+          await telegramSendMessage(
+            botToken,
+            adminChatId,
+            `🟢 CrossFin API is back UP\nURL: ${uptimeUrl}\nHTTP: ${httpStatus}\nLatency: ${latencyMs}ms`,
+          )
+        }
+      }
     }
   },
 }
