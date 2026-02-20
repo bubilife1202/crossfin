@@ -237,13 +237,15 @@ export default function RouteGraph() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const width = 800
-    const height = 440
+    const width = canvas.clientWidth || 800
+    const height = Math.round(width * (440 / 800))
     const dpr = window.devicePixelRatio || 1
     canvas.width = width * dpr
     canvas.height = height * dpr
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.scale(dpr, dpr)
+
+    const scale = width / 800
 
     ctx.fillStyle = C.bg
     ctx.fillRect(0, 0, width, height)
@@ -251,9 +253,9 @@ export default function RouteGraph() {
     ctx.font = 'bold 11px sans-serif'
     ctx.textAlign = 'center'
     ctx.fillStyle = C.muted
-    ctx.fillText('From Exchange', 90, 28)
-    ctx.fillText('Bridge Coin', 390, 28)
-    ctx.fillText('To Exchange', 690, 28)
+    ctx.fillText('From Exchange', 90 * scale, 28 * scale)
+    ctx.fillText('Bridge Coin', 390 * scale, 28 * scale)
+    ctx.fillText('To Exchange', 690 * scale, 28 * scale)
 
     const nodeById = new Map(graph.nodes.map((n) => [n.id, n]))
 
@@ -262,10 +264,10 @@ export default function RouteGraph() {
       const n2 = nodeById.get(edge.to)
       if (!n1 || !n2) return
 
-      const x1 = n1.x + (n1.type === 'source' ? 55 : 34)
-      const y1 = n1.y + 18
-      const x2 = n2.x - (n2.type === 'dest' ? 55 : 34)
-      const y2 = n2.y + 18
+      const x1 = (n1.x + (n1.type === 'source' ? 55 : 34)) * scale
+      const y1 = (n1.y + 18) * scale
+      const x2 = (n2.x - (n2.type === 'dest' ? 55 : 34)) * scale
+      const y2 = (n2.y + 18) * scale
 
       ctx.beginPath()
       ctx.moveTo(x1, y1)
@@ -279,8 +281,10 @@ export default function RouteGraph() {
     })
 
     graph.nodes.forEach((node) => {
-      const w = node.type === 'coin' ? 68 : 110
-      const h = 36
+      const w = (node.type === 'coin' ? 68 : 110) * scale
+      const h = 36 * scale
+      const nx = node.x * scale
+      const ny = node.y * scale
       const isPathNode = (data?.optimal?.bridgeCoin?.toUpperCase() === node.id) ||
         node.id === graph.fromEx ||
         node.id === graph.toEx
@@ -291,14 +295,14 @@ export default function RouteGraph() {
       ctx.strokeStyle = isPathNode ? color : C.dim
       ctx.lineWidth = isPathNode ? 2 : 1
       ctx.beginPath()
-      ctx.roundRect(node.x - w / 2, node.y, w, h, 6)
+      ctx.roundRect(nx - w / 2, ny, w, h, 6)
       ctx.fill()
       ctx.stroke()
 
       ctx.font = isPathNode ? 'bold 12px sans-serif' : '11px sans-serif'
       ctx.textAlign = 'center'
       ctx.fillStyle = isPathNode ? color : C.white
-      ctx.fillText(node.label, node.x, node.y + 22)
+      ctx.fillText(node.label, nx, ny + 22 * scale)
     })
   }, [data, graph])
 
@@ -345,23 +349,35 @@ export default function RouteGraph() {
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
-        <select value={from} onChange={(e) => setFrom(e.target.value)}>
-          {ENDPOINT_OPTIONS.map((opt) => <option key={`from-${opt.value}`} value={opt.value}>{opt.label}</option>)}
-        </select>
-        <select value={to} onChange={(e) => setTo(e.target.value)}>
-          {ENDPOINT_OPTIONS.map((opt) => <option key={`to-${opt.value}`} value={opt.value}>{opt.label}</option>)}
-        </select>
-        <input value={amountInput} onChange={(e) => setAmountInput(e.target.value)} placeholder="amount" />
-        <select value={strategy} onChange={(e) => setStrategy(e.target.value as RoutingStrategy)}>
-          <option value="cheapest">cheapest</option>
-          <option value="fastest">fastest</option>
-          <option value="balanced">balanced</option>
-        </select>
+      <div className="rgControlsGrid">
+        <label>
+          <span className="srOnly">From Exchange</span>
+          <select value={from} onChange={(e) => setFrom(e.target.value)}>
+            {ENDPOINT_OPTIONS.map((opt) => <option key={`from-${opt.value}`} value={opt.value}>{opt.label}</option>)}
+          </select>
+        </label>
+        <label>
+          <span className="srOnly">To Exchange</span>
+          <select value={to} onChange={(e) => setTo(e.target.value)}>
+            {ENDPOINT_OPTIONS.map((opt) => <option key={`to-${opt.value}`} value={opt.value}>{opt.label}</option>)}
+          </select>
+        </label>
+        <label>
+          <span className="srOnly">Amount</span>
+          <input value={amountInput} onChange={(e) => setAmountInput(e.target.value)} placeholder="amount" />
+        </label>
+        <label>
+          <span className="srOnly">Strategy</span>
+          <select value={strategy} onChange={(e) => setStrategy(e.target.value as RoutingStrategy)}>
+            <option value="cheapest">cheapest</option>
+            <option value="fastest">fastest</option>
+            <option value="balanced">balanced</option>
+          </select>
+        </label>
       </div>
 
       {error && (
-        <div style={{
+        <div role="alert" style={{
           marginBottom: 10,
           padding: '8px 10px',
           background: '#2D1010',
@@ -374,9 +390,9 @@ export default function RouteGraph() {
         </div>
       )}
 
-      <canvas ref={canvasRef} style={{ width: 800, height: 440, borderRadius: 6 }} />
+      <canvas ref={canvasRef} style={{ width: '100%', maxWidth: 800, height: 'auto', aspectRatio: '800/440', borderRadius: 6 }} />
 
-      <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+      <div className="rgInfoGrid" style={{ marginTop: 12 }}>
         <div style={{ background: C.card, border: `1px solid ${C.dim}`, borderRadius: 6, padding: 12 }}>
           <div style={{ color: C.white, fontWeight: 700, marginBottom: 8 }}>Optimal</div>
           {isInitialLoading ? (
@@ -422,7 +438,7 @@ export default function RouteGraph() {
       <div style={{ marginTop: 10, background: C.card, border: `1px solid ${C.dim}`, borderRadius: 6, padding: 12 }}>
         <div style={{ color: C.white, fontWeight: 700, marginBottom: 8 }}>Real Exchange Fees (D1)</div>
         {hasData ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div className="rgInfoGrid">
             <div>
               <div style={{ color: C.gold, fontSize: 12, marginBottom: 6 }}>Trading Fees</div>
               {Object.entries(tradingFees).map(([exchange, fee]) => (

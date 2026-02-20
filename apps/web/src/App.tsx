@@ -386,6 +386,7 @@ function App() {
         </section>
 
         <section className="featuresShowcase">
+          <h2 className="srOnly">Key Features</h2>
           <div className="featuresGrid">
             <div className="featureCard">
               <div className="featureIcon">&#x21C4;</div>
@@ -549,11 +550,13 @@ function App() {
           </div>
         </section>
 
-        <div className="tabBar">
+        <div className="tabBar" role="tablist">
           {TAB_IDS.map((tab) => (
             <button
               key={tab}
               type="button"
+              role="tab"
+              aria-selected={activeTab === tab}
               className={`tabBtn ${activeTab === tab ? 'tabBtnActive' : ''}`}
               onClick={() => switchTab(tab)}
             >
@@ -583,7 +586,7 @@ function App() {
           </div>
 
           {analytics.status === 'loading' ? (
-            <div className="panelLoading">Loading analytics…</div>
+            <div className="panelLoading" aria-live="polite">Loading analytics…</div>
           ) : analytics.status === 'error' ? (
             <div className="activityEmpty">
               <div className="activityEmptyIcon">📊</div>
@@ -761,9 +764,9 @@ function App() {
           <div className="servicesLayout">
             <div className="servicesPanel">
               {services.status === 'loading' ? (
-                <div className="panelLoading">Loading services…</div>
+                <div className="panelLoading" aria-live="polite">Loading services…</div>
               ) : services.status === 'error' ? (
-                <div className="panelError">{services.message}</div>
+                <div className="panelError" role="alert">{services.message}</div>
               ) : (
                 <div className="servicesGrid">
                   {services.data.items.map((s) => (
