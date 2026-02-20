@@ -4,6 +4,7 @@
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
 }
 
 /* ═══ Header ═══ */
@@ -101,6 +102,7 @@
   width: min(1100px, 100%);
   margin: 0 auto;
   padding: 0 20px 80px;
+  min-width: 0;
 }
 
 /* ═══ Hero ═══ */
@@ -1709,23 +1711,17 @@
   }
 }
 
-@media (max-width: 480px) {
-  .hero {
-    padding: 48px 0 32px;
-  }
-
-  .hero h1 {
-    font-size: 2rem;
-  }
-
+@media (max-width: 640px) {
   .topbarInner {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
+    padding: 10px 16px;
   }
 
   .nav {
-    gap: 2px;
+    width: 100%;
+    gap: 0;
     overflow-x: auto;
     flex-wrap: nowrap;
     -webkit-overflow-scrolling: touch;
@@ -1735,8 +1731,67 @@
   .nav::-webkit-scrollbar { display: none; }
 
   .nav a {
-    padding: 10px 12px;
-    font-size: 0.85rem;
+    padding: 8px 10px;
+    font-size: 0.82rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .heroCompact {
+    padding: 24px 0 16px;
+  }
+
+  .heroCompact h1 {
+    font-size: 1.5rem;
+  }
+
+  .heroSub {
+    font-size: 0.95rem;
+  }
+
+  .heroCtas {
+    flex-direction: column;
+  }
+
+  .heroCtas .button {
+    width: 100%;
+    justify-content: center;
+    padding: 12px 16px;
+    font-size: 0.9rem;
+  }
+
+  .heroPills {
+    gap: 6px;
+  }
+
+  .pill {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+
+  .content {
+    padding: 0 14px 60px;
+  }
+
+  .footerTop {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .footerLinks {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero {
+    padding: 48px 0 32px;
+  }
+
+  .hero h1 {
+    font-size: 2rem;
   }
 
   .livePanel {
@@ -1745,12 +1800,6 @@
 
   .liveAvgValue {
     font-size: 2.2rem;
-  }
-
-  .footerTop {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
   }
 }
 
@@ -2551,20 +2600,31 @@
 
 @media (max-width: 640px) {
   .mcpLaunch {
-    padding: 16px;
+    padding: 14px;
+  }
+
+  .mcpLaunchHeader h2 {
+    font-size: 1.1rem;
   }
 
   .mcpLaunchCommandRow {
-    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
   }
 
   .mcpLaunchCommand {
+    grid-column: 1 / -1;
     min-width: 0;
     width: 100%;
+    font-size: 0.82rem;
   }
 
   .mcpLaunchCommandRow .miniButton {
-    width: 100%;
+    font-size: 0.78rem;
+    padding: 8px 10px;
+    text-align: center;
+    justify-content: center;
   }
 }
 
@@ -2622,12 +2682,16 @@
     width: 100%;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
   }
+
+  .tabBar::-webkit-scrollbar { display: none; }
 
   .tabBtn {
     padding: 8px 14px;
     font-size: 0.85rem;
     white-space: nowrap;
+    flex-shrink: 0;
   }
 }
 
@@ -2878,6 +2942,114 @@
 .registerStepContent p { margin: 0; }
 @media (max-width: 640px) {
   .registerStep { flex-direction: column; }
+}
+
+/* ═══ Developer Tab Mobile Fixes ═══ */
+
+@media (max-width: 768px) {
+  /* Step cards: reduce padding on smaller screens */
+  .stepCard {
+    padding: 16px;
+  }
+
+  /* Code blocks: ensure parent containers constrain width */
+  .stepCard .codeBlock,
+  .registerStepContent .codeBlock {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  /* Playground panel: reduce padding */
+  .pgPanel {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Get Started grid: ensure children don't overflow */
+  .getStartedGrid {
+    min-width: 0;
+  }
+
+  .getStartedGrid > * {
+    min-width: 0;
+  }
+
+  /* Step card wide: already handled (grid-column: auto),
+     but ensure the code tabs don't overflow */
+  .codeTabs {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .codeTabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .codeTabBtn {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+
+  /* Code block pre: constrain width within flex/grid children */
+  .codeBlockPre {
+    max-width: 100%;
+    min-width: 0;
+    font-size: 0.76rem;
+  }
+
+  .codeBlock {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  /* Playground panel: tighter layout */
+  .pgPanel {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .pgSelectWrap {
+    min-width: 0;
+  }
+
+  /* Register guide: ensure code blocks stay within bounds */
+  .registerGuide {
+    min-width: 0;
+  }
+
+  .registerStep {
+    min-width: 0;
+  }
+
+  .registerStepContent {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .registerStepContent .codeBlock {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .registerStepContent .codeBlockPre {
+    font-size: 0.74rem;
+    padding: 10px;
+  }
+
+  /* Step detail rows: wrap on small screens */
+  .stepDetailRow {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 8px 10px;
+  }
+
+  .stepDetailValue {
+    text-align: left;
+  }
 }
 
 /* ═══ Reduced Motion ═══ */
