@@ -9,8 +9,8 @@ const CROSSFIN_WALLET = "0xe4E79Ce6a1377C58f0Bb99D023908858A4DB5779";
 /* ─── Types ─── */
 
 interface Decision {
-  action: "EXECUTE" | "WAIT" | "SKIP";
-  confidence: number;
+  indicator: "FAVORABLE" | "NEUTRAL" | "UNFAVORABLE";
+  signalStrength: number;
   reason: string;
 }
 
@@ -25,7 +25,7 @@ interface ArbitrageRaw {
   demo: boolean;
   krwUsdRate?: number;
   avgPremiumPct: number;
-  executeCandidates?: number;
+  favorableCandidates?: number;
   marketCondition?: string;
   preview: ArbitragePair[];
   at: string;
@@ -34,7 +34,7 @@ interface ArbitrageRaw {
 interface ArbitrageData {
   average_premium: number;
   krwUsdRate?: number;
-  executeCandidates: number;
+  favorableCandidates: number;
   marketCondition: string;
   pairs: ArbitragePair[];
 }
@@ -324,7 +324,7 @@ export default function App() {
       setArb({
         average_premium: arbRaw.avgPremiumPct,
         krwUsdRate: arbRaw.krwUsdRate,
-        executeCandidates: arbRaw.executeCandidates ?? 0,
+        favorableCandidates: arbRaw.favorableCandidates ?? 0,
         marketCondition: arbRaw.marketCondition ?? "neutral",
         pairs: arbRaw.preview ?? [],
       });
@@ -616,7 +616,7 @@ export default function App() {
           </div>
           <p className="decisionSubtext">
             Compares Bithumb (Korea, KRW) vs Binance (Global, USD) prices for each coin.
-            When the price gap is wide enough to cover fees, it signals EXECUTE — otherwise WAIT or SKIP.
+            When the price gap is wide enough to cover fees, it signals FAVORABLE — otherwise NEUTRAL or UNFAVORABLE.
           </p>
           <div className="decisionGrid">
             {pairs.length === 0 && (
@@ -1034,9 +1034,9 @@ function MetricCard({
 function DecisionCard({ pair }: { pair: ArbitragePair }) {
   const d = pair.decision;
   const actionClass = d
-    ? d.action === "EXECUTE"
+    ? d.indicator === "FAVORABLE"
       ? "execute"
-      : d.action === "WAIT"
+      : d.indicator === "NEUTRAL"
         ? "wait"
         : "skip"
     : "skip";
@@ -1047,7 +1047,7 @@ function DecisionCard({ pair }: { pair: ArbitragePair }) {
       <div className="decisionCardTop">
         <span className="decisionCoin">{pair.coin}</span>
         <span className={`decisionActionBadge ${actionClass}`}>
-          {d?.action ?? "—"}
+          {d?.indicator ?? "—"}
         </span>
       </div>
       <div className="decisionPremium">
@@ -1062,11 +1062,11 @@ function DecisionCard({ pair }: { pair: ArbitragePair }) {
           <div className="confidenceBar">
             <div
               className={`confidenceFill ${actionClass}`}
-              style={{ width: `${Math.round(d.confidence * 100)}%` }}
+              style={{ width: `${Math.round(d.signalStrength * 100)}%` }}
             />
           </div>
           <span className="confidenceLabel">
-            {Math.round(d.confidence * 100)}% confidence
+            {Math.round(d.signalStrength * 100)}% signal strength
           </span>
           <span className="decisionReason">{clarifyDecisionReason(d.reason)}</span>
         </div>

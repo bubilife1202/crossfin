@@ -10066,6 +10066,7 @@ app.get('/api/routing/optimal', async (c) => {
       trading: tradingFees,
       withdrawal: withdrawalFees,
     },
+    _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
 })

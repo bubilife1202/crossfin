@@ -30,7 +30,7 @@ Returns all 9 exchanges with supported coins, online status, and fee schedules.
 curl https://crossfin.dev/api/arbitrage/demo
 ```
 
-Top 3 route spread pairs with EXECUTE/WAIT/SKIP decisions.
+Top 3 route spread pairs with FAVORABLE/NEUTRAL/UNFAVORABLE indicators.
 
 ## Step 4: Free ACP routing quote
 

@@ -116,7 +116,7 @@ All paid via x402 (USDC on Base). No API key needed.
 | Endpoint | Price | Description |
 |----------|-------|-------------|
 | `/api/premium/arbitrage/kimchi` | $0.05 | Full Route Spread (11 pairs incl. KAIA) |
-| `/api/premium/arbitrage/opportunities` | $0.10 | Arbitrage decisions (EXECUTE/WAIT/SKIP) |
+| `/api/premium/arbitrage/opportunities` | $0.10 | Arbitrage indicators (FAVORABLE/NEUTRAL/UNFAVORABLE) |
 | `/api/premium/bithumb/orderbook?pair=BTC` | $0.02 | Bithumb orderbook (30 levels) |
 | `/api/premium/market/upbit/ticker` | $0.02 | Upbit ticker |
 | `/api/premium/market/upbit/orderbook` | $0.02 | Upbit orderbook |

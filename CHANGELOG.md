@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.8.8] - 2026-02-20
+
+### Fixed
+- Corrected withdrawal fee constants: Bithumb BTC 0.0005→0.001, ETH 0.005→0.01, Coinone BTC 0.0005→0.0015, GoPax BTC 0.0005→0.002
+- BTC transfer time estimate 20→28 minutes, Upbit trading fee 0.25→0.05% (KRW market)
+- Slippage orderbook direction: buy-korea uses asks, sell-korea uses bids (was inverted)
+- Arbitrage engine now includes withdrawal fees in profit calculation
+- Added withdrawal suspension check to arbitrage opportunities endpoint
+- Deduplicated guardian cron logic to use real computeAction instead of hardcoded values
+- Volume risk score now feeds into decision engine (high-risk coins get 1.5x volatility penalty)
+
+### Changed
+- Signal terminology for legal compliance: EXECUTE→FAVORABLE, WAIT→NEUTRAL, SKIP→UNFAVORABLE
+- Response field names: action→indicator, confidence→signalStrength
+- Cross-exchange signals: ARBITRAGE→SPREAD_OPPORTUNITY, HOLD→NEUTRAL_SIGNAL, MONITOR→MONITORING
+- Added bilingual (EN/KR) disclaimer to all 44 analytical endpoint responses
+- Updated agent.json, ai-plugin.json, OpenAPI spec, docs/guide with new terminology
+
+### Added
+- Code split: extracted types.ts, constants.ts, lib/fetchers.ts, lib/engine.ts from monolith
+
+## [1.8.7] - 2026-02-20
+
+### Fixed
+- CORS: restored .dev domains and removed incorrect .xyz origins
+- Telegram typing indicator with waitUntil for Cloudflare Workers
+
+### Added
+- Admin webhook endpoints for Telegram bot management
+- Marketplace configs and examples for MCP registries
+
 ## [1.8.6] - 2026-02-19
 
 ### Changed
@@ -41,7 +72,7 @@
 ## [1.8.1] - 2026-02-18
 
 ### Added
-- **Routing Engine**: Complete crypto transfer routing across 7 exchanges (Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit)
+- **Routing Engine**: Complete crypto transfer routing across 9 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit)
   - `GET /api/premium/route/find` ($0.10) — optimal route with bridge coin comparison, slippage, fees
   - `GET /api/route/exchanges` — supported exchanges list (free)
   - `GET /api/route/fees` — fee comparison table (free)
