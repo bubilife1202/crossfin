@@ -22,6 +22,7 @@ Base URL: `https://crossfin.dev` — 9 exchanges: Bithumb, Upbit, Coinone, GoPax
   { method: 'GET', path: '/api/premium/arbitrage/kimchi', description: 'Full 11-pair route spread index', price: '$0.05' },
   { method: 'GET', path: '/api/premium/arbitrage/opportunities', description: 'Full arbitrage scan', price: '$0.10' },
   { method: 'GET', path: '/api/premium/arbitrage/kimchi/history', description: 'Route spread 7-day history', price: '$0.05' },
+  { method: 'GET', path: '/api/premium/market/cross-exchange', description: 'Cross-Exchange Decision', price: '$0.08' },
 ]" />
 
 ---
@@ -32,9 +33,15 @@ Base URL: `https://crossfin.dev` — 9 exchanges: Bithumb, Upbit, Coinone, GoPax
   { method: 'GET', path: '/api/premium/market/fx/usdkrw', description: 'USD/KRW rate', price: '$0.01' },
   { method: 'GET', path: '/api/premium/market/upbit/ticker', description: 'Upbit ticker', price: '$0.02' },
   { method: 'GET', path: '/api/premium/market/upbit/orderbook', description: 'Upbit orderbook', price: '$0.02' },
+  { method: 'GET', path: '/api/premium/market/upbit/signals', description: 'Upbit Signals', price: '$0.05' },
   { method: 'GET', path: '/api/premium/market/coinone/ticker', description: 'Coinone ticker', price: '$0.02' },
   { method: 'GET', path: '/api/premium/bithumb/orderbook', description: 'Bithumb orderbook', price: '$0.02' },
+  { method: 'GET', path: '/api/premium/bithumb/volume-analysis', description: 'Bithumb Volume Analysis', price: '$0.03' },
   { method: 'GET', path: '/api/premium/crypto/korea/5exchange', description: 'Cross-exchange prices', price: '$0.08' },
+  { method: 'GET', path: '/api/premium/crypto/korea/exchange-status', description: 'Korea Exchange Status', price: '$0.03' },
+  { method: 'GET', path: '/api/premium/crypto/korea/fx-rate', description: 'Korea FX Rate (CRIX)', price: '$0.01' },
+  { method: 'GET', path: '/api/premium/crypto/korea/upbit-candles?coin=BTC&type=days&count=30', description: 'Upbit Candles', price: '$0.02' },
+  { method: 'GET', path: '/api/premium/market/korea', description: 'Korea Market Sentiment', price: '$0.03' },
   { method: 'GET', path: '/api/premium/news/korea/headlines', description: 'Korean crypto news', price: '$0.03' },
 ]" />
 
@@ -44,14 +51,28 @@ Base URL: `https://crossfin.dev` — 9 exchanges: Bithumb, Upbit, Coinone, GoPax
 
 <ApiTable :endpoints="[
   { method: 'GET', path: '/api/premium/market/korea/indices', description: 'KOSPI & KOSDAQ', price: '$0.03' },
+  { method: 'GET', path: '/api/premium/market/korea/indices/history?index=KOSPI&days=20', description: 'Korea Indices History', price: '$0.05' },
+  { method: 'GET', path: '/api/premium/market/korea/index-flow?index=KOSPI', description: 'Korea Index Flow', price: '$0.03' },
   { method: 'GET', path: '/api/premium/market/korea/stocks/momentum', description: 'Top movers', price: '$0.05' },
+  { method: 'GET', path: '/api/premium/market/korea/stock-detail?stock=005930', description: 'Korea Stock Detail', price: '$0.05' },
+  { method: 'GET', path: '/api/premium/market/korea/stock-news?stock=005930', description: 'Korea Stock News', price: '$0.03' },
   { method: 'GET', path: '/api/premium/market/korea/investor-flow', description: 'Investor flow', price: '$0.05' },
+  { method: 'GET', path: '/api/premium/market/korea/themes', description: 'Korea Themes', price: '$0.05' },
+  { method: 'GET', path: '/api/premium/market/korea/disclosure?stock=005930', description: 'Korea Disclosure', price: '$0.03' },
   { method: 'GET', path: '/api/premium/market/korea/etf', description: '1,070+ ETFs', price: '$0.03' },
 ]" />
 
 ---
 
-## 5. Bundles
+## 5. Global Market Data
+
+<ApiTable :endpoints="[
+  { method: 'GET', path: '/api/premium/market/global/indices-chart?index=.DJI&period=month', description: 'Global Indices Chart', price: '$0.02' },
+]" />
+
+---
+
+## 6. Bundles
 
 <ApiTable :endpoints="[
   { method: 'GET', path: '/api/premium/morning/brief', description: 'Morning Brief', price: '$0.20' },
@@ -62,7 +83,7 @@ Base URL: `https://crossfin.dev` — 9 exchanges: Bithumb, Upbit, Coinone, GoPax
 
 ---
 
-## 6. ACP (Agent Commerce Protocol)
+## 7. ACP (Agent Commerce Protocol)
 
 <ApiTable :endpoints="[
   { method: 'GET', path: '/api/acp/status', description: 'ACP protocol status', price: 'Free' },
@@ -72,7 +93,7 @@ Base URL: `https://crossfin.dev` — 9 exchanges: Bithumb, Upbit, Coinone, GoPax
 
 ---
 
-## 7. Registry & Discovery
+## 8. Registry & Discovery
 
 <ApiTable :endpoints="[
   { method: 'GET', path: '/api/registry', description: 'All services', price: 'Free' },
@@ -86,7 +107,7 @@ Base URL: `https://crossfin.dev` — 9 exchanges: Bithumb, Upbit, Coinone, GoPax
 
 ---
 
-## 8. Utility Paid APIs
+## 9. Utility Paid APIs
 
 <ApiTable :endpoints="[
   { method: 'GET', path: '/api/premium/report', description: 'Premium report (agents/wallets/transactions summary)', price: '$0.001' },

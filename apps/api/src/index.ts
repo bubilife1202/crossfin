@@ -1367,6 +1367,156 @@ app.get('/.well-known/x402.json', (c) => {
   })
 })
 
+// === Google A2A Agent Card ===
+
+app.get('/.well-known/agent.json', (c) => {
+  const origin = new URL(c.req.url).origin
+  return c.json({
+    name: 'CrossFin',
+    url: origin,
+    version: CROSSFIN_API_VERSION,
+    description: 'Cross-border crypto routing engine for AI agents. Routes capital across 9 Korean and global exchanges with 11 bridge coins. Pay-per-request via x402 USDC micropayments.',
+    provider: {
+      organization: 'CrossFin',
+      url: 'https://crossfin.dev',
+    },
+    capabilities: {
+      streaming: false,
+      pushNotifications: false,
+      stateTransitionHistory: false,
+    },
+    skills: [
+      {
+        id: 'crypto-routing',
+        name: 'Cross-Exchange Crypto Routing',
+        description: 'Find the cheapest path to move crypto between Korean exchanges (Bithumb, Upbit, Coinone, GoPax) and global exchanges (Binance, OKX, Bybit) using 11 bridge coins.',
+        tags: ['crypto', 'routing', 'arbitrage', 'korea'],
+        examples: ['Find cheapest route from Bithumb KRW to Binance USDC for 5,000,000 KRW'],
+      },
+      {
+        id: 'route-spread',
+        name: 'Route Spread / Kimchi Premium Index',
+        description: 'Real-time price spread between Korean and global crypto exchanges for 11 pairs with EXECUTE/WAIT/SKIP decisions.',
+        tags: ['arbitrage', 'spread', 'kimchi-premium', 'signals'],
+        examples: ['What is the current kimchi premium?', 'Show route spread for BTC'],
+      },
+      {
+        id: 'korean-market-data',
+        name: 'Korean Market Data',
+        description: 'Korean stock market (KOSPI/KOSDAQ), 1070+ ETFs, investor flow, crypto exchange data, USD/KRW rate, and news headlines.',
+        tags: ['korea', 'stocks', 'crypto', 'market-data', 'fx'],
+        examples: ['Get KOSPI index', 'Show Korean crypto headlines', 'USD/KRW rate'],
+      },
+      {
+        id: 'agent-finance',
+        name: 'Agent Financial Management',
+        description: 'Local ledger for AI agents: create wallets, transfer funds, set daily budgets, track transactions.',
+        tags: ['wallet', 'budget', 'ledger', 'agent-finance'],
+        examples: ['Create a wallet for Agent A with 500,000 KRW', 'Set daily budget to 200,000 KRW'],
+      },
+    ],
+    securitySchemes: {
+      x402: {
+        type: 'http',
+        scheme: 'x402',
+        description: 'x402 USDC micropayment on Base mainnet. Free endpoints work without payment.',
+      },
+      apiKey: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'X-Agent-Key',
+        description: 'Agent API key for authenticated endpoints (registration, deposits, guardian).',
+      },
+    },
+    defaultInputModes: ['application/json'],
+    defaultOutputModes: ['application/json'],
+    interfaces: {
+      openapi: `${origin}/api/openapi.json`,
+      mcp: {
+        package: 'crossfin-mcp',
+        install: 'npx -y crossfin-mcp',
+      },
+      guide: `${origin}/api/docs/guide`,
+    },
+  })
+})
+
+// === OpenAI Plugin Manifest ===
+
+app.get('/.well-known/ai-plugin.json', (c) => {
+  const origin = new URL(c.req.url).origin
+  return c.json({
+    schema_version: 'v1',
+    name_for_human: 'CrossFin',
+    name_for_model: 'crossfin',
+    description_for_human: 'Korean and global crypto exchange routing, arbitrage signals, and market data for AI agents.',
+    description_for_model: 'CrossFin provides: (1) optimal crypto routing across 9 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit) with 11 bridge coins, (2) real-time route spread (kimchi premium) index with EXECUTE/WAIT/SKIP signals, (3) Korean market data including KOSPI/KOSDAQ, ETFs, investor flow, and crypto prices, (4) USD/KRW exchange rates. Free endpoints available. Paid endpoints use x402 USDC micropayments on Base.',
+    auth: { type: 'none' },
+    api: {
+      type: 'openapi',
+      url: `${origin}/api/openapi.json`,
+    },
+    logo_url: 'https://crossfin.dev/logos/crossfin.png',
+    contact_email: 'hello@crossfin.dev',
+    legal_info_url: 'https://crossfin.dev',
+  })
+})
+
+// === LLMs.txt ===
+
+app.get('/llms.txt', (c) => {
+  const origin = new URL(c.req.url).origin
+  const text = `# CrossFin
+
+> Cross-border crypto routing engine for AI agents. Routes capital across 9 Korean and global exchanges with x402 USDC micropayments.
+
+## Docs
+
+- [Agent Guide](${origin}/api/docs/guide): Complete onboarding guide for AI agents
+- [API Reference](https://docs.crossfin.dev/api): Full endpoint documentation
+- [OpenAPI Spec](${origin}/api/openapi.json): Machine-readable API specification
+- [MCP Server](https://www.npmjs.com/package/crossfin-mcp): 16 tools for any MCP client
+
+## Free Endpoints
+
+- [Route Spread Demo](${origin}/api/arbitrage/demo): Top 3 Korean-vs-global price spreads
+- [Exchange List](${origin}/api/route/exchanges): 9 supported exchanges and coins
+- [Fee Table](${origin}/api/route/fees): Trading and withdrawal fees
+- [Exchange Prices](${origin}/api/route/pairs): Live bridge coin prices
+- [Exchange Status](${origin}/api/route/status): Network health
+- [Optimal Route](${origin}/api/routing/optimal): Free routing graph data
+- [Service Registry](${origin}/api/registry): 184+ discoverable services
+- [ACP Quote](${origin}/api/acp/quote): Free routing quote (POST)
+
+## Paid Endpoints (x402 USDC on Base)
+
+- Optimal Route Finding: $0.10
+- Route Spread Index (11 pairs): $0.05
+- Arbitrage Opportunities: $0.10
+- Bithumb/Upbit/Coinone Orderbooks: $0.02
+- USD/KRW Rate: $0.01
+- KOSPI/KOSDAQ Indices: $0.03
+- Morning Brief Bundle: $0.20
+- Crypto Snapshot Bundle: $0.15
+
+## Discovery
+
+- [\`.well-known/crossfin.json\`](${origin}/.well-known/crossfin.json): CrossFin discovery
+- [\`.well-known/x402.json\`](${origin}/.well-known/x402.json): Payment discovery
+- [\`.well-known/agent.json\`](${origin}/.well-known/agent.json): A2A Agent Card
+- [\`.well-known/ai-plugin.json\`](${origin}/.well-known/ai-plugin.json): OpenAI plugin manifest
+
+## Quick Start
+
+1. Check health: GET ${origin}/api/health
+2. See exchanges: GET ${origin}/api/route/exchanges
+3. Get spread: GET ${origin}/api/arbitrage/demo
+4. Find route: GET ${origin}/api/routing/optimal?from=bithumb:KRW&to=binance:USDC&amount=5000000
+5. Install MCP: npx -y crossfin-mcp
+`
+  return c.text(text)
+})
+
 // === OpenAPI Spec ===
 
 app.get('/api/openapi.json', (c) => {
