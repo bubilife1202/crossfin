@@ -1088,7 +1088,7 @@ app.get('/api/docs/guide', (c) => {
       overview: 'CrossFin Routing Engine finds the cheapest, fastest, or balanced crypto transfer route across 9 exchanges. It compares 11 bridge coins, models trading fees, withdrawal fees, slippage, and transfer times.',
       supportedExchanges: [
         { id: 'bithumb', country: 'South Korea', tradingFee: '0.25%', note: 'Lowest withdrawal fee policy' },
-        { id: 'upbit', country: 'South Korea', tradingFee: '0.25%', note: 'Largest Korean exchange by volume' },
+        { id: 'upbit', country: 'South Korea', tradingFee: '0.05%', note: 'Largest Korean exchange by volume (KRW market)' },
         { id: 'coinone', country: 'South Korea', tradingFee: '0.20%', note: 'Supports KAIA' },
         { id: 'gopax', country: 'South Korea', tradingFee: '0.20%', note: 'Supports KAIA, no DOT' },
         { id: 'binance', country: 'Global', tradingFee: '0.10%', note: 'Global exchange, trades in USDT/USDC' },
