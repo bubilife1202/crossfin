@@ -1,0 +1,30 @@
+# Smithery marketplace configuration for CrossFin MCP server
+# https://smithery.ai
+
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      evmPrivateKey:
+        type: string
+        title: EVM Private Key
+        description: Base wallet private key for x402 USDC payments (only needed for paid tools)
+      apiUrl:
+        type: string
+        title: API URL
+        description: "API base URL (default: https://crossfin.dev)"
+      ledgerPath:
+        type: string
+        title: Ledger Path
+        description: "Local ledger file path (default: ~/.crossfin/ledger.json)"
+  commandFunction: |-
+    (config) => ({
+      command: 'npx',
+      args: ['-y', 'crossfin-mcp@1.8.8'],
+      env: Object.assign({},
+        config.evmPrivateKey ? { EVM_PRIVATE_KEY: config.evmPrivateKey } : {},
+        config.apiUrl ? { CROSSFIN_API_URL: config.apiUrl } : {},
+        config.ledgerPath ? { CROSSFIN_LEDGER_PATH: config.ledgerPath } : {}
+      )
+    })

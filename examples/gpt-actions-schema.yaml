@@ -1,0 +1,417 @@
+openapi: "3.1.0"
+info:
+  title: CrossFin - Korean Crypto Market Tools
+  version: "1.8.8"
+  description: >
+    Free endpoints for Korean crypto market data, exchange comparison,
+    and service discovery. For use as OpenAI GPT Actions.
+  contact:
+    url: https://crossfin.dev
+
+servers:
+  - url: https://crossfin.dev
+    description: Production
+
+paths:
+  /api/health:
+    get:
+      operationId: healthCheck
+      summary: Health check
+      description: Check if the CrossFin API is online.
+      responses:
+        "200":
+          description: API status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  version:
+                    type: string
+                  status:
+                    type: string
+
+  /api/arbitrage/demo:
+    get:
+      operationId: getRouteSpreadPreview
+      summary: Route Spread (kimchi premium) preview - top 3 pairs
+      description: >
+        Free preview of the route spread index. Shows top 3 crypto pairs
+        by premium percentage between Korean (Bithumb) and global (Binance)
+        exchanges. Includes action signal (EXECUTE/WAIT/SKIP) and market condition.
+      responses:
+        "200":
+          description: Route spread preview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  demo:
+                    type: boolean
+                  pairsShown:
+                    type: integer
+                  totalPairsAvailable:
+                    type: integer
+                  krwUsdRate:
+                    type: number
+                  preview:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        coin:
+                          type: string
+                        premiumPct:
+                          type: number
+                        direction:
+                          type: string
+                        decision:
+                          type: object
+                          properties:
+                            action:
+                              type: string
+                            confidence:
+                              type: number
+                            reason:
+                              type: string
+                  avgPremiumPct:
+                    type: number
+                  marketCondition:
+                    type: string
+                  at:
+                    type: string
+                    format: date-time
+
+  /api/route/fees:
+    get:
+      operationId: getExchangeFees
+      summary: Exchange fee comparison table
+      description: >
+        Trading fees, withdrawal fees, and transfer times for all 9 supported
+        exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance,
+        OKX, Bybit). Optionally filter by coin.
+      parameters:
+        - name: coin
+          in: query
+          description: "Filter by coin symbol (e.g. BTC, XRP, KAIA). Omit for all coins."
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Fee comparison data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service:
+                    type: string
+                  coin:
+                    type: string
+                  fees:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        exchange:
+                          type: string
+                        tradingFeePct:
+                          type: number
+                        withdrawalFees:
+                          type: object
+                        transferTimes:
+                          type: object
+                  at:
+                    type: string
+                    format: date-time
+
+  /api/route/pairs:
+    get:
+      operationId: getExchangePrices
+      summary: Live exchange price comparison (Bithumb KRW vs Binance USD)
+      description: >
+        Compare live prices between Bithumb (Korean exchange, KRW) and
+        Binance (global, USD) for all tracked coins. Shows which coins
+        support cross-exchange bridging and estimated transfer times.
+      parameters:
+        - name: coin
+          in: query
+          description: "Filter by coin (e.g. BTC, ETH, XRP). Omit for all."
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Price comparison data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service:
+                    type: string
+                  coin:
+                    type: string
+                  krwUsdRate:
+                    type: number
+                  pairs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        coin:
+                          type: string
+                        bithumbKrw:
+                          type: number
+                          nullable: true
+                        binanceUsd:
+                          type: number
+                          nullable: true
+                        transferTimeMin:
+                          type: number
+                        bridgeSupported:
+                          type: boolean
+                  at:
+                    type: string
+                    format: date-time
+
+  /api/route/exchanges:
+    get:
+      operationId: getExchanges
+      summary: List supported exchanges
+      description: >
+        All 9 supported exchanges with country, trading fee, supported coins,
+        and type (korean/regional/global).
+      responses:
+        "200":
+          description: Exchange list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service:
+                    type: string
+                  exchanges:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        country:
+                          type: string
+                        tradingFeePct:
+                          type: number
+                        supportedCoins:
+                          type: array
+                          items:
+                            type: string
+                        type:
+                          type: string
+                          enum: [korean, regional, global]
+                  at:
+                    type: string
+                    format: date-time
+
+  /api/route/status:
+    get:
+      operationId: getExchangeStatus
+      summary: Exchange API health check
+      description: >
+        Real-time health check for all 9 exchange APIs. Shows online/offline
+        status per exchange and overall system health.
+      responses:
+        "200":
+          description: Exchange health status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service:
+                    type: string
+                  healthy:
+                    type: boolean
+                  exchanges:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        exchange:
+                          type: string
+                        status:
+                          type: string
+                          enum: [online, offline]
+                  at:
+                    type: string
+                    format: date-time
+
+  /api/registry:
+    get:
+      operationId: listServices
+      summary: List services from the CrossFin registry
+      description: >
+        Browse all available x402 paid services. Filter by category.
+        Returns service ID, name, description, price, and endpoint.
+      parameters:
+        - name: category
+          in: query
+          description: "Category filter (e.g. crypto-arbitrage, exchange-data, korean-stocks)"
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: "Max results (1-100, default 20)"
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: Service list
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/registry/search:
+    get:
+      operationId: searchServices
+      summary: Search services by keyword
+      description: >
+        Search the CrossFin service registry by keyword. Matches against
+        service name, description, and tags.
+      parameters:
+        - name: q
+          in: query
+          description: "Search keyword (e.g. arbitrage, orderbook, korea)"
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/registry/categories:
+    get:
+      operationId: listCategories
+      summary: List service categories with counts
+      description: >
+        All service categories in the CrossFin registry with the number
+        of services in each category.
+      responses:
+        "200":
+          description: Category list
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/registry/{id}:
+    get:
+      operationId: getServiceDetail
+      summary: Get service details by ID
+      description: >
+        Full details for a specific service including endpoint URL,
+        price, input schema, output example, and usage guide.
+      parameters:
+        - name: id
+          in: path
+          description: "Service ID (e.g. crossfin_kimchi_premium)"
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Service details
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/analytics/overview:
+    get:
+      operationId: getAnalytics
+      summary: Gateway usage analytics
+      description: >
+        CrossFin gateway analytics — total API calls, top services
+        by usage, and recent activity timeline.
+      responses:
+        "200":
+          description: Analytics overview
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/docs/guide:
+    get:
+      operationId: getAgentGuide
+      summary: CrossFin agent onboarding guide
+      description: >
+        Complete structured guide for AI agents. Covers service discovery,
+        pricing, x402 payment flow, routing engine, supported exchanges,
+        bridge coins, and code examples.
+      responses:
+        "200":
+          description: Agent guide (JSON)
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/routing/optimal:
+    get:
+      operationId: getOptimalRoute
+      summary: Free live routing (RouteGraph)
+      description: >
+        Free live optimal routing endpoint. Uses real orderbook data and
+        the D1 fee table to find the best cross-exchange transfer route.
+        Returns optimal route plus alternatives.
+      parameters:
+        - name: from
+          in: query
+          description: "Source in exchange:currency format (e.g. bithumb:KRW)"
+          required: true
+          schema:
+            type: string
+        - name: to
+          in: query
+          description: "Destination in exchange:currency format (e.g. binance:USDC)"
+          required: true
+          schema:
+            type: string
+        - name: amount
+          in: query
+          description: "Amount in source currency (e.g. 1000000 for 1M KRW)"
+          required: true
+          schema:
+            type: number
+        - name: strategy
+          in: query
+          description: "Routing strategy"
+          required: false
+          schema:
+            type: string
+            enum: [cheapest, fastest, balanced]
+            default: cheapest
+      responses:
+        "200":
+          description: Optimal route with alternatives
+          content:
+            application/json:
+              schema:
+                type: object
