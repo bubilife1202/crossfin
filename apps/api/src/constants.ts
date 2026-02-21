@@ -8,6 +8,19 @@ export const CROSSFIN_DISCLAIMER =
   '데이터의 정확성, 완전성, 시의성은 보증되지 않습니다. 모든 거래 결정은 이용자의 ' +
   '책임이며, CrossFin은 본 데이터 사용으로 인한 어떠한 손해에도 책임을 지지 않습니다.'
 
+export const CROSSFIN_DISCLAIMER_URL = 'https://crossfin.dev/legal/disclaimer'
+export const CROSSFIN_TOS_URL = 'https://crossfin.dev/legal/terms'
+export const CROSSFIN_PRIVACY_URL = 'https://crossfin.dev/legal/privacy'
+
+export const CROSSFIN_LEGAL = {
+  disclaimer: CROSSFIN_DISCLAIMER,
+  disclaimerUrl: CROSSFIN_DISCLAIMER_URL,
+  tosUrl: CROSSFIN_TOS_URL,
+  privacyUrl: CROSSFIN_PRIVACY_URL,
+  dataProvision: 'AS_IS' as const,
+  notInvestmentAdvice: true,
+}
+
 export const TRACKED_PAIRS: Record<string, string> = {
   BTC: 'BTCUSDT', ETH: 'ETHUSDT', XRP: 'XRPUSDT',
   SOL: 'SOLUSDT', DOGE: 'DOGEUSDT', ADA: 'ADAUSDT',

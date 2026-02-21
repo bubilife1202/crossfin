@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.10.0] - 2026-02-22
+
+### Added
+- Legal endpoints: `/legal/terms`, `/legal/disclaimer`, `/legal/privacy` with bilingual (EN/KO) content
+- `_legal` block auto-injected into all JSON API responses (disclaimerUrl, tosUrl, privacyUrl, dataProvision, notInvestmentAdvice)
+- `CROSSFIN_LEGAL`, `CROSSFIN_DISCLAIMER_URL`, `CROSSFIN_TOS_URL`, `CROSSFIN_PRIVACY_URL` constants
+- Premium upsell CTA in free routing endpoint response
+
+### Changed
+- **BREAKING**: Indicator values renamed for regulatory neutrality:
+  - `FAVORABLE` → `POSITIVE_SPREAD`
+  - `UNFAVORABLE` → `NEGATIVE_SPREAD`
+  - `marketCondition` values: `favorable`→`positive`, `unfavorable`→`negative`
+  - `favorableCandidates` field → `positiveSpreadCount`
+- **BREAKING**: Free `/api/routing/optimal` now returns preview only (no alternatives, no fee tables, no detailed meta)
+- Reason text in arbitrage indicators neutralized (removed "strong margin", "monitor for entry" language)
+- Error responses now include `_disclaimer` and `_legal` fields
+- Enhanced global disclaimer middleware to inject `_legal` block alongside `_disclaimer`
+
 ## [1.9.0] - 2026-02-22
 
 ### Added

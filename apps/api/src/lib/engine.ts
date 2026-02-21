@@ -90,7 +90,7 @@ export function computeAction(
   slippageEstimatePct: number,
   transferTimeMin: number,
   volatilityPct: number,
-): { indicator: 'FAVORABLE' | 'NEUTRAL' | 'UNFAVORABLE'; signalStrength: number; reason: string; caveat: string } {
+): { indicator: 'POSITIVE_SPREAD' | 'NEUTRAL' | 'NEGATIVE_SPREAD'; signalStrength: number; reason: string; caveat: string } {
   const caveat = 'This is a market data observation, not a trading recommendation. Actual execution results may differ significantly, especially in low-liquidity markets.'
   const adjustedProfit = netProfitPct - slippageEstimatePct
   const premiumRisk = volatilityPct * Math.sqrt(transferTimeMin / 60)
@@ -99,9 +99,9 @@ export function computeAction(
   if (score > 1.0) {
     const signalStrength = Math.min(0.95, 0.8 + (score - 1.0) * 0.05)
     return {
-      indicator: 'FAVORABLE',
+      indicator: 'POSITIVE_SPREAD',
       signalStrength: Math.round(signalStrength * 100) / 100,
-      reason: `Adjusted profit ${round2(adjustedProfit)}% exceeds risk ${round2(premiumRisk)}% with strong margin`,
+      reason: `Spread of ${round2(adjustedProfit)}% observed after estimated costs. Historical volatility risk: ${round2(premiumRisk)}%.`,
       caveat,
     }
   } else if (score > 0) {
@@ -109,15 +109,15 @@ export function computeAction(
     return {
       indicator: 'NEUTRAL',
       signalStrength: Math.round(signalStrength * 100) / 100,
-      reason: `Marginal profit ${round2(adjustedProfit)}% after risk ${round2(premiumRisk)}% — monitor for better entry`,
+      reason: `Marginal spread of ${round2(adjustedProfit)}% after estimated risk ${round2(premiumRisk)}%.`,
       caveat,
     }
   } else {
     const signalStrength = Math.max(0.1, 0.5 + score * 0.2)
     return {
-      indicator: 'UNFAVORABLE',
+      indicator: 'NEGATIVE_SPREAD',
       signalStrength: Math.round(signalStrength * 100) / 100,
-      reason: `Negative expected return: adjusted profit ${round2(adjustedProfit)}% minus risk ${round2(premiumRisk)}%`,
+      reason: `Negative spread observed: ${round2(adjustedProfit)}% after estimated risk ${round2(premiumRisk)}%.`,
       caveat,
     }
   }
@@ -127,7 +127,7 @@ export function computeRouteAction(
   totalCostPct: number,
   slippageEstimatePct: number,
   transferTimeMin: number,
-): { indicator: 'FAVORABLE' | 'NEUTRAL' | 'UNFAVORABLE'; signalStrength: number; reason: string; caveat: string } {
+): { indicator: 'POSITIVE_SPREAD' | 'NEUTRAL' | 'NEGATIVE_SPREAD'; signalStrength: number; reason: string; caveat: string } {
   const caveat = 'Slippage estimates are approximations. Actual slippage may be significantly higher, especially for large trades or illiquid pairs.'
   const slippagePenalty = Math.max(0, slippageEstimatePct) * 0.4
   const timePenalty = Math.max(0, transferTimeMin - 2) * 0.07
@@ -136,9 +136,9 @@ export function computeRouteAction(
   if (score < 1.4) {
     const signalStrength = Math.max(0.58, Math.min(0.95, 0.91 - score * 0.1))
     return {
-      indicator: 'FAVORABLE',
+      indicator: 'POSITIVE_SPREAD',
       signalStrength: Math.round(signalStrength * 100) / 100,
-      reason: `Low projected routing cost ${round2(totalCostPct)}% with manageable transfer risk`,
+      reason: `Projected routing cost ${round2(totalCostPct)}% observed for current conditions.`,
       caveat,
     }
   }
@@ -148,16 +148,16 @@ export function computeRouteAction(
     return {
       indicator: 'NEUTRAL',
       signalStrength: Math.round(signalStrength * 100) / 100,
-      reason: `Moderate routing cost ${round2(totalCostPct)}% — monitor liquidity before execution`,
+      reason: `Moderate routing cost ${round2(totalCostPct)}% observed. Liquidity conditions may vary.`,
       caveat,
     }
   }
 
   const signalStrength = Math.max(0.62, Math.min(0.97, 0.64 + (score - 3.2) * 0.08))
   return {
-    indicator: 'UNFAVORABLE',
+    indicator: 'NEGATIVE_SPREAD',
     signalStrength: Math.round(signalStrength * 100) / 100,
-    reason: `High projected routing cost ${round2(totalCostPct)}% for current market conditions`,
+      reason: `High projected routing cost ${round2(totalCostPct)}% observed for current conditions.`,
     caveat,
   }
 }
