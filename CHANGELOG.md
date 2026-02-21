@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.8.9] - 2026-02-21
+
+### Changed
+- Fix MCP server `get_service` example service ID
+- Add `.env` protection to `.gitignore`
+- Update Coinone API to v2
+- Mount A2A and status routes
+- Fix A2A dispatching to free endpoints
+- Fix duplicate migration numbering
+- Clean up unused TypeScript imports
+- Update docs: MCP tool count, service IDs, terminology
+- Sync dates and version numbers across configs
+- Add SDK package (packages/sdk) with ESM support
+- Bump MCP server to 1.8.9
+
 ## [1.8.8] - 2026-02-20
 
 ### Fixed
