@@ -51,10 +51,6 @@ type RoutingResponse = {
   optimal: Route | null
   alternatives: Route[]
   meta: RouteMeta
-  fees: {
-    trading: Record<string, number>
-    withdrawal: Record<string, Record<string, number>>
-  }
   at: string
 }
 
@@ -143,16 +139,6 @@ function sumStepFees(steps: RouteStep[], type: RouteStep['type']): number {
 function parseExchange(endpoint: string): string {
   const [exchange] = endpoint.split(':')
   return (exchange ?? '').toLowerCase()
-}
-
-function formatTradingFeePercent(fee: number): string {
-  if (!Number.isFinite(fee)) return 'N/A'
-  return `${fee.toFixed(2)}%`
-}
-
-function formatWithdrawalFee(value: number | undefined, coin: string | null): string {
-  if (!coin || !Number.isFinite(value)) return 'N/A'
-  return `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 6 })} ${coin}`
 }
 
 function formatSignedPpt(value: number): string {
@@ -605,9 +591,7 @@ export default function RouteGraph() {
     return { nodes, edges: Array.from(byKey.values()), fromEx, toEx }
   }, [data, optimal, alternatives])
 
-  const tradingFees = data?.fees.trading ?? {}
   const optimalCoin = optimal?.bridgeCoin?.toUpperCase() ?? null
-  const withdrawalByExchange = data?.fees.withdrawal ?? {}
   const requestFrom = data?.request.from ?? INITIAL_SCENARIO.from
   const requestTo = data?.request.to ?? INITIAL_SCENARIO.to
   const fromCurrency = requestFrom.split(':')[1] ?? ''
@@ -920,24 +904,24 @@ export default function RouteGraph() {
         <div className="rg-card" style={{ borderLeft: '3px solid var(--cyan)' }}>
           <div className="rg-lbl">Data Freshness</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {([
-              ['Routes evaluated', String(data?.meta.routesEvaluated ?? 0)],
-              ['Price source', data?.meta.priceAge?.globalPrices?.source ?? 'n/a'],
-              ['Price age', (() => {
-                const ageMs = data?.meta.priceAge?.globalPrices?.ageMs;
-                if (ageMs == null) return 'n/a';
-                if (ageMs < 1000) return 'just now';
-                if (ageMs < 60_000) return `${Math.round(ageMs / 1000)}s ago`;
-                return `${Math.round(ageMs / 60_000)}m ago`;
-              })()],
-              ['Data status', (() => {
-                const status = data?.meta.dataFreshness;
-                if (status === 'live') return 'Live';
-                if (status === 'cached') return 'Cached';
-                if (status === 'stale') return 'Stale';
-                return 'n/a';
-              })()],
-            ] as const).map(([label, value]) => (
+             {([
+               ['Routes evaluated', String(data?.meta?.routesEvaluated ?? 0)],
+               ['Price source', data?.meta?.priceAge?.globalPrices?.source ?? 'n/a'],
+               ['Price age', (() => {
+                 const ageMs = data?.meta?.priceAge?.globalPrices?.ageMs;
+                 if (ageMs == null) return 'n/a';
+                 if (ageMs < 1000) return 'just now';
+                 if (ageMs < 60_000) return `${Math.round(ageMs / 1000)}s ago`;
+                 return `${Math.round(ageMs / 60_000)}m ago`;
+               })()],
+               ['Data status', (() => {
+                 const status = data?.meta?.dataFreshness;
+                 if (status === 'live') return 'Live';
+                 if (status === 'cached') return 'Cached';
+                 if (status === 'stale') return 'Stale';
+                 return 'n/a';
+               })()],
+             ] as const).map(([label, value]) => (
               <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: 'var(--muted)', fontSize: '0.86rem' }}>{label}</span>
                 <span style={{ color: 'var(--ink)', fontSize: '0.86rem', fontFamily: 'var(--mono)', fontWeight: 600 }}>{value}</span>
@@ -949,29 +933,8 @@ export default function RouteGraph() {
         {/* Exchange Fees */}
         <div className="rg-card rg-full">
           <div className="rg-lbl">Exchange Fees</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div>
-              <div style={{ fontSize: '0.76rem', fontWeight: 650, color: 'var(--amber)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Trading</div>
-              {Object.entries(tradingFees).map(([exchange, fee]) => (
-                <div key={`tf-${exchange}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.88rem' }}>
-                  <span style={{ color: 'var(--muted)' }}>{formatExchange(exchange)}</span>
-                  <span style={{ color: 'var(--ink)', fontFamily: 'var(--mono)', fontWeight: 600 }}>{formatTradingFeePercent(fee)}</span>
-                </div>
-              ))}
-            </div>
-            <div>
-              <div style={{ fontSize: '0.76rem', fontWeight: 650, color: 'var(--amber)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Withdrawal{optimalCoin ? ` (${optimalCoin})` : ''}
-              </div>
-              {Object.entries(withdrawalByExchange).map(([exchange, byCoin]) => (
-                <div key={`wd-${exchange}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.88rem' }}>
-                  <span style={{ color: 'var(--muted)' }}>{formatExchange(exchange)}</span>
-                  <span style={{ color: 'var(--ink)', fontFamily: 'var(--mono)', fontWeight: 600 }}>
-                    {formatWithdrawalFee(byCoin[optimalCoin ?? ''], optimalCoin)}
-                  </span>
-                </div>
-              ))}
-            </div>
+          <div style={{ fontSize: '0.88rem', color: 'var(--muted)' }}>
+            View fees in the Fee Comparison table below
           </div>
         </div>
 
@@ -1001,7 +964,7 @@ export default function RouteGraph() {
       </div>
 
       {/* ── Footer ───────────────────────────────── */}
-      {data && (
+      {data && data.meta && (
         <div className="rg-foot">
           {data.meta.routesEvaluated} routes / {data.meta.bridgeCoinsTotal} coins evaluated
         </div>
