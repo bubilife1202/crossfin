@@ -326,25 +326,39 @@ export default function RouteGraph() {
       return
     }
 
-    try {
-      const params = new URLSearchParams({ from: scenario.from, to: scenario.to, amount: String(amount), strategy: strat })
-      const res = await fetch(`${API_BASE}/api/routing/optimal?${params.toString()}`)
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`routing_fetch_failed:${res.status} ${text.slice(0, 120)}`)
-      }
-      const json = await res.json() as RoutingResponse
+    const params = new URLSearchParams({ from: scenario.from, to: scenario.to, amount: String(amount), strategy: strat })
+    const url = `${API_BASE}/api/routing/optimal?${params.toString()}`
+
+    for (let attempt = 0; attempt < 3; attempt++) {
       if (requestSeq !== requestSeqRef.current) return
-      setData(json)
-      setDataVersion((v) => v + 1)
-    } catch (e) {
-      if (requestSeq !== requestSeqRef.current) return
-      setError(e instanceof Error ? e.message : 'Failed to fetch route data')
-      setData(null)
-    } finally {
-      if (requestSeq === requestSeqRef.current) {
+      try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 12_000)
+        const res = await fetch(url, { signal: controller.signal })
+        clearTimeout(timeout)
+        if (!res.ok) {
+          const text = await res.text()
+          throw new Error(`routing_fetch_failed:${res.status} ${text.slice(0, 120)}`)
+        }
+        const json = await res.json() as RoutingResponse
+        if (requestSeq !== requestSeqRef.current) return
+        setData(json)
+        setDataVersion((v) => v + 1)
+        setError(null)
         setLoading(false)
+        return
+      } catch (e) {
+        if (requestSeq !== requestSeqRef.current) return
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
+          continue
+        }
+        setError(e instanceof Error ? e.message : 'Failed to fetch route data')
+        setData(null)
       }
+    }
+    if (requestSeq === requestSeqRef.current) {
+      setLoading(false)
     }
   }, [])
 

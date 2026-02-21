@@ -248,9 +248,25 @@ function formatExchangeLabel(ex: string): string {
 
 /* ─── Fetch helpers ─── */
 
+async function fetchWithRetry(url: string, retries = 2): Promise<Response> {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10_000);
+      const r = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeout);
+      return r;
+    } catch (e) {
+      if (i === retries) throw e;
+      await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+    }
+  }
+  throw new Error("fetch failed");
+}
+
 async function fetchJson<T>(url: string): Promise<T | null> {
   try {
-    const r = await fetch(url);
+    const r = await fetchWithRetry(url);
     if (!r.ok) return null;
     return (await r.json()) as T;
   } catch {
@@ -260,7 +276,7 @@ async function fetchJson<T>(url: string): Promise<T | null> {
 
 async function fetchOnChainTxs(): Promise<OnChainTx[]> {
   try {
-    const r = await fetch(`${API}/api/onchain/usdc-transfers?limit=10`);
+    const r = await fetchWithRetry(`${API}/api/onchain/usdc-transfers?limit=10`);
     if (!r.ok) return [];
     const data = (await r.json()) as { transfers?: OnChainTx[] };
     if (!data || !Array.isArray(data.transfers)) return [];
