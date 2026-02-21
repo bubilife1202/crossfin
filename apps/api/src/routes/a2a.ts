@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import type { Env } from '../types'
+import { fetchWithTimeout } from '../lib/fetchers'
 
 // ---------------------------------------------------------------------------
 // A2A (Agent-to-Agent) Protocol — JSON-RPC-style task management
@@ -98,9 +99,9 @@ function extractParam(text: string, key: string): string | undefined {
 
 async function fetchInternal(url: string): Promise<SkillResult> {
   try {
-    const resp = await fetch(url, {
+    const resp = await fetchWithTimeout(url, {
       headers: { 'Accept': 'application/json', 'User-Agent': 'CrossFin-A2A/1.0' },
-    })
+    }, 10000)
     if (!resp.ok) {
       const text = await resp.text()
       return { error: `Upstream ${resp.status}: ${text.slice(0, 500)}` }

@@ -16,6 +16,28 @@ import type {
 } from '../constants'
 
 // ============================================================
+// Fetch with timeout utility
+// ============================================================
+
+export const CROSSFIN_UA = 'CrossFin-API/1.9.0'
+
+export async function fetchWithTimeout(
+  url: string,
+  init?: RequestInit,
+  timeoutMs = 5000,
+): Promise<Response> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const headers = new Headers(init?.headers)
+    if (!headers.has('User-Agent')) headers.set('User-Agent', CROSSFIN_UA)
+    return await fetch(url, { ...init, signal: controller.signal, headers })
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+// ============================================================
 // Fee helpers
 // ============================================================
 
@@ -135,7 +157,7 @@ export async function fetchBithumbWithdrawalStatuses(): Promise<Record<string, b
 
   const promise = (async () => {
     try {
-      const res = await fetch('https://api.bithumb.com/public/assetsstatus/ALL')
+      const res = await fetchWithTimeout('https://api.bithumb.com/public/assetsstatus/ALL')
       if (!res.ok) throw new Error(`Bithumb asset status unavailable (${res.status})`)
       const data: unknown = await res.json()
       if (!isRecord(data) || data.status !== '0000' || !isRecord(data.data)) {
@@ -355,7 +377,7 @@ export async function fetchBithumbAll(): Promise<Record<string, Record<string, s
 
   const promise = (async () => {
     try {
-      const res = await fetch('https://api.bithumb.com/public/ticker/ALL_KRW')
+      const res = await fetchWithTimeout('https://api.bithumb.com/public/ticker/ALL_KRW')
       if (!res.ok) throw new Error(`Bithumb API unavailable (${res.status})`)
       const data: unknown = await res.json()
       if (!isRecord(data) || typeof data.status !== 'string' || !isRecord(data.data)) {
@@ -384,10 +406,15 @@ export async function fetchBithumbAll(): Promise<Record<string, Record<string, s
 }
 
 export async function fetchBithumbOrderbook(pair: string): Promise<{ bids: unknown[]; asks: unknown[] }> {
-  const res = await fetch(`https://api.bithumb.com/public/orderbook/${pair}_KRW`)
-  const data = await res.json() as { status: string; data: { bids: unknown[]; asks: unknown[] } }
-  if (data.status !== '0000') throw new HTTPException(400, { message: `Invalid pair: ${pair}` })
-  return data.data
+  const res = await fetchWithTimeout(`https://api.bithumb.com/public/orderbook/${pair}_KRW`)
+  const raw: unknown = await res.json()
+  if (!isRecord(raw)) throw new HTTPException(502, { message: 'Bithumb orderbook: invalid response' })
+  if (raw.status !== '0000') throw new HTTPException(400, { message: `Invalid pair: ${pair}` })
+  const data = raw.data
+  if (!isRecord(data)) throw new HTTPException(502, { message: 'Bithumb orderbook: missing data' })
+  const bids = Array.isArray(data.bids) ? data.bids : []
+  const asks = Array.isArray(data.asks) ? data.asks : []
+  return { bids, asks }
 }
 
 // ============================================================
@@ -420,7 +447,7 @@ export async function fetchBinancePrices(): Promise<Record<string, number>> {
     for (const baseUrl of BINANCE_BASE_URLS) {
       try {
         const url = `${baseUrl}/api/v3/ticker/price?symbols=${query}`
-        const res = await fetch(url)
+        const res = await fetchWithTimeout(url)
         if (!res.ok) throw new Error(`Binance price feed unavailable (${res.status})`)
         const data: unknown = await res.json()
         if (!Array.isArray(data)) throw new Error('Binance price feed invalid response')
@@ -482,7 +509,7 @@ export async function fetchOkxPrices(): Promise<Record<string, number>> {
 
   const promise = (async () => {
     try {
-      const res = await fetch('https://www.okx.com/api/v5/market/tickers?instType=SPOT')
+      const res = await fetchWithTimeout('https://www.okx.com/api/v5/market/tickers?instType=SPOT')
       if (!res.ok) throw new Error(`OKX price feed unavailable (${res.status})`)
       const data: unknown = await res.json()
       if (!isRecord(data) || data.code !== '0' || !Array.isArray(data.data)) {
@@ -547,7 +574,7 @@ export async function fetchBybitPrices(): Promise<Record<string, number>> {
 
   const promise = (async () => {
     try {
-      const res = await fetch('https://api.bybit.com/v5/market/tickers?category=spot')
+      const res = await fetchWithTimeout('https://api.bybit.com/v5/market/tickers?category=spot')
       if (!res.ok) throw new Error(`Bybit price feed unavailable (${res.status})`)
       const data: unknown = await res.json()
       if (!isRecord(data) || data.retCode !== 0 || !isRecord(data.result) || !Array.isArray(data.result.list)) {
@@ -675,7 +702,7 @@ export async function fetchGlobalPrices(db?: D1Database): Promise<Record<string,
     // 2) CryptoCompare fallback (no key)
     try {
       const coins = Object.keys(TRACKED_PAIRS).join(',')
-      const res = await fetch(
+      const res = await fetchWithTimeout(
         `https://min-api.cryptocompare.com/data/pricemulti?fsyms=${coins}&tsyms=USD`,
       )
       if (!res.ok) throw new Error(`CryptoCompare price feed unavailable (${res.status})`)
@@ -721,7 +748,7 @@ export async function fetchGlobalPrices(db?: D1Database): Promise<Record<string,
 
       const ids = Array.from(new Set(Object.values(COINGECKO_IDS))).join(',')
       const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids)}&vs_currencies=usd`
-      const res = await fetch(url)
+      const res = await fetchWithTimeout(url)
       if (!res.ok) throw new Error(`CoinGecko price feed unavailable (${res.status})`)
       const data: unknown = await res.json()
       if (!isRecord(data)) throw new Error('CoinGecko price feed invalid response')
@@ -805,7 +832,7 @@ export async function fetchGlobalPrices(db?: D1Database): Promise<Record<string,
     await Promise.allSettled(missing.map(async ([, symbol]) => {
       for (const baseUrl of BINANCE_INDIVIDUAL_URLS) {
         try {
-          const res = await fetch(`${baseUrl}/api/v3/ticker/price?symbol=${symbol}`)
+          const res = await fetchWithTimeout(`${baseUrl}/api/v3/ticker/price?symbol=${symbol}`)
           if (!res.ok) { await res.body?.cancel(); continue }
           const data = await res.json() as { symbol?: string; price?: string }
           const price = Number(data.price ?? NaN)
@@ -878,7 +905,7 @@ export async function fetchUsdFxRates(): Promise<Record<'KRW' | 'JPY' | 'INR', n
   const fallback = cached?.value ?? { KRW: 1450, JPY: 150, INR: 85 }
   const promise = (async () => {
     try {
-      const res = await fetch('https://open.er-api.com/v6/latest/USD')
+      const res = await fetchWithTimeout('https://open.er-api.com/v6/latest/USD')
       if (!res.ok) throw new Error(`FX rate fetch failed (${res.status})`)
       const data = await res.json() as { rates?: Record<string, number> }
 
@@ -937,7 +964,7 @@ export async function fetchFxRatesWithMeta(): Promise<FxRatesMeta> {
 // ============================================================
 
 export async function fetchUpbitTicker(market: string) {
-  const res = await fetch(`https://api.upbit.com/v1/ticker?markets=${encodeURIComponent(market)}`)
+  const res = await fetchWithTimeout(`https://api.upbit.com/v1/ticker?markets=${encodeURIComponent(market)}`)
   if (!res.ok) throw new HTTPException(502, { message: 'Upbit API unavailable' })
   const data: unknown = await res.json()
   if (!Array.isArray(data) || data.length === 0 || !isRecord(data[0])) {
@@ -947,7 +974,7 @@ export async function fetchUpbitTicker(market: string) {
 }
 
 export async function fetchUpbitOrderbook(market: string) {
-  const res = await fetch(`https://api.upbit.com/v1/orderbook?markets=${encodeURIComponent(market)}`)
+  const res = await fetchWithTimeout(`https://api.upbit.com/v1/orderbook?markets=${encodeURIComponent(market)}`)
   if (!res.ok) throw new HTTPException(502, { message: 'Upbit API unavailable' })
   const data: unknown = await res.json()
   if (!Array.isArray(data) || data.length === 0 || !isRecord(data[0])) {
@@ -957,7 +984,7 @@ export async function fetchUpbitOrderbook(market: string) {
 }
 
 export async function fetchCoinoneTicker(currency: string) {
-  const res = await fetch(`https://api.coinone.co.kr/public/v2/ticker_new/KRW/${encodeURIComponent(currency)}`)
+  const res = await fetchWithTimeout(`https://api.coinone.co.kr/public/v2/ticker_new/KRW/${encodeURIComponent(currency)}`)
   if (!res.ok) throw new HTTPException(502, { message: 'Coinone API unavailable' })
   const data: unknown = await res.json()
   if (!isRecord(data) || data.result !== 'success' || !Array.isArray(data.tickers) || data.tickers.length === 0) {
@@ -986,7 +1013,7 @@ export async function fetchWazirxTickers(): Promise<Record<string, Record<string
   const fallback = cached?.value ?? {}
   const promise = (async () => {
     try {
-      const res = await fetch('https://api.wazirx.com/api/v2/tickers')
+      const res = await fetchWithTimeout('https://api.wazirx.com/api/v2/tickers')
       if (!res.ok) throw new Error(`WazirX ticker feed unavailable (${res.status})`)
       const data: unknown = await res.json()
       if (!isRecord(data)) throw new Error('WazirX ticker feed invalid response')
@@ -1029,8 +1056,11 @@ export function calcPremiums(
     if (!bithumb?.closing_price || !binancePrice) continue
 
     const bithumbKrw = parseFloat(bithumb.closing_price)
+    if (!Number.isFinite(bithumbKrw) || bithumbKrw <= 0) continue
+
     const bithumbUsd = bithumbKrw / krwRate
     const premiumPct = ((bithumbUsd - binancePrice) / binancePrice) * 100
+    if (!Number.isFinite(premiumPct)) continue
     const volume24hKrw = parseFloat(bithumb.acc_trade_value_24H || '0')
     const change24hPct = parseFloat(bithumb.fluctate_rate_24H || '0')
 

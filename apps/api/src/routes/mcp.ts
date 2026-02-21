@@ -5,6 +5,7 @@ import { z } from 'zod/v4'
 import type { Env } from '../types'
 import { CROSSFIN_API_VERSION } from '../catalog'
 import { CORS_ALLOWED_ORIGINS } from '../constants'
+import { fetchWithTimeout } from '../lib/fetchers'
 
 const mcp = new Hono<Env>()
 
@@ -26,7 +27,7 @@ mcp.all('/', async (c) => {
 
   async function proxy(path: string): Promise<{ content: Array<{ type: 'text'; text: string }>, isError?: boolean }> {
     try {
-      const res = await fetch(`${BASE}${path}`)
+      const res = await fetchWithTimeout(`${BASE}${path}`, undefined, 10000)
       if (!res.ok) throw new Error(`API ${res.status}`)
       return { content: [{ type: 'text', text: await res.text() }] }
     } catch (e) {

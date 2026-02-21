@@ -66,6 +66,8 @@ import {
   fetchCoinoneTicker,
   fetchWazirxTickers,
   calcPremiums,
+  fetchWithTimeout,
+  CROSSFIN_UA,
 } from './lib/fetchers'
 import {
   getTransferTime,
@@ -310,7 +312,7 @@ async function telegramSendMessage(
   text: string,
   parseMode?: 'Markdown',
 ): Promise<void> {
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+  const response = await fetchWithTimeout(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -319,7 +321,7 @@ async function telegramSendMessage(
       disable_web_page_preview: true,
       parse_mode: parseMode,
     }),
-  })
+  }, 10000)
   if (!response.ok) {
     const details = await response.text().catch(() => '')
     throw new Error(`telegram_send_message_failed:${response.status} ${details.slice(0, 180)}`)
@@ -327,11 +329,11 @@ async function telegramSendMessage(
 }
 
 async function telegramSendTyping(botToken: string, chatId: string | number): Promise<void> {
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendChatAction`, {
+  const response = await fetchWithTimeout(`https://api.telegram.org/bot${botToken}/sendChatAction`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, action: 'typing' }),
-  })
+  }, 10000)
   if (!response.ok) {
     const details = await response.text().catch(() => '')
     throw new Error(`telegram_send_typing_failed:${response.status} ${details.slice(0, 180)}`)
@@ -463,27 +465,36 @@ const CROSSFIN_TELEGRAM_TOOLS: GlmTool[] = [
 const CROSSFIN_TELEGRAM_SYSTEM_PROMPT = 'You are CrossFin Bot — an AI assistant that finds the cheapest crypto transfer routes across 9 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit). You also check live prices, exchange status, route spread, and fees. Rules: 1) Never use emojis. 2) Be concise — short sentences, no filler. 3) Match the user\'s language (Korean or English). 4) When you have enough info, call tools immediately instead of asking more questions. 5) If info is missing, ask in one short sentence, not a numbered list. 6) Only answer questions about crypto routing, exchange prices, fees, route spread, and Korean/global crypto markets. For unrelated topics, say you only handle crypto routing and suggest what you can help with. 7) You are read-only — you CANNOT execute trades, send crypto, or move funds. You only FIND and RECOMMEND routes. Never ask "실행하시겠습니까" or suggest you can execute anything. 8) After showing a route, suggest the user can try different amounts or exchange pairs.'
 
 async function glmChatCompletion(apiKey: string, messages: GlmMessage[], tools: GlmTool[]): Promise<GlmMessage> {
-  const res = await fetch('https://api.z.ai/api/coding/paas/v4/chat/completions', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: 'glm-5',
-      messages,
-      tools,
-      tool_choice: 'auto',
-      temperature: 0.3,
-      max_tokens: 2048,
-      stream: false,
-    }),
-  })
-  if (!res.ok) {
-    const errText = await res.text()
-    throw new Error(`GLM-5 API error ${res.status}: ${errText.slice(0, 200)}`)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 15_000)
+  try {
+    const res = await fetch('https://api.z.ai/api/coding/paas/v4/chat/completions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Authorization: `Bearer ${apiKey}`, 'User-Agent': 'CrossFin-API/1.9.0' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: 'glm-5',
+        messages,
+        tools,
+        tool_choice: 'auto',
+        temperature: 0.3,
+        max_tokens: 2048,
+        stream: false,
+      }),
+    })
+    if (!res.ok) {
+      const errText = await res.text()
+      throw new Error(`GLM-5 API error ${res.status}: ${errText.slice(0, 200)}`)
+    }
+    const raw: unknown = await res.json()
+    if (!raw || typeof raw !== 'object' || !('choices' in raw)) throw new Error('GLM-5 unexpected response format')
+    const data = raw as { choices: Array<{ message: GlmMessage }> }
+    const message = data.choices[0]?.message
+    if (!message) throw new Error('GLM-5 API returned no message')
+    return message
+  } finally {
+    clearTimeout(timeout)
   }
-  const data = await res.json() as { choices: Array<{ message: GlmMessage }> }
-  const message = data.choices[0]?.message
-  if (!message) throw new Error('GLM-5 API returned no message')
-  return message
 }
 
 async function executeTelegramTool(name: string, args: Record<string, unknown>, db: D1Database): Promise<string> {
@@ -3996,7 +4007,7 @@ function mapServiceRow(row: Record<string, unknown>): RegistryService {
 
 async function fetchX402EngineSeeds(): Promise<ServiceSeed[]> {
   const url = 'https://x402-gateway-production.up.railway.app/.well-known/x402.json'
-  const res = await fetch(url, { headers: { 'User-Agent': 'crossfin-registry-seed/1.0' } })
+  const res = await fetchWithTimeout(url, { headers: { 'User-Agent': 'crossfin-registry-seed/1.0' } })
   if (!res.ok) return []
 
   const json: unknown = await res.json()
@@ -4057,7 +4068,7 @@ async function fetchX402EngineSeeds(): Promise<ServiceSeed[]> {
 
 async function fetchEinsteinAiSeeds(): Promise<ServiceSeed[]> {
   const url = 'https://emc2ai.io/.well-known/x402.json'
-  const res = await fetch(url, { headers: { 'User-Agent': 'crossfin-registry-seed/1.0' } })
+  const res = await fetchWithTimeout(url, { headers: { 'User-Agent': 'crossfin-registry-seed/1.0' } })
   if (!res.ok) return []
 
   const json: unknown = await res.json()
@@ -6032,7 +6043,7 @@ async function fetchRegionalExchangePrice(
       let asks: Array<{ price: string; quantity: string }> = []
       if (!skipOrderbook) {
         try {
-          const obRes = await fetch(`https://api.bithumb.com/public/orderbook/${coinUpper}_KRW?count=30`)
+          const obRes = await fetchWithTimeout(`https://api.bithumb.com/public/orderbook/${coinUpper}_KRW?count=30`)
           if (obRes.ok) {
             const obData = await obRes.json() as { data?: { asks?: Array<{ price: string; quantity: string }> } }
             asks = obData?.data?.asks ?? []
@@ -6073,7 +6084,7 @@ async function fetchRegionalExchangePrice(
 
     if (exchange === 'gopax') {
       try {
-        const res = await fetch(`https://api.gopax.co.kr/trading-pairs/${coinUpper}-KRW/ticker`)
+        const res = await fetchWithTimeout(`https://api.gopax.co.kr/trading-pairs/${coinUpper}-KRW/ticker`)
         if (!res.ok) { await res.body?.cancel(); return null }
         const data = await res.json() as { price?: number; close?: number }
         const gopaxPrice = data.price ?? data.close
@@ -6084,7 +6095,7 @@ async function fetchRegionalExchangePrice(
 
     if (exchange === 'bitflyer') {
       const productCode = `${coinUpper}_JPY`
-      const tickerRes = await fetch(`https://api.bitflyer.com/v1/getticker?product_code=${productCode}`)
+      const tickerRes = await fetchWithTimeout(`https://api.bitflyer.com/v1/getticker?product_code=${productCode}`)
       if (!tickerRes.ok) { await tickerRes.body?.cancel(); return null }
       const tickerData = await tickerRes.json() as { status?: number; ltp?: number; best_ask?: number }
       if (typeof tickerData.status === 'number' && tickerData.status < 0) return null
@@ -6094,7 +6105,7 @@ async function fetchRegionalExchangePrice(
       let asks: Array<{ price: string; quantity: string }> = []
       if (!skipOrderbook) {
         try {
-          const obRes = await fetch(`https://api.bitflyer.com/v1/getboard?product_code=${productCode}`)
+          const obRes = await fetchWithTimeout(`https://api.bitflyer.com/v1/getboard?product_code=${productCode}`)
           if (obRes.ok) {
             const obData = await obRes.json() as { asks?: Array<{ price?: number; size?: number }> }
             asks = Array.isArray(obData.asks)
@@ -6129,7 +6140,7 @@ async function fetchRegionalExchangePrice(
       let asks: Array<{ price: string; quantity: string }> = []
       if (!skipOrderbook) {
         try {
-          const obRes = await fetch(`https://api.wazirx.com/api/v2/depth?market=${market}&limit=30`)
+          const obRes = await fetchWithTimeout(`https://api.wazirx.com/api/v2/depth?market=${market}&limit=30`)
           if (obRes.ok) {
             const obData = await obRes.json() as { asks?: Array<[string, string]> }
             asks = Array.isArray(obData.asks)
@@ -7269,20 +7280,24 @@ app.get('/api/premium/market/coinone/ticker', async (c) => {
   })
 })
 
+// ── Naver Finance cache helper ─────────────────────────────────────────
+const naverCache = new Map<string, { data: unknown; expiresAt: number }>()
+async function fetchNaverCached(url: string, ttlMs = 60_000): Promise<unknown> {
+  const now = Date.now()
+  const cached = naverCache.get(url)
+  if (cached && now < cached.expiresAt) return cached.data
+  const res = await fetchWithTimeout(url, { headers: { 'User-Agent': CROSSFIN_UA } }, 5000)
+  if (!res.ok) throw new HTTPException(502, { message: 'Naver API unavailable' })
+  const data: unknown = await res.json()
+  naverCache.set(url, { data, expiresAt: now + ttlMs })
+  return data
+}
+
 // ── KOSPI / KOSDAQ Korean Stock Market Index ──────────────────────────
 app.get('/api/premium/market/korea/indices', async (c) => {
-  const [kospiRes, kosdaqRes] = await Promise.all([
-    fetch('https://m.stock.naver.com/api/index/KOSPI/basic'),
-    fetch('https://m.stock.naver.com/api/index/KOSDAQ/basic'),
-  ])
-
-  if (!kospiRes.ok || !kosdaqRes.ok) {
-    throw new HTTPException(502, { message: 'Korean stock market data unavailable' })
-  }
-
   const [kospiRawValue, kosdaqRawValue] = await Promise.all([
-    kospiRes.json() as Promise<unknown>,
-    kosdaqRes.json() as Promise<unknown>,
+    fetchNaverCached('https://m.stock.naver.com/api/index/KOSPI/basic'),
+    fetchNaverCached('https://m.stock.naver.com/api/index/KOSDAQ/basic'),
   ])
 
   const parseIndex = (raw: unknown) => {
@@ -7318,12 +7333,7 @@ app.get('/api/premium/market/korea/indices/history', async (c) => {
     throw new HTTPException(400, { message: 'index must be KOSPI or KOSDAQ' })
   }
 
-  const res = await fetch(`https://m.stock.naver.com/api/index/${index}/price?pageSize=${days}`)
-  if (!res.ok) {
-    throw new HTTPException(502, { message: `${index} historical data unavailable` })
-  }
-
-  const rawData = toRecordArray(await res.json() as unknown)
+  const rawData = toRecordArray(await fetchNaverCached(`https://m.stock.naver.com/api/index/${index}/price?pageSize=${days}`) as unknown)
 
   const history = rawData.map((item) => {
     const directionValue = isRecord(item.compareToPreviousPrice) ? item.compareToPreviousPrice.name : null
@@ -7358,20 +7368,10 @@ app.get('/api/premium/market/korea/stocks/momentum', async (c) => {
   }
 
   const baseUrl = 'https://m.stock.naver.com/api/stocks'
-  const [capRes, upRes, downRes] = await Promise.all([
-    fetch(`${baseUrl}/marketValue/${market}?page=1&pageSize=10`),
-    fetch(`${baseUrl}/up/${market}?page=1&pageSize=5`),
-    fetch(`${baseUrl}/down/${market}?page=1&pageSize=5`),
-  ])
-
-  if (!capRes.ok || !upRes.ok || !downRes.ok) {
-    throw new HTTPException(502, { message: 'Korean stock ranking data unavailable' })
-  }
-
   const [capDataRaw, upDataRaw, downDataRaw] = await Promise.all([
-    capRes.json() as Promise<unknown>,
-    upRes.json() as Promise<unknown>,
-    downRes.json() as Promise<unknown>,
+    fetchNaverCached(`${baseUrl}/marketValue/${market}?page=1&pageSize=10`),
+    fetchNaverCached(`${baseUrl}/up/${market}?page=1&pageSize=5`),
+    fetchNaverCached(`${baseUrl}/down/${market}?page=1&pageSize=5`),
   ])
 
   const capData = isRecord(capDataRaw) ? capDataRaw : {}
@@ -7409,9 +7409,7 @@ app.get('/api/premium/market/korea/investor-flow', async (c) => {
   const stock = (c.req.query('stock') ?? '005930').trim()
   if (!/^\d{6}$/.test(stock)) throw new HTTPException(400, { message: 'stock must be 6-digit code (e.g., 005930)' })
 
-  const res = await fetch(`https://m.stock.naver.com/api/stock/${stock}/trend`)
-  if (!res.ok) throw new HTTPException(502, { message: 'Investor flow data unavailable' })
-  const rawData = toRecordArray(await res.json() as unknown)
+  const rawData = toRecordArray(await fetchNaverCached(`https://m.stock.naver.com/api/stock/${stock}/trend`) as unknown)
 
   const flow = rawData.map((d) => {
     const directionValue = isRecord(d.compareToPreviousPrice) ? d.compareToPreviousPrice.name : null
@@ -7445,9 +7443,7 @@ app.get('/api/premium/market/korea/index-flow', async (c) => {
     throw new HTTPException(400, { message: 'index must be KOSPI, KOSDAQ, or KPI200' })
   }
 
-  const res = await fetch(`https://m.stock.naver.com/api/index/${index}/trend`)
-  if (!res.ok) throw new HTTPException(502, { message: 'Index investor flow data unavailable' })
-  const rawValue = await res.json() as unknown
+  const rawValue = await fetchNaverCached(`https://m.stock.naver.com/api/index/${index}/trend`)
   if (!isRecord(rawValue)) {
     throw new HTTPException(502, { message: 'Invalid index investor flow payload' })
   }
@@ -7471,10 +7467,10 @@ app.get('/api/premium/crypto/korea/5exchange', async (c) => {
   const coin = (c.req.query('coin') ?? 'BTC').toUpperCase()
 
   const [upbitRes, bithumbRes, coinoneRes, gopaxRes] = await Promise.allSettled([
-    fetch(`https://api.upbit.com/v1/ticker?markets=KRW-${coin}`).then(r => r.json()),
-    fetch(`https://api.bithumb.com/public/ticker/${coin}_KRW`).then(r => r.json()),
-    fetch(`https://api.coinone.co.kr/public/v2/ticker_new/KRW/${encodeURIComponent(coin)}`).then(r => r.json()),
-    fetch(`https://api.gopax.co.kr/trading-pairs/${coin}-KRW/ticker`).then(r => r.json()),
+    fetchWithTimeout(`https://api.upbit.com/v1/ticker?markets=KRW-${coin}`).then(r => r.json()),
+    fetchWithTimeout(`https://api.bithumb.com/public/ticker/${coin}_KRW`).then(r => r.json()),
+    fetchWithTimeout(`https://api.coinone.co.kr/public/v2/ticker_new/KRW/${encodeURIComponent(coin)}`).then(r => r.json()),
+    fetchWithTimeout(`https://api.gopax.co.kr/trading-pairs/${coin}-KRW/ticker`).then(r => r.json()),
   ])
 
   const exchanges: Array<{ exchange: string; priceKrw: number; volume24h: number; change24hPct: number | null }> = []
@@ -7572,7 +7568,7 @@ app.get('/api/premium/crypto/korea/5exchange', async (c) => {
 })
 
 app.get('/api/premium/crypto/korea/exchange-status', async (c) => {
-  const res = await fetch('https://api.bithumb.com/public/assetsstatus/ALL')
+  const res = await fetchWithTimeout('https://api.bithumb.com/public/assetsstatus/ALL')
   if (!res.ok) throw new HTTPException(502, { message: 'Exchange status data unavailable' })
   const raw: unknown = await res.json()
   const data = isRecord(raw) && isRecord(raw.data) ? raw.data : {}
@@ -7610,9 +7606,7 @@ app.get('/api/premium/market/korea/stock-detail', async (c) => {
   const stock = (c.req.query('stock') ?? '005930').trim()
   if (!/^\d{6}$/.test(stock)) throw new HTTPException(400, { message: 'stock must be 6-digit code' })
 
-  const res = await fetch(`https://m.stock.naver.com/api/stock/${stock}/integration`)
-  if (!res.ok) throw new HTTPException(502, { message: 'Stock detail data unavailable' })
-  const raw: unknown = await res.json()
+  const raw: unknown = await fetchNaverCached(`https://m.stock.naver.com/api/stock/${stock}/integration`)
   const rd = isRecord(raw) ? raw : {}
 
   const infos: Record<string, string> = {}
@@ -7657,9 +7651,7 @@ app.get('/api/premium/market/korea/stock-news', async (c) => {
   const pageSize = Math.min(20, Math.max(1, Number(c.req.query('pageSize') ?? '10') || 10))
   if (!/^\d{6}$/.test(stock)) throw new HTTPException(400, { message: 'stock must be 6-digit code' })
 
-  const res = await fetch(`https://m.stock.naver.com/api/news/stock/${stock}?page=${page}&pageSize=${pageSize}`)
-  if (!res.ok) throw new HTTPException(502, { message: 'Stock news data unavailable' })
-  const rawArr: unknown = await res.json()
+  const rawArr: unknown = await fetchNaverCached(`https://m.stock.naver.com/api/news/stock/${stock}?page=${page}&pageSize=${pageSize}`)
   const first = Array.isArray(rawArr) && rawArr.length > 0 ? rawArr[0] : null
   const raw = isRecord(first) ? first : { total: 0, items: [] }
 
@@ -7682,9 +7674,7 @@ app.get('/api/premium/market/korea/themes', async (c) => {
   const page = Math.max(1, Number(c.req.query('page') ?? '1') || 1)
   const pageSize = Math.min(50, Math.max(1, Number(c.req.query('pageSize') ?? '20') || 20))
 
-  const res = await fetch(`https://m.stock.naver.com/api/stocks/theme?page=${page}&pageSize=${pageSize}`)
-  if (!res.ok) throw new HTTPException(502, { message: 'Theme data unavailable' })
-  const rawThemes: unknown = await res.json()
+  const rawThemes: unknown = await fetchNaverCached(`https://m.stock.naver.com/api/stocks/theme?page=${page}&pageSize=${pageSize}`, 300_000)
   const rtd = isRecord(rawThemes) ? rawThemes : {}
 
   return c.json({
@@ -7713,9 +7703,7 @@ app.get('/api/premium/market/korea/disclosure', async (c) => {
   const pageSize = Math.min(20, Math.max(1, Number(c.req.query('pageSize') ?? '10') || 10))
   if (!/^\d{6}$/.test(stock)) throw new HTTPException(400, { message: 'stock must be 6-digit code' })
 
-  const res = await fetch(`https://m.stock.naver.com/api/stock/${stock}/disclosure?page=${page}&pageSize=${pageSize}`)
-  if (!res.ok) throw new HTTPException(502, { message: 'Disclosure data unavailable' })
-  const raw = toRecordArray(await res.json() as unknown)
+  const raw = toRecordArray(await fetchNaverCached(`https://m.stock.naver.com/api/stock/${stock}/disclosure?page=${page}&pageSize=${pageSize}`) as unknown)
 
   return c.json({
     paid: true,
@@ -7739,9 +7727,7 @@ app.get('/api/premium/market/korea/stock-brief', async (c) => {
   const at = new Date().toISOString()
 
   const detailTask = (async () => {
-    const res = await fetch(`https://m.stock.naver.com/api/stock/${stock}/integration`)
-    if (!res.ok) throw new Error(`Stock detail data unavailable (${res.status})`)
-    const raw: unknown = await res.json()
+    const raw: unknown = await fetchNaverCached(`https://m.stock.naver.com/api/stock/${stock}/integration`)
     if (!isRecord(raw)) throw new Error('Stock detail invalid response')
 
     const infos: Record<string, string> = {}
@@ -7791,9 +7777,7 @@ app.get('/api/premium/market/korea/stock-brief', async (c) => {
   const newsTask = (async () => {
     const page = 1
     const pageSize = 5
-    const res = await fetch(`https://m.stock.naver.com/api/news/stock/${stock}?page=${page}&pageSize=${pageSize}`)
-    if (!res.ok) throw new Error(`Stock news data unavailable (${res.status})`)
-    const rawArr: unknown = await res.json()
+    const rawArr: unknown = await fetchNaverCached(`https://m.stock.naver.com/api/news/stock/${stock}?page=${page}&pageSize=${pageSize}`)
     const raw0 = Array.isArray(rawArr) && rawArr.length > 0 ? rawArr[0] : null
     const raw = isRecord(raw0) ? raw0 : { items: [] as unknown[] }
     const itemsRaw = Array.isArray(raw.items) ? raw.items : []
@@ -7811,9 +7795,7 @@ app.get('/api/premium/market/korea/stock-brief', async (c) => {
   })()
 
   const investorFlowTask = (async () => {
-    const res = await fetch(`https://m.stock.naver.com/api/stock/${stock}/trend`)
-    if (!res.ok) throw new Error(`Investor flow data unavailable (${res.status})`)
-    const rawData: unknown = await res.json()
+    const rawData: unknown = await fetchNaverCached(`https://m.stock.naver.com/api/stock/${stock}/trend`)
     const rows = Array.isArray(rawData) ? rawData : []
 
     const flow = rows.map((d) => {
@@ -7857,9 +7839,7 @@ app.get('/api/premium/market/korea/stock-brief', async (c) => {
   const disclosureTask = (async () => {
     const page = 1
     const pageSize = 5
-    const res = await fetch(`https://m.stock.naver.com/api/stock/${stock}/disclosure?page=${page}&pageSize=${pageSize}`)
-    if (!res.ok) throw new Error(`Disclosure data unavailable (${res.status})`)
-    const raw: unknown = await res.json()
+    const raw: unknown = await fetchNaverCached(`https://m.stock.naver.com/api/stock/${stock}/disclosure?page=${page}&pageSize=${pageSize}`)
     const itemsRaw = Array.isArray(raw) ? raw : []
 
     return itemsRaw.map((d) => {
@@ -7898,7 +7878,7 @@ app.get('/api/premium/market/korea/stock-brief', async (c) => {
 })
 
 app.get('/api/premium/crypto/korea/fx-rate', async (c) => {
-  const res = await fetch('https://crix-api-cdn.upbit.com/v1/forex/recent?codes=FRX.KRWUSD')
+  const res = await fetchWithTimeout('https://crix-api-cdn.upbit.com/v1/forex/recent?codes=FRX.KRWUSD')
   if (!res.ok) throw new HTTPException(502, { message: 'FX rate data unavailable' })
   const data = toRecordArray(await res.json() as unknown)
   const quote = data[0]
@@ -7928,15 +7908,23 @@ app.get('/api/premium/crypto/korea/fx-rate', async (c) => {
 })
 
 app.get('/api/premium/market/korea/etf', async (c) => {
-  const res = await fetch('https://finance.naver.com/api/sise/etfItemList.nhn')
-  if (!res.ok) throw new HTTPException(502, { message: 'ETF data unavailable' })
-  const buf = await res.arrayBuffer()
-  const text = new TextDecoder('euc-kr').decode(buf)
+  const etfCacheKey = 'naver-etf-list'
+  const now = Date.now()
+  const etfCached = naverCache.get(etfCacheKey)
   let rawParsed: unknown
-  try {
-    rawParsed = JSON.parse(text) as unknown
-  } catch {
-    throw new HTTPException(502, { message: 'ETF payload parse failed' })
+  if (etfCached && now < etfCached.expiresAt) {
+    rawParsed = etfCached.data
+  } else {
+    const res = await fetchWithTimeout('https://finance.naver.com/api/sise/etfItemList.nhn', { headers: { 'User-Agent': CROSSFIN_UA } }, 5000)
+    if (!res.ok) throw new HTTPException(502, { message: 'ETF data unavailable' })
+    const buf = await res.arrayBuffer()
+    const text = new TextDecoder('euc-kr').decode(buf)
+    try {
+      rawParsed = JSON.parse(text) as unknown
+    } catch {
+      throw new HTTPException(502, { message: 'ETF payload parse failed' })
+    }
+    naverCache.set(etfCacheKey, { data: rawParsed, expiresAt: now + 300_000 })
   }
 
   if (!isRecord(rawParsed) || !isRecord(rawParsed.result)) {
@@ -7975,7 +7963,7 @@ app.get('/api/premium/crypto/korea/upbit-candles', async (c) => {
   if (!validTypes.includes(type)) throw new HTTPException(400, { message: `type must be one of: ${validTypes.join(', ')}` })
 
   const market = `KRW-${coin}`
-  const res = await fetch(`https://api.upbit.com/v1/candles/${type}?market=${market}&count=${count}`)
+  const res = await fetchWithTimeout(`https://api.upbit.com/v1/candles/${type}?market=${market}&count=${count}`)
   if (!res.ok) throw new HTTPException(502, { message: 'Upbit candle data unavailable' })
   const raw = toRecordArray(await res.json() as unknown)
 
@@ -8006,9 +7994,7 @@ app.get('/api/premium/market/global/indices-chart', async (c) => {
 
   if (!['month'].includes(period)) throw new HTTPException(400, { message: 'period must be: month' })
 
-  const res = await fetch(`https://api.stock.naver.com/chart/foreign/index/${encodeURIComponent(index)}/${period}`)
-  if (!res.ok) throw new HTTPException(502, { message: 'Global index chart data unavailable' })
-  const rawValue = await res.json() as unknown
+  const rawValue = await fetchNaverCached(`https://api.stock.naver.com/chart/foreign/index/${encodeURIComponent(index)}/${period}`, 300_000)
 
   if (Array.isArray(rawValue) && rawValue.length === 0) {
     throw new HTTPException(404, { message: `No data for index ${index}. Available: .DJI, .IXIC, .HSI, .N225` })
@@ -8042,7 +8028,7 @@ app.get('/api/premium/news/korea/headlines', async (c) => {
   const limit = Math.min(20, Math.max(1, Number(c.req.query('limit') ?? '10')))
   const feedUrl = 'https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko'
 
-  const res = await fetch(feedUrl, { headers: { 'User-Agent': 'crossfin-news/1.0' } })
+  const res = await fetchWithTimeout(feedUrl, { headers: { 'User-Agent': 'crossfin-news/1.0' } })
   if (!res.ok) throw new HTTPException(502, { message: 'News feed unavailable' })
   const xml = await res.text()
 
@@ -8092,7 +8078,7 @@ app.get('/api/premium/crypto/snapshot', async (c) => {
 
   const exchangesTask = (async () => {
     const fetchJson = async (url: string): Promise<unknown> => {
-      const res = await fetch(url)
+      const res = await fetchWithTimeout(url)
       if (!res.ok) throw new Error(`Request failed: ${url}`)
       return res.json() as Promise<unknown>
     }
@@ -8529,16 +8515,10 @@ app.get('/api/premium/morning/brief', async (c) => {
   })()
 
   const indicesTask = (async () => {
-    const [kospiRes, kosdaqRes] = await Promise.all([
-      fetch('https://m.stock.naver.com/api/index/KOSPI/basic'),
-      fetch('https://m.stock.naver.com/api/index/KOSDAQ/basic'),
+    const [kospiRaw, kosdaqRaw] = await Promise.all([
+      fetchNaverCached('https://m.stock.naver.com/api/index/KOSPI/basic'),
+      fetchNaverCached('https://m.stock.naver.com/api/index/KOSDAQ/basic'),
     ])
-
-    if (!kospiRes.ok || !kosdaqRes.ok) {
-      throw new HTTPException(502, { message: 'Korean stock market data unavailable' })
-    }
-
-    const [kospiRaw, kosdaqRaw] = await Promise.all([kospiRes.json(), kosdaqRes.json()]) as [unknown, unknown]
 
     const parseIndex = (raw: unknown) => {
       if (!isRecord(raw)) {
@@ -8566,16 +8546,10 @@ app.get('/api/premium/morning/brief', async (c) => {
 
   const momentumTask = (async () => {
     const baseUrl = 'https://m.stock.naver.com/api/stocks'
-    const [upRes, downRes] = await Promise.all([
-      fetch(`${baseUrl}/up/${market}?page=1&pageSize=5`),
-      fetch(`${baseUrl}/down/${market}?page=1&pageSize=5`),
+    const [upDataRaw, downDataRaw] = await Promise.all([
+      fetchNaverCached(`${baseUrl}/up/${market}?page=1&pageSize=5`),
+      fetchNaverCached(`${baseUrl}/down/${market}?page=1&pageSize=5`),
     ])
-
-    if (!upRes.ok || !downRes.ok) {
-      throw new HTTPException(502, { message: 'Korean stock ranking data unavailable' })
-    }
-
-    const [upDataRaw, downDataRaw] = await Promise.all([upRes.json(), downRes.json()]) as [unknown, unknown]
     const upStocksRaw = isRecord(upDataRaw) && Array.isArray(upDataRaw.stocks) ? upDataRaw.stocks : []
     const downStocksRaw = isRecord(downDataRaw) && Array.isArray(downDataRaw.stocks) ? downDataRaw.stocks : []
 
@@ -8609,7 +8583,7 @@ app.get('/api/premium/morning/brief', async (c) => {
 
   const headlinesTask = (async () => {
     const feedUrl = 'https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko'
-    const res = await fetch(feedUrl, { headers: { 'User-Agent': 'crossfin-news/1.0' } })
+    const res = await fetchWithTimeout(feedUrl, { headers: { 'User-Agent': 'crossfin-news/1.0' } })
     if (!res.ok) throw new HTTPException(502, { message: 'News feed unavailable' })
     const xml = await res.text()
 
@@ -9423,7 +9397,7 @@ app.post('/api/deposits', agentAuth, async (c) => {
 
   // Verify on Basescan
   const basescanUrl = `https://api.basescan.org/api?module=proxy&action=eth_getTransactionReceipt&txhash=${txHash}`
-  const receipt: unknown = await fetch(basescanUrl).then((r) => r.json()).catch(() => null)
+  const receipt: unknown = await fetchWithTimeout(basescanUrl, undefined, 10000).then((r) => r.json()).catch(() => null)
   const receiptResult = isRecord(receipt) && isRecord(receipt.result) ? receipt.result : null
 
   if (!receiptResult?.status || receiptResult.status !== '0x1') {
@@ -11253,55 +11227,62 @@ app.post('/api/telegram/webhook', async (c) => {
     const maxToolLoops = 3
     let finalReply = ''
 
-    for (let loop = 0; loop < maxToolLoops; loop += 1) {
-      const assistantMessage = await glmChatCompletion(zaiApiKey, messages, CROSSFIN_TELEGRAM_TOOLS)
-      messages.push({
-        role: 'assistant',
-        content: assistantMessage.content,
-        tool_calls: assistantMessage.tool_calls,
-      })
-
-      const toolCalls = assistantMessage.tool_calls ?? []
-      if (toolCalls.length === 0) {
-        finalReply = (assistantMessage.content ?? '').trim()
-        break
-      }
-
-      for (const toolCall of toolCalls) {
-        if (toolCall.type !== 'function') continue
-
-        let toolArgs: Record<string, unknown> = {}
-        const rawArgs = toolCall.function.arguments
-        if (rawArgs && rawArgs.trim()) {
-          try {
-            const parsed = JSON.parse(rawArgs) as unknown
-            if (isRecord(parsed)) {
-              toolArgs = parsed
-            }
-          } catch {
-            toolArgs = {}
-          }
-        }
-
-        let toolResult = ''
-        try {
-          toolResult = await executeTelegramTool(toolCall.function.name, toolArgs, c.env.DB)
-        } catch (toolErr) {
-          const toolError = toolErr instanceof Error ? toolErr.message : 'tool execution failed'
-          toolResult = JSON.stringify({ error: toolError, tool: toolCall.function.name })
-        }
-
+    try {
+      for (let loop = 0; loop < maxToolLoops; loop += 1) {
+        const assistantMessage = await glmChatCompletion(zaiApiKey, messages, CROSSFIN_TELEGRAM_TOOLS)
         messages.push({
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: toolResult,
+          role: 'assistant',
+          content: assistantMessage.content,
+          tool_calls: assistantMessage.tool_calls,
         })
-      }
-    }
 
-    if (!finalReply) {
-      const lastToolMessage = [...messages].reverse().find((msg) => msg.role === 'tool' && typeof msg.content === 'string')
-      finalReply = lastToolMessage?.content?.trim() || 'I gathered partial data, but could not complete the response in time. Please try again.'
+        const toolCalls = assistantMessage.tool_calls ?? []
+        if (toolCalls.length === 0) {
+          finalReply = (assistantMessage.content ?? '').trim()
+          break
+        }
+
+        for (const toolCall of toolCalls) {
+          if (toolCall.type !== 'function') continue
+
+          let toolArgs: Record<string, unknown> = {}
+          const rawArgs = toolCall.function.arguments
+          if (rawArgs && rawArgs.trim()) {
+            try {
+              const parsed = JSON.parse(rawArgs) as unknown
+              if (isRecord(parsed)) {
+                toolArgs = parsed
+              }
+            } catch {
+              toolArgs = {}
+            }
+          }
+
+          let toolResult = ''
+          try {
+            toolResult = await executeTelegramTool(toolCall.function.name, toolArgs, c.env.DB)
+          } catch (toolErr) {
+            const toolError = toolErr instanceof Error ? toolErr.message : 'tool execution failed'
+            toolResult = JSON.stringify({ error: toolError, tool: toolCall.function.name })
+          }
+
+          messages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: toolResult,
+          })
+        }
+      }
+
+      if (!finalReply) {
+        const lastToolMessage = [...messages].reverse().find((msg) => msg.role === 'tool' && typeof msg.content === 'string')
+        finalReply = lastToolMessage?.content?.trim() || 'I gathered partial data, but could not complete the response in time. Please try again.'
+      }
+    } catch (llmErr) {
+      const isTimeout = llmErr instanceof Error && llmErr.name === 'AbortError'
+      finalReply = isTimeout
+        ? '응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요. (Response timed out. Please try again shortly.)'
+        : '일시적인 오류가 발생했습니다. 다시 시도해주세요. (A temporary error occurred. Please try again.)'
     }
 
     await c.env.DB.prepare(

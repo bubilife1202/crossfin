@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.9.0] - 2026-02-22
+
+### Added
+- `fetchWithTimeout` utility with 5s default timeout on all external API calls
+- Naver Finance caching layer with timeout and User-Agent header
+- GLM-5 LLM 15s timeout with graceful failure message
+- NaN guard in `calcPremiums` to skip invalid/zero parsed values
+- Data freshness warnings (`_dataMeta`) on cached responses
+- Global disclaimer middleware on all API responses
+
+### Fixed
+- Bithumb orderbook response validation (replaced unsafe `as` cast with runtime `isRecord` checks)
+- Strengthened bilingual disclaimer text
+
+### Changed
+- Unified all component versions to 1.9.0 (API, MCP, SDK, docs, web, live)
+
 ## [1.8.9] - 2026-02-21
 
 ### Changed

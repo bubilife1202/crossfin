@@ -4,7 +4,7 @@ import type { Env } from '../types'
 import { requireAdmin, isRecord } from '../types'
 import type { RoutingExchange } from '../constants'
 import { ROUTING_EXCHANGES } from '../constants'
-import { ensureFeeTables, invalidateFeeCaches } from '../lib/fetchers'
+import { ensureFeeTables, invalidateFeeCaches, fetchWithTimeout } from '../lib/fetchers'
 import { audit, ensurePremiumPaymentsTable } from '../lib/helpers'
 
 const admin = new Hono<Env>()
@@ -148,7 +148,7 @@ admin.post('/telegram/setup-webhook', async (c) => {
 
   const webhookUrl = 'https://crossfin.dev/api/telegram/webhook'
 
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+  const response = await fetchWithTimeout(`https://api.telegram.org/bot${botToken}/setWebhook`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -156,7 +156,7 @@ admin.post('/telegram/setup-webhook', async (c) => {
       secret_token: webhookSecret,
       allowed_updates: ['message'],
     }),
-  })
+  }, 10000)
 
   const result = await response.json()
   return c.json({ ok: true, webhook_url: webhookUrl, telegram_response: result })
@@ -171,7 +171,7 @@ admin.get('/telegram/webhook-info', async (c) => {
     throw new HTTPException(500, { message: 'TELEGRAM_BOT_TOKEN not configured' })
   }
 
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/getWebhookInfo`)
+  const response = await fetchWithTimeout(`https://api.telegram.org/bot${botToken}/getWebhookInfo`, undefined, 10000)
   const result = await response.json()
   return c.json(result)
 })
@@ -189,11 +189,11 @@ admin.post('/telegram/test-typing', async (c) => {
     throw new HTTPException(500, { message: 'TELEGRAM_ADMIN_CHAT_ID not configured' })
   }
 
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendChatAction`, {
+  const response = await fetchWithTimeout(`https://api.telegram.org/bot${botToken}/sendChatAction`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ chat_id: adminChatId, action: 'typing' }),
-  })
+  }, 10000)
 
   const result = await response.json()
   return c.json({ ok: response.ok, status: response.status, chat_id: adminChatId, telegram_response: result })
