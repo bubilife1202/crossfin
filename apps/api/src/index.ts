@@ -978,6 +978,7 @@ app.get('/api/docs/guide', (c) => {
       { path: '/api/docs/guide', description: 'This guide' },
       { path: '/.well-known/crossfin.json', description: 'CrossFin discovery metadata for agents' },
       { path: '/.well-known/x402.json', description: 'x402 discovery metadata (payment/network/endpoints)' },
+      { path: '/.well-known/glama.json', description: 'Glama.ai ownership verification' },
       { path: '/api/route/exchanges', description: 'List supported exchanges with trading fees and supported coins' },
       { path: '/api/route/fees', description: 'Fee comparison table — trading + withdrawal fees for all exchanges' },
       { path: '/api/route/fees?coin=KAIA', description: 'Fee comparison for a specific coin' },
@@ -1391,6 +1392,18 @@ app.get('/.well-known/agent.json', (c) => {
   })
 })
 
+// === Glama.ai Ownership Verification ===
+
+app.get('/.well-known/glama.json', (c) => {
+  return c.json({
+    name: 'CrossFin',
+    maintainer: {
+      email: 'bubilife1202@gmail.com',
+    },
+    repository: 'https://github.com/bubilife1202/crossfin',
+  })
+})
+
 // === OpenAI Plugin Manifest ===
 
 app.get('/.well-known/ai-plugin.json', (c) => {
@@ -1455,6 +1468,7 @@ app.get('/llms.txt', (c) => {
 - [\`.well-known/x402.json\`](${origin}/.well-known/x402.json): Payment discovery
 - [\`.well-known/agent.json\`](${origin}/.well-known/agent.json): A2A Agent Card
 - [\`.well-known/ai-plugin.json\`](${origin}/.well-known/ai-plugin.json): OpenAI plugin manifest
+- [\`.well-known/glama.json\`](${origin}/.well-known/glama.json): Glama.ai ownership verification
 
 ## Quick Start
 
