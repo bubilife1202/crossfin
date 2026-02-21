@@ -57,8 +57,10 @@ import {
   fetchBithumbOrderbook,
   getExchangePrice,
   fetchGlobalPrices,
+  fetchGlobalPricesWithMeta,
   fetchUsdFxRates,
   fetchKrwRate,
+  fetchFxRatesWithMeta,
   fetchUpbitTicker,
   fetchUpbitOrderbook,
   fetchCoinoneTicker,
@@ -77,6 +79,43 @@ import adminRoutes from './routes/admin'
 import mcpRoutes from './routes/mcp'
 import a2aRoutes from './routes/a2a'
 import statusRoutes from './routes/status'
+
+import type { GlobalPricesMeta, FxRatesMeta } from './lib/fetchers'
+
+type DataMeta = {
+  freshness: 'live' | 'cached' | 'stale' | 'fallback'
+  sourceAgeMs: number
+  sources: string[]
+  warnings: string[]
+}
+
+function buildDataMeta(priceMeta?: GlobalPricesMeta, fxMeta?: FxRatesMeta): DataMeta {
+  const warnings: string[] = []
+  const sources: string[] = []
+  let worstFreshness: DataMeta['freshness'] = 'live'
+  let maxAgeMs = 0
+
+  const freshnessRank = { live: 0, cached: 1, stale: 2, fallback: 3 } as const
+  const worsen = (current: DataMeta['freshness'], next: DataMeta['freshness']): DataMeta['freshness'] =>
+    freshnessRank[next] > freshnessRank[current] ? next : current
+
+  if (priceMeta) {
+    sources.push(`prices:${priceMeta.source}`)
+    warnings.push(...priceMeta.warnings)
+    if (priceMeta.ageMs > maxAgeMs) maxAgeMs = priceMeta.ageMs
+    if (priceMeta.source === 'd1-snapshot') worstFreshness = worsen(worstFreshness, 'fallback')
+    else if (priceMeta.source === 'coingecko' || priceMeta.source === 'cryptocompare') worstFreshness = worsen(worstFreshness, 'stale')
+    else if (priceMeta.ageMs > 30000) worstFreshness = worsen(worstFreshness, 'cached')
+  }
+
+  if (fxMeta) {
+    sources.push(`fx:${fxMeta.source}`)
+    warnings.push(...fxMeta.warnings)
+    if (fxMeta.isFallback) worstFreshness = worsen(worstFreshness, 'fallback')
+  }
+
+  return { freshness: worstFreshness, sourceAgeMs: Math.round(maxAgeMs), sources, warnings }
+}
 
 const TELEGRAM_ROUTE_USAGE = [
   '라우팅 명령 형식:',
@@ -919,6 +958,23 @@ const endpointTelemetry: MiddlewareHandler<Env> = async (c, next) => {
 
 app.use('/api/*', endpointTelemetry)
 
+// Global disclaimer injection middleware
+app.use('*', async (c, next) => {
+  await next()
+  const ct = c.res.headers.get('content-type')
+  if (!ct?.includes('application/json')) return
+  try {
+    const body = await c.res.json()
+    if (typeof body === 'object' && body !== null && !Array.isArray(body) && !('_disclaimer' in body)) {
+      c.res = Response.json({ ...body, _disclaimer: CROSSFIN_DISCLAIMER }, {
+        status: c.res.status,
+        headers: c.res.headers,
+      })
+    }
+  } catch {
+    // keep original response on parse failure
+  }
+})
 
 app.onError((err, c) => {
   if (err instanceof HTTPException) {
@@ -5943,6 +5999,7 @@ interface RouteMeta {
   skippedReasons?: Record<string, string>
   analysisTimestamp: string
   disclaimer: string
+  slippageCaveat: string
   priceAge: {
     globalPrices: { ageMs: number; source: string; cacheTtlMs: number }
     koreanPrices: { source: string }
@@ -6254,6 +6311,7 @@ async function findOptimalRoute(
         if (!sourceGlobalPrice) continue
 
         buyFeePct = fromFeePct
+        // NOTE: Hardcoded slippage estimate for global exchanges. Actual slippage depends on orderbook depth and trade size.
         buySlippagePct = 0.10
         buyPriceUsed = sourceGlobalPrice
 
@@ -6477,6 +6535,7 @@ async function findOptimalRoute(
         : undefined,
       analysisTimestamp: new Date().toISOString(),
       disclaimer: 'Estimates based on current orderbook depth and market prices. Actual costs may vary due to price movements during execution.',
+      slippageCaveat: 'Slippage estimates are approximations based on limited orderbook data. Actual slippage may be significantly higher, especially for large trades or illiquid pairs.',
       priceAge: {
         globalPrices: globalPricesSource,
         koreanPrices: { source: 'exchange-api-direct' },
@@ -6587,13 +6646,14 @@ function splitPublisherFromTitle(title: string): { title: string; publisher: str
 // === Route Spread (paid $0.05) ===
 
 app.get('/api/premium/arbitrage/kimchi', async (c) => {
-  const [bithumbData, binancePrices, krwRate] = await Promise.all([
+  const [bithumbData, priceMeta, fxMeta] = await Promise.all([
     fetchBithumbAll(),
-    fetchGlobalPrices(c.env.DB),
-    fetchKrwRate(),
+    fetchGlobalPricesWithMeta(c.env.DB),
+    fetchFxRatesWithMeta(),
   ])
 
-  const premiums = calcPremiums(bithumbData, binancePrices, krwRate)
+  const krwRate = fxMeta.rates.KRW
+  const premiums = calcPremiums(bithumbData, priceMeta.prices, krwRate)
   const avg = premiums.length > 0
     ? Math.round(premiums.reduce((s, p) => s + p.premiumPct, 0) / premiums.length * 100) / 100
     : 0
@@ -6606,6 +6666,7 @@ app.get('/api/premium/arbitrage/kimchi', async (c) => {
     avgPremiumPct: avg,
     topPremium: premiums[0] ?? null,
     premiums,
+    _dataMeta: buildDataMeta(priceMeta, fxMeta),
     _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
@@ -6692,13 +6753,14 @@ app.get('/api/premium/arbitrage/kimchi/history', async (c) => {
 // === Arbitrage Opportunities (paid $0.10) ===
 
 app.get('/api/premium/arbitrage/opportunities', async (c) => {
-  const [bithumbData, binancePrices, krwRate] = await Promise.all([
+  const [bithumbData, priceMeta, fxMeta] = await Promise.all([
     fetchBithumbAll(),
-    fetchGlobalPrices(c.env.DB),
-    fetchKrwRate(),
+    fetchGlobalPricesWithMeta(c.env.DB),
+    fetchFxRatesWithMeta(),
   ])
 
-  const premiums = calcPremiums(bithumbData, binancePrices, krwRate)
+  const krwRate = fxMeta.rates.KRW
+  const premiums = calcPremiums(bithumbData, priceMeta.prices, krwRate)
   const tradingFeesPct = BITHUMB_FEES_PCT + BINANCE_FEES_PCT
 
   // Fetch orderbooks, premium trends, and withdrawal suspensions in parallel
@@ -6807,6 +6869,7 @@ app.get('/api/premium/arbitrage/opportunities', async (c) => {
     estimatedFeesNote: `Trading ${round2(tradingFeesPct)}% + per-coin withdrawal fees included`,
     bestOpportunity: profitable[0] ?? null,
     opportunities,
+    _dataMeta: buildDataMeta(priceMeta, fxMeta),
     _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
@@ -7480,6 +7543,15 @@ app.get('/api/premium/crypto/korea/5exchange', async (c) => {
   const maxPrice = prices.length > 0 ? Math.max(...prices) : 0
   const spreadPct = minPrice > 0 ? Math.round((maxPrice - minPrice) / minPrice * 10000) / 100 : 0
 
+  const failedExchanges: string[] = []
+  if (upbitRes.status === 'rejected') failedExchanges.push('upbit')
+  if (bithumbRes.status === 'rejected') failedExchanges.push('bithumb')
+  if (coinoneRes.status === 'rejected') failedExchanges.push('coinone')
+  if (gopaxRes.status === 'rejected') failedExchanges.push('gopax')
+  const exchangeWarnings: string[] = failedExchanges.length > 0
+    ? [`Exchange API(s) unavailable: ${failedExchanges.join(', ')}. Data may be incomplete.`]
+    : []
+
   return c.json({
     paid: true,
     service: 'crossfin-crypto-5exchange',
@@ -7488,6 +7560,12 @@ app.get('/api/premium/crypto/korea/5exchange', async (c) => {
     exchanges,
     spread: { minPriceKrw: minPrice, maxPriceKrw: maxPrice, spreadPct },
     source: 'upbit+bithumb+coinone+gopax',
+    _dataMeta: {
+      freshness: (failedExchanges.length >= 3 ? 'stale' : exchanges.length > 0 ? 'live' : 'fallback') as DataMeta['freshness'],
+      sourceAgeMs: 0,
+      sources: ['upbit', 'bithumb', 'coinone', 'gopax'].filter(e => !failedExchanges.includes(e)),
+      warnings: exchangeWarnings,
+    },
     _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
@@ -7999,8 +8077,8 @@ app.get('/api/premium/crypto/snapshot', async (c) => {
   const coin = 'BTC'
 
   const bithumbPromise = fetchBithumbAll()
-  const globalPricesPromise = fetchGlobalPrices(c.env.DB)
-  const krwRatePromise = fetchKrwRate()
+  const globalPricesPromise = fetchGlobalPricesWithMeta(c.env.DB)
+  const fxMetaPromise = fetchFxRatesWithMeta()
 
   type KimchiPremiumRow = ReturnType<typeof calcPremiums>[number]
   type ExchangePrice = { krw: number; usd: number }
@@ -8071,21 +8149,23 @@ app.get('/api/premium/crypto/snapshot', async (c) => {
     }
   })()
 
-  const [bithumbSet, globalSet, krwSet, exchangesSet] = await Promise.allSettled([
+  const [bithumbSet, globalSet, fxSet, exchangesSet] = await Promise.allSettled([
     bithumbPromise,
     globalPricesPromise,
-    krwRatePromise,
+    fxMetaPromise,
     exchangesTask,
   ] as const)
 
-  const usdKrw = krwSet.status === 'fulfilled' ? krwSet.value : 1450
+  const fxMeta = fxSet.status === 'fulfilled' ? fxSet.value : null
+  const priceMeta = globalSet.status === 'fulfilled' ? globalSet.value : null
+  const usdKrw = fxMeta ? fxMeta.rates.KRW : 1450
 
   const kimchiPremium = (() => {
-    if (bithumbSet.status !== 'fulfilled' || globalSet.status !== 'fulfilled') {
+    if (bithumbSet.status !== 'fulfilled' || !priceMeta) {
       return { avgPremiumPct: 0, topPair: '', pairsTracked: 0, premiums: [] as KimchiPremiumRow[] }
     }
 
-    const premiums = calcPremiums(bithumbSet.value, globalSet.value, usdKrw)
+    const premiums = calcPremiums(bithumbSet.value, priceMeta.prices, usdKrw)
     const avg = premiums.length > 0
       ? round2(premiums.reduce((s, p) => s + p.premiumPct, 0) / premiums.length)
       : 0
@@ -8188,6 +8268,7 @@ app.get('/api/premium/crypto/snapshot', async (c) => {
     },
     exchanges,
     volumeAnalysis,
+    _dataMeta: buildDataMeta(priceMeta ?? undefined, fxMeta ?? undefined),
     _disclaimer: CROSSFIN_DISCLAIMER,
     at,
   })
@@ -8198,22 +8279,25 @@ app.get('/api/premium/kimchi/stats', async (c) => {
 
   type KimchiPremiumRow = ReturnType<typeof calcPremiums>[number]
 
+  const priceMetaPromise = fetchGlobalPricesWithMeta(c.env.DB)
+  const fxMetaPromise = fetchFxRatesWithMeta()
+
   const currentTask = (async () => {
     const bithumbPromise = fetchBithumbAll()
-    const globalPricesPromise = fetchGlobalPrices(c.env.DB)
-    const krwRatePromise = fetchKrwRate()
 
-    const [bithumbSet, globalSet, krwSet] = await Promise.allSettled([
+    const [bithumbSet, globalSet, fxSet] = await Promise.allSettled([
       bithumbPromise,
-      globalPricesPromise,
-      krwRatePromise,
+      priceMetaPromise,
+      fxMetaPromise,
     ] as const)
 
-    const usdKrw = krwSet.status === 'fulfilled' ? krwSet.value : 1450
+    const fxMeta = fxSet.status === 'fulfilled' ? fxSet.value : null
+    const priceMeta = globalSet.status === 'fulfilled' ? globalSet.value : null
+    const usdKrw = fxMeta ? fxMeta.rates.KRW : 1450
 
     const premiums: KimchiPremiumRow[] =
-      bithumbSet.status === 'fulfilled' && globalSet.status === 'fulfilled'
-        ? calcPremiums(bithumbSet.value, globalSet.value, usdKrw)
+      bithumbSet.status === 'fulfilled' && priceMeta
+        ? calcPremiums(bithumbSet.value, priceMeta.prices, usdKrw)
         : []
 
     const avgPremiumPct = premiums.length > 0
@@ -8378,6 +8462,11 @@ app.get('/api/premium/kimchi/stats', async (c) => {
     ? spreadSet.value
     : { coin: 'BTC' as const, upbitKrw: null as number | null, bithumbKrw: null as number | null, coinoneKrw: null as number | null, spreadPct: 0, bestBuy: '', bestSell: '' }
 
+  const [resolvedPriceMeta, resolvedFxMeta] = await Promise.all([
+    priceMetaPromise.catch(() => undefined),
+    fxMetaPromise.catch(() => undefined),
+  ])
+
   return c.json({
     paid: true,
     service: 'crossfin-kimchi-stats',
@@ -8394,6 +8483,7 @@ app.get('/api/premium/kimchi/stats', async (c) => {
     fxRate: {
       usdKrw: round2(current.usdKrw),
     },
+    _dataMeta: buildDataMeta(resolvedPriceMeta, resolvedFxMeta),
     _disclaimer: CROSSFIN_DISCLAIMER,
     at,
   })
@@ -8403,7 +8493,8 @@ app.get('/api/premium/morning/brief', async (c) => {
   const at = new Date().toISOString()
   const market = 'KOSPI'
 
-  const krwRatePromise = fetchKrwRate()
+  const fxMetaPromise = fetchFxRatesWithMeta()
+  const priceMetaPromise = fetchGlobalPricesWithMeta(c.env.DB)
 
   type KimchiPremiumRow = ReturnType<typeof calcPremiums>[number]
   type HeadlinesItem = { title: string; publisher: string | null; link: string; publishedAt: string }
@@ -8417,13 +8508,14 @@ app.get('/api/premium/morning/brief', async (c) => {
   }
 
   const kimchiTask = (async () => {
-    const [bithumbData, binancePrices, krwRate] = await Promise.all([
+    const [bithumbData, pMeta, fMeta] = await Promise.all([
       fetchBithumbAll(),
-      fetchGlobalPrices(c.env.DB),
-      krwRatePromise,
+      priceMetaPromise,
+      fxMetaPromise,
     ])
 
-    const premiums = calcPremiums(bithumbData, binancePrices, krwRate)
+    const krwRate = fMeta.rates.KRW
+    const premiums = calcPremiums(bithumbData, pMeta.prices, krwRate)
     const avg = premiums.length > 0
       ? Math.round(premiums.reduce((s, p) => s + p.premiumPct, 0) / premiums.length * 100) / 100
       : 0
@@ -8540,15 +8632,18 @@ app.get('/api/premium/morning/brief', async (c) => {
     return items
   })()
 
-  const [krwSet, kimchiSet, indicesSet, momentumSet, headlinesSet] = await Promise.allSettled([
-    krwRatePromise,
+  const [fxSet, priceSet, kimchiSet, indicesSet, momentumSet, headlinesSet] = await Promise.allSettled([
+    fxMetaPromise,
+    priceMetaPromise,
     kimchiTask,
     indicesTask,
     momentumTask,
     headlinesTask,
   ] as const)
 
-  const usdKrw = krwSet.status === 'fulfilled' ? krwSet.value : 1450
+  const fxMeta = fxSet.status === 'fulfilled' ? fxSet.value : null
+  const priceMeta = priceSet.status === 'fulfilled' ? priceSet.value : null
+  const usdKrw = fxMeta ? fxMeta.rates.KRW : 1450
 
   const kimchiPremium = kimchiSet.status === 'fulfilled'
     ? kimchiSet.value
@@ -8573,11 +8668,12 @@ app.get('/api/premium/morning/brief', async (c) => {
     kimchiPremium,
     fxRate: {
       usdKrw: round2(usdKrw),
-      source: 'open.er-api.com',
+      source: fxMeta ? fxMeta.source : 'fallback',
     },
     indices,
     momentum,
     headlines,
+    _dataMeta: buildDataMeta(priceMeta ?? undefined, fxMeta ?? undefined),
     _disclaimer: CROSSFIN_DISCLAIMER,
     at,
   })
@@ -8586,15 +8682,17 @@ app.get('/api/premium/morning/brief', async (c) => {
 app.get('/api/premium/market/cross-exchange', async (c) => {
   const coins = parseCoinsQueryParam(c.req.query('coins'))
 
-  const [bithumbSet, binanceSet, krwSet] = await Promise.allSettled([
+  const [bithumbSet, binanceSet, fxSet] = await Promise.allSettled([
     fetchBithumbAll(),
-    fetchGlobalPrices(c.env.DB),
-    fetchKrwRate(),
+    fetchGlobalPricesWithMeta(c.env.DB),
+    fetchFxRatesWithMeta(),
   ])
 
   const bithumbData: Record<string, Record<string, string>> = bithumbSet.status === 'fulfilled' ? bithumbSet.value : {}
-  const binancePrices: Record<string, number> = binanceSet.status === 'fulfilled' ? binanceSet.value : {}
-  const krwRate = krwSet.status === 'fulfilled' ? krwSet.value : 1450
+  const priceMeta = binanceSet.status === 'fulfilled' ? binanceSet.value : null
+  const fxMeta = fxSet.status === 'fulfilled' ? fxSet.value : null
+  const binancePrices: Record<string, number> = priceMeta ? priceMeta.prices : {}
+  const krwRate = fxMeta ? fxMeta.rates.KRW : 1450
 
   const rows = await Promise.all(
     coins.map(async (coin) => {
@@ -8760,6 +8858,7 @@ app.get('/api/premium/market/cross-exchange', async (c) => {
       spreadOpportunityCount,
       bestDomesticSpread: spreadOpportunityCandidates[0] ?? null,
     },
+    _dataMeta: buildDataMeta(priceMeta ?? undefined, fxMeta ?? undefined),
     _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })

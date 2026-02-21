@@ -1,4 +1,12 @@
-export const CROSSFIN_DISCLAIMER = 'This data is for informational purposes only and does not constitute investment advice, financial advice, or trading advice. CrossFin is not a registered investment advisor. All trading decisions are made at the user\'s own risk. 본 데이터는 정보 제공 목적으로만 제공되며 투자 자문에 해당하지 않습니다.'
+export const CROSSFIN_DISCLAIMER =
+  'This data is provided "AS IS" for informational purposes only. ' +
+  'It does not constitute investment advice. Data accuracy, completeness, ' +
+  'and timeliness are not guaranteed. All trading decisions are at the ' +
+  "user's sole risk. CrossFin is not liable for any losses arising from " +
+  'the use of this data. | ' +
+  '본 데이터는 정보 제공 목적의 "있는 그대로" 제공이며, 투자 자문에 해당하지 않습니다. ' +
+  '데이터의 정확성, 완전성, 시의성은 보증되지 않습니다. 모든 거래 결정은 이용자의 ' +
+  '책임이며, CrossFin은 본 데이터 사용으로 인한 어떠한 손해에도 책임을 지지 않습니다.'
 
 export const TRACKED_PAIRS: Record<string, string> = {
   BTC: 'BTCUSDT', ETH: 'ETHUSDT', XRP: 'XRPUSDT',

@@ -90,7 +90,8 @@ export function computeAction(
   slippageEstimatePct: number,
   transferTimeMin: number,
   volatilityPct: number,
-): { indicator: 'FAVORABLE' | 'NEUTRAL' | 'UNFAVORABLE'; signalStrength: number; reason: string } {
+): { indicator: 'FAVORABLE' | 'NEUTRAL' | 'UNFAVORABLE'; signalStrength: number; reason: string; caveat: string } {
+  const caveat = 'This is a market data observation, not a trading recommendation. Actual execution results may differ significantly, especially in low-liquidity markets.'
   const adjustedProfit = netProfitPct - slippageEstimatePct
   const premiumRisk = volatilityPct * Math.sqrt(transferTimeMin / 60)
   const score = adjustedProfit - premiumRisk
@@ -101,6 +102,7 @@ export function computeAction(
       indicator: 'FAVORABLE',
       signalStrength: Math.round(signalStrength * 100) / 100,
       reason: `Adjusted profit ${round2(adjustedProfit)}% exceeds risk ${round2(premiumRisk)}% with strong margin`,
+      caveat,
     }
   } else if (score > 0) {
     const signalStrength = 0.5 + (score / 1.0) * 0.3
@@ -108,6 +110,7 @@ export function computeAction(
       indicator: 'NEUTRAL',
       signalStrength: Math.round(signalStrength * 100) / 100,
       reason: `Marginal profit ${round2(adjustedProfit)}% after risk ${round2(premiumRisk)}% — monitor for better entry`,
+      caveat,
     }
   } else {
     const signalStrength = Math.max(0.1, 0.5 + score * 0.2)
@@ -115,6 +118,7 @@ export function computeAction(
       indicator: 'UNFAVORABLE',
       signalStrength: Math.round(signalStrength * 100) / 100,
       reason: `Negative expected return: adjusted profit ${round2(adjustedProfit)}% minus risk ${round2(premiumRisk)}%`,
+      caveat,
     }
   }
 }
@@ -123,7 +127,8 @@ export function computeRouteAction(
   totalCostPct: number,
   slippageEstimatePct: number,
   transferTimeMin: number,
-): { indicator: 'FAVORABLE' | 'NEUTRAL' | 'UNFAVORABLE'; signalStrength: number; reason: string } {
+): { indicator: 'FAVORABLE' | 'NEUTRAL' | 'UNFAVORABLE'; signalStrength: number; reason: string; caveat: string } {
+  const caveat = 'Slippage estimates are approximations. Actual slippage may be significantly higher, especially for large trades or illiquid pairs.'
   const slippagePenalty = Math.max(0, slippageEstimatePct) * 0.4
   const timePenalty = Math.max(0, transferTimeMin - 2) * 0.07
   const score = totalCostPct + slippagePenalty + timePenalty
@@ -134,6 +139,7 @@ export function computeRouteAction(
       indicator: 'FAVORABLE',
       signalStrength: Math.round(signalStrength * 100) / 100,
       reason: `Low projected routing cost ${round2(totalCostPct)}% with manageable transfer risk`,
+      caveat,
     }
   }
 
@@ -143,6 +149,7 @@ export function computeRouteAction(
       indicator: 'NEUTRAL',
       signalStrength: Math.round(signalStrength * 100) / 100,
       reason: `Moderate routing cost ${round2(totalCostPct)}% — monitor liquidity before execution`,
+      caveat,
     }
   }
 
@@ -151,5 +158,6 @@ export function computeRouteAction(
     indicator: 'UNFAVORABLE',
     signalStrength: Math.round(signalStrength * 100) / 100,
     reason: `High projected routing cost ${round2(totalCostPct)}% for current market conditions`,
+    caveat,
   }
 }

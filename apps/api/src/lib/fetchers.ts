@@ -829,6 +829,33 @@ export async function fetchGlobalPrices(db?: D1Database): Promise<Record<string,
   })
 }
 
+export type GlobalPricesMeta = {
+  prices: Record<string, number>
+  source: string
+  ageMs: number
+  warnings: string[]
+}
+
+export async function fetchGlobalPricesWithMeta(db?: D1Database): Promise<GlobalPricesMeta> {
+  const globalAny = globalThis as unknown as {
+    __crossfinGlobalPricesCache?: CachedGlobalPrices
+  }
+  const prices = await fetchGlobalPrices(db)
+  const cached = globalAny.__crossfinGlobalPricesCache
+  const source = cached?.source ?? 'unknown'
+  const ageMs = cached ? Date.now() - (cached.expiresAt - GLOBAL_PRICES_SUCCESS_TTL_MS) : 0
+  const warnings: string[] = []
+  if (source === 'd1-snapshot') {
+    warnings.push('Price data is from D1 snapshot, not real-time. Data may be up to 7 days old.')
+  } else if (source === 'coingecko' || source === 'cryptocompare') {
+    warnings.push(`Price data from ${source} fallback. Primary exchange APIs may be unavailable.`)
+  }
+  if (ageMs > 30000) {
+    warnings.push(`Price data may be delayed (age: ${Math.round(ageMs / 1000)}s).`)
+  }
+  return { prices, source, ageMs, warnings }
+}
+
 // ============================================================
 // FX Rates
 // ============================================================
@@ -880,6 +907,29 @@ export async function fetchUsdFxRates(): Promise<Record<'KRW' | 'JPY' | 'INR', n
 export async function fetchKrwRate(): Promise<number> {
   const rates = await fetchUsdFxRates()
   return rates.KRW
+}
+
+export type FxRatesMeta = {
+  rates: Record<'KRW' | 'JPY' | 'INR', number>
+  isFallback: boolean
+  source: string
+  warnings: string[]
+}
+
+export async function fetchFxRatesWithMeta(): Promise<FxRatesMeta> {
+  const globalAny = globalThis as unknown as {
+    __crossfinUsdFxRatesCache?: { value: Record<'KRW' | 'JPY' | 'INR', number>; expiresAt: number }
+  }
+  const rates = await fetchUsdFxRates()
+  const cached = globalAny.__crossfinUsdFxRatesCache
+  // Detect if using hardcoded fallback by checking if values exactly match defaults
+  const isHardcodedFallback = rates.KRW === 1450 && rates.JPY === 150 && rates.INR === 85
+  const isFallback = isHardcodedFallback || !cached || Date.now() >= cached.expiresAt
+  const warnings: string[] = []
+  if (isHardcodedFallback) {
+    warnings.push('Exchange rate is using hardcoded fallback value. Actual rate may differ significantly.')
+  }
+  return { rates, isFallback, source: isFallback ? 'fallback' : 'open.er-api.com', warnings }
 }
 
 // ============================================================
