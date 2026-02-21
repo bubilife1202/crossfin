@@ -1554,7 +1554,7 @@ app.get('/llms.txt', (c) => {
 
 // === Legal Endpoints ===
 
-app.get('/legal/terms', (c) => {
+app.get('/api/legal/terms', (c) => {
   return c.json({
     title: 'CrossFin Terms of Service / 이용약관',
     effectiveDate: '2026-02-22',
@@ -1609,7 +1609,7 @@ app.get('/legal/terms', (c) => {
   })
 })
 
-app.get('/legal/disclaimer', (c) => {
+app.get('/api/legal/disclaimer', (c) => {
   return c.json({
     title: 'CrossFin Full Disclaimer / 면책 고지',
     effectiveDate: '2026-02-22',
@@ -1653,7 +1653,7 @@ app.get('/legal/disclaimer', (c) => {
   })
 })
 
-app.get('/legal/privacy', (c) => {
+app.get('/api/legal/privacy', (c) => {
   return c.json({
     title: 'CrossFin Privacy Policy / 개인정보처리방침',
     effectiveDate: '2026-02-22',
