@@ -9,7 +9,7 @@ const CROSSFIN_WALLET = "0xe4E79Ce6a1377C58f0Bb99D023908858A4DB5779";
 /* ─── Types ─── */
 
 interface Decision {
-  indicator: "FAVORABLE" | "NEUTRAL" | "UNFAVORABLE";
+  indicator: "POSITIVE_SPREAD" | "NEUTRAL" | "NEGATIVE_SPREAD";
   signalStrength: number;
   reason: string;
 }
@@ -25,7 +25,7 @@ interface ArbitrageRaw {
   demo: boolean;
   krwUsdRate?: number;
   avgPremiumPct: number;
-  favorableCandidates?: number;
+  positiveSpreadCount?: number;
   marketCondition?: string;
   preview: ArbitragePair[];
   at: string;
@@ -34,7 +34,7 @@ interface ArbitrageRaw {
 interface ArbitrageData {
   average_premium: number;
   krwUsdRate?: number;
-  favorableCandidates: number;
+  positiveSpreadCount: number;
   marketCondition: string;
   pairs: ArbitragePair[];
 }
@@ -324,7 +324,7 @@ export default function App() {
       setArb({
         average_premium: arbRaw.avgPremiumPct,
         krwUsdRate: arbRaw.krwUsdRate,
-        favorableCandidates: arbRaw.favorableCandidates ?? 0,
+        positiveSpreadCount: arbRaw.positiveSpreadCount ?? 0,
         marketCondition: arbRaw.marketCondition ?? "neutral",
         pairs: arbRaw.preview ?? [],
       });
@@ -601,11 +601,11 @@ export default function App() {
                 <span
                   className={`marketBadge ${arb.marketCondition}`}
                 >
-                  {arb.marketCondition === "favorable"
-                    ? "🟢 Favorable"
+                  {arb.marketCondition === "positive"
+                    ? "🟢 Positive Spread"
                     : arb.marketCondition === "neutral"
                       ? "🟡 Neutral"
-                      : "🔴 Unfavorable"}
+                      : "🔴 Negative Spread"}
                 </span>
               )}
               <span className="panelBadge">
@@ -616,7 +616,7 @@ export default function App() {
           </div>
           <p className="decisionSubtext">
             Compares Bithumb (Korea, KRW) vs Binance (Global, USD) prices for each coin.
-            When the price gap is wide enough to cover fees, it signals FAVORABLE — otherwise NEUTRAL or UNFAVORABLE.
+            When the price gap is wide enough to cover fees, it signals POSITIVE_SPREAD — otherwise NEUTRAL or NEGATIVE_SPREAD.
           </p>
           <div className="decisionGrid">
             {pairs.length === 0 && (
@@ -1034,7 +1034,7 @@ function MetricCard({
 function DecisionCard({ pair }: { pair: ArbitragePair }) {
   const d = pair.decision;
   const actionClass = d
-    ? d.indicator === "FAVORABLE"
+    ? d.indicator === "POSITIVE_SPREAD"
       ? "execute"
       : d.indicator === "NEUTRAL"
         ? "wait"

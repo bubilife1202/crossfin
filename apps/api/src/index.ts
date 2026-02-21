@@ -471,7 +471,7 @@ async function glmChatCompletion(apiKey: string, messages: GlmMessage[], tools: 
   try {
     const res = await fetch('https://api.z.ai/api/coding/paas/v4/chat/completions', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', Authorization: `Bearer ${apiKey}`, 'User-Agent': 'CrossFin-API/1.9.0' },
+      headers: { 'content-type': 'application/json', Authorization: `Bearer ${apiKey}`, 'User-Agent': 'CrossFin-API/1.10.0' },
       signal: controller.signal,
       body: JSON.stringify({
         model: 'glm-5',

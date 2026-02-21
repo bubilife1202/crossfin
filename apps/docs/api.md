@@ -18,7 +18,7 @@ Base URL: `https://crossfin.dev` — 9 exchanges: Bithumb, Upbit, Coinone, GoPax
 ## 2. Arbitrage & Route Spread Index
 
 <ApiTable :endpoints="[
-  { method: 'GET', path: '/api/arbitrage/demo', description: 'Top-3 indicators (FAVORABLE/NEUTRAL/UNFAVORABLE)', price: 'Free' },
+  { method: 'GET', path: '/api/arbitrage/demo', description: 'Top-3 indicators (POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD)', price: 'Free' },
   { method: 'GET', path: '/api/premium/arbitrage/kimchi', description: 'Full 11-pair route spread index', price: '$0.05' },
   { method: 'GET', path: '/api/premium/arbitrage/opportunities', description: 'Full arbitrage scan', price: '$0.10' },
   { method: 'GET', path: '/api/premium/arbitrage/kimchi/history', description: 'Route spread 7-day history', price: '$0.05' },

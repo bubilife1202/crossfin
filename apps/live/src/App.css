@@ -613,9 +613,9 @@
   letter-spacing: 0.02em;
 }
 
-.marketBadge.favorable { background: var(--green-dim); color: var(--green); }
+.marketBadge.positive { background: var(--green-dim); color: var(--green); }
 .marketBadge.neutral { background: var(--cyan-dim); color: var(--cyan); }
-.marketBadge.unfavorable { background: var(--red-dim); color: var(--red); }
+.marketBadge.negative { background: var(--red-dim); color: var(--red); }
 .marketBadge.unknown { background: rgba(255,255,255,0.05); color: var(--muted); }
 
 .decisionSubtext {

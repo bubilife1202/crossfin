@@ -298,7 +298,7 @@ Agent steps:
 |---|---|---|
 | `crossfin_kimchi_premium` | $0.05 | Route spread for 11 crypto pairs |
 | `crossfin_kimchi_premium_history` | $0.05 | Hourly spread snapshots (up to 7 days) |
-| `crossfin_arbitrage_opportunities` | $0.10 | FAVORABLE/NEUTRAL/UNFAVORABLE indicators with signalStrength |
+| `crossfin_arbitrage_opportunities` | $0.10 | POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD indicators with signalStrength |
 | `crossfin_cross_exchange` | $0.08 | 4 Korean exchange price comparison |
 | `crossfin_crypto_korea_5exchange` | $0.08 | Multi-exchange coin comparison |
 | `crossfin_bithumb_orderbook` | $0.02 | Live 30-level orderbook |
