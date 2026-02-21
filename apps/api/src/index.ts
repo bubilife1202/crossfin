@@ -975,7 +975,7 @@ app.use('*', async (c, next) => {
   const ct = c.res.headers.get('content-type')
   if (!ct?.includes('application/json')) return
   try {
-    const body = await c.res.json()
+    const body = await c.res.clone().json()
     if (typeof body === 'object' && body !== null && !Array.isArray(body) && !('_disclaimer' in body)) {
       c.res = Response.json({ ...body, _disclaimer: CROSSFIN_DISCLAIMER }, {
         status: c.res.status,
