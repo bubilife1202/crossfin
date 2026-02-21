@@ -10168,21 +10168,11 @@ app.get('/api/routing/optimal', async (c) => {
 
   const routing = await findOptimalRoute(fromEx, fromCur, toEx, toCur, amount, strategy, c.env.DB)
 
-  const optimalPreview = routing.optimal
-    ? {
-        bridgeCoin: routing.optimal.bridgeCoin,
-        totalCostPct: routing.optimal.totalCostPct,
-        totalTimeMinutes: routing.optimal.totalTimeMinutes,
-        indicator: routing.optimal.indicator,
-        summary: routing.optimal.summary,
-      }
-    : null
-
   return c.json({
     service: 'crossfin-routing-preview',
     free: true,
     request: { from: `${fromEx}:${fromCur}`, to: `${toEx}:${toCur}`, amount, strategy },
-    optimal: optimalPreview,
+    optimal: routing.optimal ?? null,
     alternativesCount: routing.alternatives?.length ?? 0,
     dataFreshness: routing.meta?.dataFreshness ?? 'unknown',
     _premiumCTA: {
