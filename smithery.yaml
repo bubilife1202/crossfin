@@ -21,7 +21,7 @@ startCommand:
   commandFunction: |-
     (config) => ({
       command: 'npx',
-      args: ['-y', 'crossfin-mcp@1.8.8'],
+      args: ['-y', 'crossfin-mcp@1.8.9'],
       env: Object.assign({},
         config.evmPrivateKey ? { EVM_PRIVATE_KEY: config.evmPrivateKey } : {},
         config.apiUrl ? { CROSSFIN_API_URL: config.apiUrl } : {},

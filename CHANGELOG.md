@@ -14,6 +14,7 @@
 - Sync dates and version numbers across configs
 - Add SDK package (packages/sdk) with ESM support
 - Bump MCP server to 1.8.9
+- Unify all component versions to 1.8.9
 
 ## [1.8.8] - 2026-02-20
 

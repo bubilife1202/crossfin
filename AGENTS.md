@@ -87,6 +87,53 @@ curl https://crossfin.dev/api/route/exchanges
 
 Network: Base mainnet (eip155:8453), Currency: USDC
 
+## Versioning — 반드시 3개 동시 업데이트
+
+API, MCP 서버, SDK는 **항상 같은 버전**을 유지한다. 버전을 올릴 때 아래 파일을 **모두** 업데이트해야 한다.
+
+### 버전 업데이트 체크리스트
+
+```
+[ ] catalog/crossfin-catalog.json          → apiVersion
+[ ] apps/mcp-server/package.json           → version
+[ ] apps/mcp-server/server.json            → version + packages[].version
+[ ] apps/mcp-server/package-lock.json      → version (npm install로 자동)
+[ ] packages/sdk/package.json              → version
+[ ] packages/sdk/package-lock.json         → version (npm install로 자동)
+[ ] packages/sdk/src/types.ts              → 버전 문자열 있으면 변경
+[ ] packages/sdk/README.md                 → 예시 출력의 version
+[ ] apps/web/public/.well-known/crossfin.json → version + updatedAt
+[ ] examples/gpt-actions-schema.yaml       → version
+[ ] smithery.yaml                          → crossfin-mcp@{version}
+[ ] CHANGELOG.md                           → 새 버전 항목 추가
+```
+
+### 배포 순서
+
+```bash
+# 1. npm publish (MCP + SDK)
+cd apps/mcp-server && npm run build && npm publish
+cd packages/sdk && npm run build && npm publish --access public
+
+# 2. API 배포
+cd apps/api && npx wrangler deploy
+
+# 3. Web 배포 (crossfin.json 변경 시)
+cd apps/web && npm run build && npx wrangler pages deploy dist --project-name=crossfin
+
+# 4. Docs 배포 (문서 변경 시)
+cd apps/docs && npm run build && npx wrangler pages deploy dist --project-name=crossfin-docs
+
+# 5. Live 배포 (live 변경 시)
+cd apps/live && npm run build && npx wrangler pages deploy dist --project-name=crossfin-live
+```
+
+### 절대 하면 안 되는 것
+
+- API, MCP, SDK 중 하나만 버전 올리고 나머지는 안 올리기
+- CHANGELOG에 새 버전 항목 안 넣기
+- npm publish 후 git commit/push 안 하기
+
 ## Coding Conventions
 
 - TypeScript throughout
