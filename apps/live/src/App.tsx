@@ -176,6 +176,32 @@ interface AcpStatusData {
   execution_mode: string;
 }
 
+
+interface AsianPremiumCountry {
+  exchange: string;
+  currency: string;
+  avgPremiumPct: number;
+  topCoin: string;
+  topPremiumPct: number;
+  pairsTracked: number;
+  fxRate: number;
+}
+
+interface AsianPremiumSummary {
+  highestPremiumCountry: string;
+  highestPremiumPct: number;
+  lowestPremiumCountry: string;
+  lowestPremiumPct: number;
+  asianAvgPremiumPct: number;
+}
+
+interface AsianPremiumData {
+  summary: AsianPremiumSummary;
+  korea: AsianPremiumCountry;
+  japan: AsianPremiumCountry;
+  indonesia: AsianPremiumCountry;
+  thailand: AsianPremiumCountry;
+}
 /* ─── Helpers ─── */
 
 function timeAgo(iso: string): string {
@@ -303,6 +329,7 @@ export default function App() {
   const [routeFees, setRouteFees] = useState<RouteFeeData | null>(null);
   const [routePairs, setRoutePairs] = useState<RoutePairsData | null>(null);
   const [acpStatus, setAcpStatus] = useState<AcpStatusData | null>(null);
+  const [asianPremium, setAsianPremium] = useState<AsianPremiumData | null>(null);
 
   const refresh = useCallback(async () => {
     const results = await Promise.allSettled([
@@ -316,13 +343,14 @@ export default function App() {
       fetchJson<RouteFeeData>(`${API}/api/route/fees?coin=XRP`),
       fetchJson<RoutePairsData>(`${API}/api/route/pairs`),
       fetchJson<AcpStatusData>(`${API}/api/acp/status`),
+      fetchJson<AsianPremiumData>(`${API}/api/premium/asia/overview`),
     ]);
 
     const vals = results.map((r) =>
       r.status === "fulfilled" ? r.value : null,
     );
 
-    const [arbRaw, statsRaw, analyticsRaw, healthVal, survivalVal, txsVal, routeStatusVal, routeFeesVal, routePairsVal, acpStatusVal] =
+    const [arbRaw, statsRaw, analyticsRaw, healthVal, survivalVal, txsVal, routeStatusVal, routeFeesVal, routePairsVal, acpStatusVal, asianPremiumVal] =
       vals as [
         ArbitrageRaw | null,
         RegistryStatsRaw | null,
@@ -334,6 +362,7 @@ export default function App() {
         RouteFeeData | null,
         RoutePairsData | null,
         AcpStatusData | null,
+        AsianPremiumData | null,
       ];
 
     if (arbRaw) {
@@ -371,6 +400,7 @@ export default function App() {
     if (routeFeesVal) setRouteFees(routeFeesVal);
     if (routePairsVal) setRoutePairs(routePairsVal);
     if (acpStatusVal) setAcpStatus(acpStatusVal);
+    if (asianPremiumVal) setAsianPremium(asianPremiumVal);
 
     const successfulReads = [
       arbRaw,
@@ -493,7 +523,7 @@ export default function App() {
             <div className="agentDemoLeft">
               <h3 className="agentDemoHeading">Your agent speaks Korean crypto</h3>
               <p className="agentDemoDesc">
-                Connect via MCP server or Telegram bot — query Korean exchanges, find optimal routes, and access 35 paid APIs through natural language.
+                Connect via MCP server or Telegram bot — query Korean exchanges, find optimal routes, and access 23 APIs through natural language.
               </p>
               <div className="agentDemoFeatures">
                 <div className="agentDemoFeature">
@@ -510,7 +540,7 @@ export default function App() {
                 </div>
                 <div className="agentDemoFeature">
                   <span className="agentFeatureIcon">⚡</span>
-                  <span>35 paid APIs via x402 micropayments</span>
+                  <span>23 APIs — all free during open beta</span>
                 </div>
               </div>
             </div>
@@ -562,6 +592,88 @@ export default function App() {
         </section>
 
 
+
+
+        {/* ═══════════════════════════════════════════════
+            SECTION 3.5: Asian Premium Index
+            ═══════════════════════════════════════════════ */}
+        {asianPremium && (
+          <section className="panel asianPremiumPanel">
+            <div className="panelHeader">
+              <h2 className="panelTitle">Asian Premium Index</h2>
+              <span className="panelBadge">
+                <span className="liveDot" />
+                Live
+              </span>
+            </div>
+            <p className="panelSubtext">
+              Real-time crypto premium across 4 Asian markets vs Binance (Global)
+            </p>
+            <div className="asianPremiumGrid">
+              <div className="asianCountryCard">
+                <div className="asianCountryHeader">
+                  <span className="asianCountryFlag">🇰🇷</span>
+                  <span className="asianCountryName">Korea</span>
+                </div>
+                <span className="asianExchange">{asianPremium.korea.exchange}</span>
+                <span className={`asianPremiumValue ${asianPremium.korea.avgPremiumPct >= 0 ? 'positive' : 'negative'}`}>
+                  {asianPremium.korea.avgPremiumPct >= 0 ? '+' : ''}{asianPremium.korea.avgPremiumPct.toFixed(2)}%
+                </span>
+                <span className="asianCurrency">{asianPremium.korea.currency}</span>
+                <span className="asianTopCoin">
+                  Top: <span>{asianPremium.korea.topCoin} {asianPremium.korea.topPremiumPct >= 0 ? '+' : ''}{asianPremium.korea.topPremiumPct.toFixed(2)}%</span>
+                </span>
+              </div>
+              <div className="asianCountryCard">
+                <div className="asianCountryHeader">
+                  <span className="asianCountryFlag">🇯🇵</span>
+                  <span className="asianCountryName">Japan</span>
+                </div>
+                <span className="asianExchange">{asianPremium.japan.exchange}</span>
+                <span className={`asianPremiumValue ${asianPremium.japan.avgPremiumPct >= 0 ? 'positive' : 'negative'}`}>
+                  {asianPremium.japan.avgPremiumPct >= 0 ? '+' : ''}{asianPremium.japan.avgPremiumPct.toFixed(2)}%
+                </span>
+                <span className="asianCurrency">{asianPremium.japan.currency}</span>
+                <span className="asianTopCoin">
+                  Top: <span>{asianPremium.japan.topCoin} {asianPremium.japan.topPremiumPct >= 0 ? '+' : ''}{asianPremium.japan.topPremiumPct.toFixed(2)}%</span>
+                </span>
+              </div>
+              <div className="asianCountryCard">
+                <div className="asianCountryHeader">
+                  <span className="asianCountryFlag">🇮🇩</span>
+                  <span className="asianCountryName">Indonesia</span>
+                </div>
+                <span className="asianExchange">{asianPremium.indonesia.exchange}</span>
+                <span className={`asianPremiumValue ${asianPremium.indonesia.avgPremiumPct >= 0 ? 'positive' : 'negative'}`}>
+                  {asianPremium.indonesia.avgPremiumPct >= 0 ? '+' : ''}{asianPremium.indonesia.avgPremiumPct.toFixed(2)}%
+                </span>
+                <span className="asianCurrency">{asianPremium.indonesia.currency}</span>
+                <span className="asianTopCoin">
+                  Top: <span>{asianPremium.indonesia.topCoin} {asianPremium.indonesia.topPremiumPct >= 0 ? '+' : ''}{asianPremium.indonesia.topPremiumPct.toFixed(2)}%</span>
+                </span>
+              </div>
+              <div className="asianCountryCard">
+                <div className="asianCountryHeader">
+                  <span className="asianCountryFlag">🇹🇭</span>
+                  <span className="asianCountryName">Thailand</span>
+                </div>
+                <span className="asianExchange">{asianPremium.thailand.exchange}</span>
+                <span className={`asianPremiumValue ${asianPremium.thailand.avgPremiumPct >= 0 ? 'positive' : 'negative'}`}>
+                  {asianPremium.thailand.avgPremiumPct >= 0 ? '+' : ''}{asianPremium.thailand.avgPremiumPct.toFixed(2)}%
+                </span>
+                <span className="asianCurrency">{asianPremium.thailand.currency}</span>
+                <span className="asianTopCoin">
+                  Top: <span>{asianPremium.thailand.topCoin} {asianPremium.thailand.topPremiumPct >= 0 ? '+' : ''}{asianPremium.thailand.topPremiumPct.toFixed(2)}%</span>
+                </span>
+              </div>
+            </div>
+            <div className="asianAvgRow">
+              <span>Asian Avg: <span className="asianAvgValue">{asianPremium.summary.asianAvgPremiumPct >= 0 ? '+' : ''}{asianPremium.summary.asianAvgPremiumPct.toFixed(2)}%</span></span>
+              <span>|</span>
+              <span>All vs Binance (Global)</span>
+            </div>
+          </section>
+        )}
 
         {/* ═══════════════════════════════════════════════
             SECTION 5: Metrics row (condensed)
@@ -771,6 +883,29 @@ export default function App() {
                       <span className="exchangePillName">{formatExchangeLabel(ex.exchange)}</span>
                       <span className={`statusDotSmall ${ex.status === "online" ? "green" : "red"}`} />
                       <span className="exchangePillStatus">{ex.status}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="exchangeHubCard premium">
+                <div className="exchangeHubHead">
+                  <div>
+                    <h3 className="exchangeHubTitle">Premium Data</h3>
+                    <p className="exchangeHubDesc">Asian premium comparison sources</p>
+                  </div>
+                  <span className="exchangeHubMeta">3 sources</span>
+                </div>
+                <div className="exchangeHubList">
+                  {[
+                    { name: "bitbank", label: "🇯🇵 JPY" },
+                    { name: "Indodax", label: "🇮🇩 IDR" },
+                    { name: "Bitkub", label: "🇹🇭 THB" },
+                  ].map((src) => (
+                    <div key={src.name} className="exchangePill online">
+                      <span className="exchangePillName">{src.name}</span>
+                      <span className="statusDotSmall green" />
+                      <span className="exchangePillStatus">{src.label}</span>
                     </div>
                   ))}
                 </div>
