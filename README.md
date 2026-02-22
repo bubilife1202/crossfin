@@ -286,6 +286,16 @@ apps/
   docs/         Documentation (docs.crossfin.dev)
 ```
 
+## Release Verification
+
+Run a full pre-deploy verification sweep in one command:
+
+```bash
+npm --prefix apps/api run verify:release
+```
+
+This command runs API contract/catalog verification, builds API/web/docs in parallel, checks production API/page responses, and fails on stale copy patterns in README/docs/web/live/examples.
+
 ## Links
 
 - [Dashboard](https://crossfin.dev) — Gateway UI

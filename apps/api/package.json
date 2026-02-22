@@ -16,7 +16,8 @@
     "x402:make20": "node scripts/x402-make-20.mjs",
     "catalog:sync": "node scripts/catalog-guard.mjs --sync",
     "catalog:verify": "node scripts/catalog-guard.mjs",
-    "contract:verify": "node scripts/contract-guard.mjs"
+    "contract:verify": "node scripts/contract-guard.mjs",
+    "verify:release": "node ../../scripts/verify-release.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
