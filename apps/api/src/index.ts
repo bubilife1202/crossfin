@@ -93,8 +93,10 @@ import { createDocsRoutes } from './routes/docs'
 import { createMetaRoutes } from './routes/meta'
 import { createRegistryPublicRoutes } from './routes/registryPublic'
 import { createRegistryAdminRoutes } from './routes/registryAdmin'
+import { createRegistryWriteProxyRoutes } from './routes/registryWriteProxy'
 import { createCronRoutes } from './routes/cron'
 import { createGuardianRoutes } from './routes/guardian'
+import { createAgentsRoutes } from './routes/agents'
 import { createAnalyticsRoutes } from './routes/analytics'
 import {
   createRoutingRoutes,
@@ -2284,25 +2286,6 @@ const agentAuth: MiddlewareHandler<Env> = async (c, next) => {
   await next()
 }
 
-app.post('/api/agents', async (c) => {
-  requireAdmin(c)
-
-  const body = await c.req.json<{ name: string }>()
-  if (!body.name?.trim()) throw new HTTPException(400, { message: 'name is required' })
-
-  const id = crypto.randomUUID()
-  const apiKey = `cf_${crypto.randomUUID().replace(/-/g, '')}`
-  const apiKeyHash = await sha256Hex(apiKey)
-
-  await c.env.DB.prepare(
-    'INSERT INTO agents (id, name, api_key) VALUES (?, ?, ?)'
-  ).bind(id, body.name.trim(), apiKeyHash).run()
-
-  await audit(c.env.DB, id, 'agent.create', 'agents', id, 'success')
-
-  return c.json({ id, name: body.name.trim(), apiKey }, 201)
-})
-
 type ServiceStatus = 'active' | 'disabled'
 
 type RegistryService = {
@@ -4231,203 +4214,6 @@ async function ensureRegistrySeeded(
     registrySeedInFlight = null
   }
 }
-
-app.post('/api/registry', agentAuth, async (c) => {
-  await ensureRegistrySeeded(c.env.DB, c.env.PAYMENT_RECEIVER_ADDRESS)
-
-  const agentId = c.get('agentId')
-  const body = await c.req.json<{
-    name?: string
-    description?: string | null
-    provider?: string
-    category?: string
-    endpoint?: string
-    method?: string
-    price?: string
-    currency?: string
-    network?: string | null
-    payTo?: string | null
-    tags?: unknown
-    inputSchema?: unknown
-    outputExample?: unknown
-  }>()
-
-  const name = body.name?.trim() ?? ''
-  const provider = requireRegistryProvider(body.provider)
-  const category = requireRegistryCategory(body.category)
-  const endpoint = body.endpoint ? await requirePublicHttpsUrl(body.endpoint) : ''
-  const price = body.price?.trim() ?? ''
-  const currency = (body.currency?.trim() ?? 'USDC') || 'USDC'
-
-  if (!name) throw new HTTPException(400, { message: 'name is required' })
-  if (!endpoint) throw new HTTPException(400, { message: 'endpoint is required' })
-  if (!price) throw new HTTPException(400, { message: 'price is required' })
-
-  const tags = Array.isArray(body.tags)
-    ? body.tags.filter((t): t is string => typeof t === 'string').slice(0, 20)
-    : []
-
-  const id = crypto.randomUUID()
-  const method = normalizeMethod(body.method)
-  const status: ServiceStatus = 'active'
-
-  await c.env.DB.prepare(
-    `INSERT INTO services
-      (id, name, description, provider, category, endpoint, method, price, currency, network, pay_to, tags, input_schema, output_example, status, is_crossfin)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`
-  ).bind(
-    id,
-    name,
-    body.description ?? null,
-    provider,
-    category,
-    endpoint,
-    method,
-    price,
-    currency,
-    body.network ?? null,
-    body.payTo ?? null,
-    tags.length ? JSON.stringify(tags) : null,
-    body.inputSchema ? JSON.stringify(body.inputSchema) : null,
-    body.outputExample ? JSON.stringify(body.outputExample) : null,
-    status,
-  ).run()
-
-  await audit(c.env.DB, agentId, 'service.create', 'services', id, 'success')
-
-  const created = await c.env.DB.prepare('SELECT * FROM services WHERE id = ?').bind(id).first<Record<string, unknown>>()
-  return c.json({ data: created ? applyCrossfinDocs(mapServiceRow(created)) : { id } }, 201)
-})
-
-async function proxyToService(c: Context<Env>, method: 'GET' | 'POST'): Promise<Response> {
-  await ensureRegistrySeeded(c.env.DB, c.env.PAYMENT_RECEIVER_ADDRESS)
-
-  const agentId = c.get('agentId')
-  if (!agentId) throw new HTTPException(401, { message: 'Missing X-Agent-Key header' })
-
-  const serviceId = c.req.param('serviceId')
-  const row = await c.env.DB.prepare('SELECT * FROM services WHERE id = ?').bind(serviceId).first<Record<string, unknown>>()
-  if (!row) throw new HTTPException(404, { message: 'Service not found' })
-
-  const service = mapServiceRow(row)
-
-  if (service.method !== 'UNKNOWN' && service.method !== method) {
-    throw new HTTPException(405, { message: `Method not allowed (expected ${service.method})` })
-  }
-
-  const PROXY_MAX_BODY_BYTES = 512 * 1024
-  const PROXY_RATE_LIMIT_PER_MINUTE_PER_SERVICE = 60
-  const PROXY_RATE_LIMIT_PER_MINUTE_PER_AGENT = 240
-  const PROXY_UPSTREAM_TIMEOUT_MS = 10_000
-
-  const [serviceWindowRow, agentWindowRow] = await c.env.DB.batch([
-    c.env.DB.prepare(
-      "SELECT COUNT(*) as count FROM service_calls WHERE agent_id = ? AND service_id = ? AND created_at >= datetime('now', '-60 seconds')"
-    ).bind(agentId, service.id),
-    c.env.DB.prepare(
-      "SELECT COUNT(*) as count FROM service_calls WHERE agent_id = ? AND created_at >= datetime('now', '-60 seconds')"
-    ).bind(agentId),
-  ])
-
-  const countService = Number(((serviceWindowRow?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0))
-  const countAgent = Number(((agentWindowRow?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0))
-  if (countService >= PROXY_RATE_LIMIT_PER_MINUTE_PER_SERVICE || countAgent >= PROXY_RATE_LIMIT_PER_MINUTE_PER_AGENT) {
-    throw new HTTPException(429, { message: 'Rate limited' })
-  }
-
-  let upstreamUrl: URL
-  try {
-    upstreamUrl = new URL(service.endpoint)
-  } catch {
-    throw new HTTPException(500, { message: 'Service endpoint is not a valid URL' })
-  }
-
-  try {
-    assertPublicHostname(upstreamUrl)
-    await assertHostnameResolvesToPublicIp(upstreamUrl.hostname)
-  } catch {
-    throw new HTTPException(502, { message: 'Service endpoint blocked' })
-  }
-
-  const incomingUrl = new URL(c.req.url)
-  for (const [key, value] of incomingUrl.searchParams.entries()) {
-    upstreamUrl.searchParams.append(key, value)
-  }
-
-  const start = Date.now()
-  const callId = crypto.randomUUID()
-
-  try {
-    const headers: Record<string, string> = {}
-    const accept = c.req.header('accept')
-    if (accept) headers.accept = accept
-
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), PROXY_UPSTREAM_TIMEOUT_MS)
-    const init: RequestInit = { method, headers, redirect: 'manual', signal: controller.signal }
-    if (method === 'POST') {
-      const contentLength = Number(c.req.header('content-length') ?? '0')
-      if (contentLength > PROXY_MAX_BODY_BYTES) {
-        throw new HTTPException(413, { message: 'Payload too large' })
-      }
-      const contentType = c.req.header('content-type')
-      if (contentType) headers['content-type'] = contentType
-      const body = await c.req.arrayBuffer()
-      if (body.byteLength > PROXY_MAX_BODY_BYTES) {
-        throw new HTTPException(413, { message: 'Payload too large' })
-      }
-      init.body = body
-    }
-
-    let upstreamRes: Response
-    try {
-      upstreamRes = await fetch(upstreamUrl.toString(), init)
-    } finally {
-      clearTimeout(timeoutId)
-    }
-    const responseTimeMs = Date.now() - start
-    const isRedirectResponse = upstreamRes.status >= 300 && upstreamRes.status < 400
-    const status = upstreamRes.ok && !isRedirectResponse ? 'success' : 'error'
-
-    try {
-      await c.env.DB.prepare(
-        'INSERT INTO service_calls (id, service_id, agent_id, status, response_time_ms) VALUES (?, ?, ?, ?, ?)' 
-      ).bind(callId, service.id, agentId, status, responseTimeMs).run()
-    } catch (err) {
-      console.error('Failed to log service call', err)
-    }
-
-    if (isRedirectResponse) {
-      return c.json({ error: 'Upstream redirects are not allowed' }, 502)
-    }
-
-    const outHeaders = buildProxyResponseHeaders(upstreamRes.headers)
-    return new Response(upstreamRes.body, { status: upstreamRes.status, headers: outHeaders })
-  } catch (err) {
-    if (err instanceof HTTPException) throw err
-
-    const responseTimeMs = Date.now() - start
-
-    try {
-      await c.env.DB.prepare(
-        'INSERT INTO service_calls (id, service_id, agent_id, status, response_time_ms) VALUES (?, ?, ?, ?, ?)' 
-      ).bind(callId, service.id, agentId, 'error', responseTimeMs).run()
-    } catch (logErr) {
-      console.error('Failed to log service call', logErr)
-    }
-
-    if (err instanceof Error && err.name === 'AbortError') {
-      return c.json({ error: 'Upstream request timed out' }, 504)
-    }
-
-    console.error('Proxy upstream request failed', err)
-    return c.json({ error: 'Upstream request failed' }, 502)
-  }
-}
-
-app.get('/api/proxy/:serviceId', agentAuth, async (c) => proxyToService(c, 'GET'))
-
-app.post('/api/proxy/:serviceId', agentAuth, async (c) => proxyToService(c, 'POST'))
 
 // === Korean Arbitrage Data Helpers ===
 
@@ -7110,285 +6896,6 @@ app.get('/api/arbitrage/demo', async (c) => {
   return c.json(await getArbitrageDemoPayload(c.env.DB))
 })
 
-// === Autonomous Actions Log ===
-
-app.get('/api/agents/:agentId/actions', agentAuth, async (c) => {
-  requireGuardianEnabled(c)
-  const requesterAgentId = c.get('agentId')
-  const agentId = c.req.param('agentId')
-  if (agentId !== requesterAgentId) {
-    throw new HTTPException(403, { message: 'Forbidden' })
-  }
-
-  const limit = Math.min(parseInt(c.req.query('limit') ?? '50', 10), 200)
-
-  const { results } = await c.env.DB.prepare(
-    'SELECT * FROM autonomous_actions WHERE agent_id = ? ORDER BY created_at DESC LIMIT ?'
-  ).bind(agentId, limit).all()
-
-  return c.json({
-    agentId,
-    actions: (results ?? []).map((a: any) => ({
-      ...a,
-      details: JSON.parse(a.details || '{}'),
-    })),
-    at: new Date().toISOString(),
-  })
-})
-
-// === Deposit Verification ===
-
-const CROSSFIN_WALLET = '0xe4E79Ce6a1377C58f0Bb99D023908858A4DB5779'
-const USDC_BASE_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
-
-app.post('/api/deposits', agentAuth, async (c) => {
-  requireGuardianEnabled(c)
-  const agentId = c.get('agentId')
-  const body = await c.req.json<{
-    tx_hash: string
-  }>()
-
-  if (!body.tx_hash?.trim()) {
-    throw new HTTPException(400, { message: 'tx_hash is required' })
-  }
-
-  const txHash = body.tx_hash.trim().toLowerCase()
-
-  // Check for duplicate
-  const existing = await c.env.DB.prepare(
-    'SELECT id, status, agent_id FROM deposits WHERE tx_hash = ?'
-  ).bind(txHash).first<{ id: string; status: string; agent_id: string | null }>()
-  if (existing) {
-    if (existing.agent_id === agentId) {
-      return c.json({ id: existing.id, status: existing.status, message: 'Deposit already processed' })
-    }
-    throw new HTTPException(409, { message: 'Transaction already claimed by another agent' })
-  }
-
-  // Verify on Basescan
-  const basescanUrl = `https://api.basescan.org/api?module=proxy&action=eth_getTransactionReceipt&txhash=${txHash}`
-  const receipt: unknown = await fetchWithTimeout(basescanUrl, undefined, 10000).then((r) => r.json()).catch(() => null)
-  const receiptResult = isRecord(receipt) && isRecord(receipt.result) ? receipt.result : null
-
-  if (!receiptResult?.status || receiptResult.status !== '0x1') {
-    throw new HTTPException(400, { message: 'Transaction not found or not confirmed on Base mainnet' })
-  }
-
-  // Parse USDC transfer amount from logs
-  let amountUsd = 0
-  let fromAddress = ''
-  const transferTopic = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef' // Transfer event
-
-  const receiptLogs = Array.isArray(receiptResult.logs) ? receiptResult.logs : []
-  for (const log of receiptLogs) {
-    if (
-      log.address?.toLowerCase() === USDC_BASE_ADDRESS.toLowerCase() &&
-      log.topics?.[0] === transferTopic &&
-      topicToAddress(log.topics?.[2] ?? '') === CROSSFIN_WALLET.toLowerCase()
-    ) {
-      const parsed = Number.parseInt(log.data, 16)
-      if (!Number.isFinite(parsed) || parsed <= 0) continue
-      amountUsd = parsed / 1e6 // USDC has 6 decimals
-      fromAddress = topicToAddress(log.topics[1] ?? '')
-      break
-    }
-  }
-
-  if (amountUsd <= 0) {
-    throw new HTTPException(400, { message: 'No USDC transfer to CrossFin wallet found in transaction' })
-  }
-
-  const depositId = crypto.randomUUID()
-
-  let credited = false
-  const wallet = await c.env.DB.prepare(
-    'SELECT id FROM wallets WHERE agent_id = ? LIMIT 1'
-  ).bind(agentId).first<{ id: string }>()
-
-  if (wallet) {
-    const creditCents = Math.round(amountUsd * 100)
-    await c.env.DB.batch([
-      c.env.DB.prepare(
-        "INSERT INTO deposits (id, agent_id, tx_hash, amount_usd, from_address, status, verified_at) VALUES (?, ?, ?, ?, ?, 'verified', datetime('now'))"
-      ).bind(depositId, agentId, txHash, amountUsd, fromAddress),
-      c.env.DB.prepare(
-        'UPDATE wallets SET balance_cents = balance_cents + ? WHERE id = ?'
-      ).bind(creditCents, wallet.id),
-      c.env.DB.prepare(
-        "INSERT INTO transactions (id, to_wallet_id, amount_cents, rail, memo, status) VALUES (?, ?, ?, 'x402', ?, 'completed')"
-      ).bind(crypto.randomUUID(), wallet.id, creditCents, `Deposit via ${txHash.slice(0, 10)}...`),
-    ])
-    credited = true
-  } else {
-    await c.env.DB.prepare(
-      "INSERT INTO deposits (id, agent_id, tx_hash, amount_usd, from_address, status, verified_at) VALUES (?, ?, ?, ?, ?, 'verified', datetime('now'))"
-    ).bind(depositId, agentId, txHash, amountUsd, fromAddress).run()
-  }
-
-  await logAutonomousAction(c.env.DB, agentId, 'DEPOSIT_VERIFY', null, 'POSITIVE_SPREAD', 1.0, amountUsd, null, {
-    txHash,
-    amountUsd,
-    fromAddress,
-    basescan: `https://basescan.org/tx/${txHash}`,
-  })
-
-  await audit(c.env.DB, agentId, 'deposit.verify', 'deposits', depositId, 'success', `$${amountUsd.toFixed(2)} USDC from ${fromAddress.slice(0, 10)}...`)
-
-  return c.json({
-    id: depositId,
-    status: 'verified',
-    amountUsd,
-    fromAddress,
-    txHash,
-    basescan: `https://basescan.org/tx/${txHash}`,
-    credited,
-  }, 201)
-})
-
-app.get('/api/deposits', agentAuth, async (c) => {
-  requireGuardianEnabled(c)
-  const agentId = c.get('agentId')
-  const limit = Math.min(parseInt(c.req.query('limit') ?? '20', 10), 100)
-  const { results } = await c.env.DB.prepare(
-    'SELECT * FROM deposits WHERE agent_id = ? ORDER BY created_at DESC LIMIT ?'
-  ).bind(agentId, limit).all()
-  return c.json({
-    deposits: (results ?? []).map((d: any) => ({
-      ...d,
-      basescan: `https://basescan.org/tx/${d.tx_hash}`,
-    })),
-    at: new Date().toISOString(),
-  })
-})
-
-// === Agent Self-Registration ===
-
-app.post('/api/agents/register', async (c) => {
-  let body: {
-    name?: string
-    evm_address?: string
-    signup_token?: string
-  }
-
-  try {
-    body = await c.req.json()
-  } catch {
-    throw new HTTPException(400, { message: 'Invalid JSON body' })
-  }
-
-  const name = body.name?.trim() ?? ''
-  if (!name) {
-    throw new HTTPException(400, { message: 'name is required' })
-  }
-
-  const clientIp = getClientRateLimitKey(c)
-  const ipHint = maskIpForAudit(clientIp)
-  const ipHash = await sha256Hex(`agent-register:${clientIp}`)
-
-  await ensureAgentRegistrationAttemptsTable(c.env.DB)
-
-  const attemptWindowModifier = `-${AGENT_REGISTER_ATTEMPT_WINDOW_MINUTES} minutes`
-  const attemptsRow = await c.env.DB.prepare(
-    "SELECT COUNT(*) as count FROM agent_registration_attempts WHERE ip_hash = ? AND created_at >= datetime('now', ?)"
-  ).bind(ipHash, attemptWindowModifier).first<{ count: number | string }>()
-
-  const recentAttempts = Number(attemptsRow?.count ?? 0)
-  if (recentAttempts >= AGENT_REGISTER_MAX_ATTEMPTS_PER_WINDOW) {
-    try {
-      await logAgentRegistrationAttempt(c.env.DB, ipHash, ipHint, name, false, 'rate_limited')
-      await audit(
-        c.env.DB,
-        null,
-        'agent.self_register',
-        'agents',
-        null,
-        'blocked',
-        `rate_limited ip=${ipHint} window=${AGENT_REGISTER_ATTEMPT_WINDOW_MINUTES}m limit=${AGENT_REGISTER_MAX_ATTEMPTS_PER_WINDOW}`,
-      )
-    } catch (err) {
-      console.error('Failed to record rate-limited registration attempt', err)
-    }
-
-    throw new HTTPException(429, {
-      message: `Too many registration attempts from this IP. Try again in ${AGENT_REGISTER_ATTEMPT_WINDOW_MINUTES} minutes.`,
-    })
-  }
-
-  const requiredSignupToken = (c.env.CROSSFIN_AGENT_SIGNUP_TOKEN ?? '').trim()
-  if (!requiredSignupToken) {
-    try {
-      await logAgentRegistrationAttempt(c.env.DB, ipHash, ipHint, name, false, 'signup_token_not_configured')
-      await audit(c.env.DB, null, 'agent.self_register', 'agents', null, 'blocked', 'signup_token_not_configured')
-    } catch (err) {
-      console.error('Failed to record missing signup-token configuration', err)
-    }
-    throw new HTTPException(503, { message: 'Agent registration is temporarily unavailable' })
-  }
-
-  const providedSignupToken = (c.req.header('X-CrossFin-Signup-Token') ?? body.signup_token ?? '').trim()
-  if (requiredSignupToken && !timingSafeEqual(providedSignupToken, requiredSignupToken)) {
-    try {
-      await logAgentRegistrationAttempt(c.env.DB, ipHash, ipHint, name, false, 'invalid_signup_token')
-      await audit(c.env.DB, null, 'agent.self_register', 'agents', null, 'blocked', `invalid_signup_token ip=${ipHint}`)
-    } catch (err) {
-      console.error('Failed to record invalid-token registration attempt', err)
-    }
-    throw new HTTPException(401, { message: 'Invalid signup token' })
-  }
-
-  const id = crypto.randomUUID()
-  const rawApiKey = `cf_${crypto.randomUUID().replace(/-/g, '')}`
-  const keyHash = await sha256Hex(rawApiKey)
-
-  await c.env.DB.prepare(
-    "INSERT INTO agents (id, name, api_key, status) VALUES (?, ?, ?, 'active')"
-  ).bind(id, name, keyHash).run()
-
-  // Create default wallet
-  const walletId = crypto.randomUUID()
-  await c.env.DB.prepare(
-    'INSERT INTO wallets (id, agent_id, label, balance_cents) VALUES (?, ?, ?, 0)'
-  ).bind(walletId, id, 'Default Wallet').run()
-
-  // Set default Guardian rules
-  const defaultRules = [
-    { type: 'SPEND_CAP', params: { dailyLimitUsd: 10.0 } },
-    { type: 'FAIL_STREAK', params: { maxConsecutiveFails: 10 } },
-    { type: 'CIRCUIT_BREAKER', params: { failRatePct: 60, windowMinutes: 30 } },
-  ]
-  let guardianApplied = false
-  if (isEnabledFlag(c.env.CROSSFIN_GUARDIAN_ENABLED)) {
-    try {
-      for (const rule of defaultRules) {
-        await c.env.DB.prepare(
-          'INSERT INTO guardian_rules (id, agent_id, type, params) VALUES (?, ?, ?, ?)'
-        ).bind(crypto.randomUUID(), id, rule.type, JSON.stringify(rule.params)).run()
-      }
-      guardianApplied = true
-    } catch (err) {
-      console.error('Failed to apply default guardian rules', err)
-    }
-  }
-
-  await audit(c.env.DB, id, 'agent.self_register', 'agents', id, 'success')
-  try {
-    await logAgentRegistrationAttempt(c.env.DB, ipHash, ipHint, name, true, 'created', id)
-  } catch (err) {
-    console.error('Failed to record successful registration attempt', err)
-  }
-
-  return c.json({
-    id,
-    name,
-    apiKey: rawApiKey,
-    walletId,
-    guardianRules: guardianApplied ? defaultRules.map((r) => r.type) : [],
-    note: guardianApplied
-      ? 'Save your API key — it cannot be retrieved later. Default Guardian rules have been applied.'
-      : 'Save your API key — it cannot be retrieved later.',
-  }, 201)
-})
-
 // === Existing Premium Endpoints ===
 
 app.get('/api/premium/report', async (c) => {
@@ -8848,6 +8355,21 @@ const registryAdminRoutes = createRegistryAdminRoutes({
   audit,
 })
 
+const registryWriteProxyRoutes = createRegistryWriteProxyRoutes({
+  agentAuth,
+  ensureRegistrySeeded,
+  requireRegistryProvider,
+  requireRegistryCategory,
+  requirePublicHttpsUrl,
+  normalizeMethod,
+  mapServiceRow,
+  toServiceResponse: (row) => applyCrossfinDocs(mapServiceRow(row)),
+  assertPublicHostname,
+  assertHostnameResolvesToPublicIp,
+  buildProxyResponseHeaders,
+  audit,
+})
+
 const cronRoutes = createCronRoutes({
   requireAdmin,
   fetchBithumbAll,
@@ -8864,6 +8386,28 @@ const guardianRoutes = createGuardianRoutes({
   audit,
 })
 
+const agentsRoutes = createAgentsRoutes({
+  agentAuth,
+  requireAdmin,
+  requireGuardianEnabled,
+  sha256Hex,
+  timingSafeEqual,
+  isEnabledFlag,
+  isRecord,
+  fetchWithTimeout,
+  topicToAddress,
+  getClientRateLimitKey,
+  ensureAgentRegistrationAttemptsTable,
+  maskIpForAudit,
+  logAgentRegistrationAttempt,
+  logAutonomousAction,
+  audit,
+  agentRegisterAttemptWindowMinutes: AGENT_REGISTER_ATTEMPT_WINDOW_MINUTES,
+  agentRegisterMaxAttemptsPerWindow: AGENT_REGISTER_MAX_ATTEMPTS_PER_WINDOW,
+  crossfinWallet: '0xe4E79Ce6a1377C58f0Bb99D023908858A4DB5779',
+  usdcBaseAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+})
+
 app.route('/api/admin', adminRoutes)
 app.route('/api/mcp', mcpRoutes)
 app.route('/api/analytics', analyticsRoutes)
@@ -8874,9 +8418,11 @@ app.route('/', docsRoutes)
 app.route('/', metaRoutes)
 app.route('/', registryAdminRoutes)
 app.route('/', registryPublicRoutes)
+app.route('/', registryWriteProxyRoutes)
 app.route('/', onchainRoutes)
 app.route('/', cronRoutes)
 app.route('/', guardianRoutes)
+app.route('/', agentsRoutes)
 // --- A2A skill handler injection (avoids self-fetch on CF Workers) ---
 app.use('/api/a2a/*', async (c, next) => {
   const db = c.env.DB
