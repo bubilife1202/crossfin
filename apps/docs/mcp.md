@@ -26,18 +26,18 @@ npm: [crossfin-mcp](https://www.npmjs.com/package/crossfin-mcp)
 }
 ```
 
-All tools are currently free during open beta. No API key or wallet required. x402 payment enforcement is temporarily disabled and will be re-enabled later.
+CrossFin API endpoints are currently free during open beta. Most MCP tools work without wallet setup, and payment-capable tools require `EVM_PRIVATE_KEY` for x402 flow compatibility.
 
 ---
 
 ## All 16 Tools
 
 <ToolGrid :tools="[
-  { name: 'find_optimal_route', description: 'Optimal path across 13 exchanges', price: 'Free' },
+  { name: 'find_optimal_route', description: 'Optimal path across 13 exchanges', price: 'x402 flow (requires EVM key)' },
   { name: 'list_exchange_fees', description: 'Trading + withdrawal fees', price: 'Free' },
   { name: 'compare_exchange_prices', description: 'Bithumb KRW vs Binance USD', price: 'Free' },
   { name: 'get_kimchi_premium', description: 'Route spread data — Korean vs. global price spread (top 3 pairs)', price: 'Free' },
-  { name: 'call_paid_service', description: 'Call any paid API with x402', price: 'Free' },
+  { name: 'call_paid_service', description: 'Call any paid API with x402', price: 'x402 flow (requires EVM key)' },
   { name: 'search_services', description: 'Search registered services', price: 'Free' },
   { name: 'list_services', description: 'Browse service catalog', price: 'Free' },
   { name: 'get_service', description: 'Service details', price: 'Free' },

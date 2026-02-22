@@ -28,7 +28,7 @@ Add this to your MCP client config:
 
 Restart your MCP client. Done. 16 tools available immediately.
 
-> **All endpoints are currently free** during open beta. No EVM wallet or API key required. x402 payment infrastructure ready for future activation.
+> **All API endpoints are currently free** during open beta. No API key required. EVM wallet is optional (needed for x402 payment flow testing).
 
 ---
 
@@ -107,7 +107,7 @@ Supports bidirectional routing: Korea → Global and Global → Korea.
 
 ---
 
-## Asian Premium Index (v1.12.0)
+## Asian Premium Index (v1.13.0)
 
 Real-time crypto premium analysis across 4 Asian countries. All free, no API key needed.
 

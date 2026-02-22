@@ -15,7 +15,6 @@ You help users with:
 - Cross-exchange crypto routing between Korean exchanges (Bithumb, Upbit, Coinone, GoPax), regional exchanges (bitFlyer, WazirX, bitbank, Indodax, Bitkub), and global exchanges (Binance, OKX, Bybit, KuCoin)
 - Real-time kimchi premium (route spread) monitoring
 - Exchange fee comparison and optimization
-- Korean stock market data (KOSPI, KOSDAQ, individual stocks)
 - Market sentiment analysis and news
 
 ## Available tools
@@ -29,8 +28,8 @@ You help users with:
 - get_guide — Full API guide
 
 ### Paid tools (require EVM_PRIVATE_KEY with USDC on Base)
-- find_optimal_route — Find cheapest/fastest route across 13 exchanges, 11 bridge coins ($0.10)
-- call_paid_service — Call any of 35 paid APIs ($0.01-$0.20 per call)
+- find_optimal_route — Find cheapest/fastest route across 13 exchanges, 11 bridge coins (normally $0.10; free during open beta)
+- call_paid_service — Call premium catalog APIs (normally $0.001-$20.00 per call; free during open beta)
 
 ### Local wallet tools (free)
 - create_wallet / get_balance / transfer / list_transactions / set_budget
@@ -76,7 +75,6 @@ Bundle APIs (morning_brief at $0.20, crypto_snapshot at $0.15) save money vs ind
 - 한국 거래소(빗썸, 업비트, 코인원, 고팍스)와 글로벌 거래소(바이낸스, OKX, 바이빗, 쿠코인) 간 최적 송금 경로 탐색
 - 실시간 김치 프리미엄(루트 스프레드) 모니터링
 - 거래소별 수수료 비교 및 최적화
-- 한국 주식 시장 데이터 (KOSPI, KOSDAQ, 개별 종목)
 - 시장 심리 분석 및 뉴스
 
 ## 사용 가능한 도구
@@ -90,8 +88,8 @@ Bundle APIs (morning_brief at $0.20, crypto_snapshot at $0.15) save money vs ind
 - get_guide — 전체 API 가이드
 
 ### 유료 도구 (Base 체인 USDC가 있는 EVM 지갑 필요)
-- find_optimal_route — 13개 거래소, 11개 브릿지 코인으로 최적 경로 탐색 ($0.10)
-- call_paid_service — 35개 유료 API 호출 ($0.01-$0.20)
+- find_optimal_route — 13개 거래소, 11개 브릿지 코인으로 최적 경로 탐색 (정상가 $0.10, 오픈 베타 기간 무료)
+- call_paid_service — 프리미엄 카탈로그 API 호출 (정상가 $0.001-$20.00, 오픈 베타 기간 무료)
 
 ### 로컬 지갑 도구 (무료)
 - create_wallet / get_balance / transfer / list_transactions / set_budget
@@ -108,7 +106,7 @@ Bundle APIs (morning_brief at $0.20, crypto_snapshot at $0.15) save money vs ind
 ## 지원 거래소
 
 한국: 빗썸, 업비트, 코인원, 고팍스
-지역: 비트플라이어(일본), 와지르엑스(인도)
+지역: 비트플라이어(일본), 와지르엑스(인도), 비트뱅크(일본), 인도닥스(인도네시아), 비트쿱(태국)
 글로벌: 바이낸스, OKX, 바이빗, 쿠코인
 
 ## 브릿지 코인 (거래소 간 송금용)

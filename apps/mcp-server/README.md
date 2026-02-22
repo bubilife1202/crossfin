@@ -15,9 +15,9 @@
 npx -y crossfin-mcp
 ```
 
-That's it. Your agent now has 16 tools -- 14 free, 2 paid. No API key needed for free tools.
+That's it. Your agent now has 16 tools. Most tools work with no wallet setup, and payment-capable tools require `EVM_PRIVATE_KEY`.
 
-For paid tools ($0.01--$0.10 per call), set `EVM_PRIVATE_KEY` to a Base wallet with USDC.
+Open beta note: CrossFin API endpoints are currently free, but payment-capable MCP tools still require wallet config for x402 flow compatibility.
 
 ---
 
@@ -120,7 +120,7 @@ EVM_PRIVATE_KEY=0x... npx -y crossfin-mcp
 
 | Tool | Price | Description |
 |------|-------|-------------|
-| `find_optimal_route` | $0.10 | Optimal crypto transfer path across 13 exchanges with 11 bridge coins |
+| `find_optimal_route` | x402 flow | Optimal crypto transfer path across 13 exchanges with 11 bridge coins |
 | `list_exchange_fees` | Free | Trading + withdrawal fee comparison for all exchanges |
 | `compare_exchange_prices` | Free | Live Bithumb KRW vs Binance USD price comparison |
 | `get_kimchi_premium` | Free | Korean vs. global route spread preview (top 3 pairs) |
@@ -129,7 +129,7 @@ EVM_PRIVATE_KEY=0x... npx -y crossfin-mcp
 
 | Tool | Price | Description |
 |------|-------|-------------|
-| `call_paid_service` | Varies | Call any of 35+ paid APIs with automatic x402 USDC payment |
+| `call_paid_service` | x402 flow | Call catalog premium endpoints with automatic x402 USDC payment |
 
 ### Service Registry
 

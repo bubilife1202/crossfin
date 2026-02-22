@@ -322,7 +322,7 @@ function App() {
             <div className="featureCard">
               <div className="featureIcon">&#x25B2;</div>
               <h3>Asia Premium Monitor</h3>
-              <p>Real-time price spreads across Korean, Japanese, and Indian exchanges vs. global markets. 11 crypto pairs with EXECUTE/WAIT/SKIP signals.</p>
+              <p>Real-time price spreads across Korean, Japanese, Indonesian, and Thai exchanges vs. global markets. 11 crypto pairs with POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD signals.</p>
             </div>
             <div className="featureCard">
               <div className="featureIcon">&#x26A1;</div>
@@ -492,7 +492,7 @@ function App() {
               <p className="routeShowcaseDesc">
                 CrossFin evaluates every possible cross-border path in real-time, aggregating 5 cost layers
                 into a single comparable number per route. Find the cheapest way to move crypto between
-                Korean, Japanese, Indian, and global exchanges.
+                Korean, Japanese, Indonesian, Thai, and global exchanges.
               </p>
               <div className="routeShowcaseStats">
                 <div className="routeShowcaseStat">

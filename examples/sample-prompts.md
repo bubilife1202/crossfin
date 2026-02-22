@@ -108,13 +108,13 @@ Tool: `get_guide` | Free | Complete agent guide with all endpoints, pricing, and
 "빗썸에서 바이낸스로 5000만원 보내는 최적 경로 찾아줘"
 ```
 
-도구: `find_optimal_route` (`from: "bithumb:KRW"`, `to: "binance:USDC"`, `amount: 50000000`) | $0.10 | 11개 브릿지 코인 비교, 최저비용 경로 추천.
+도구: `find_optimal_route` (`from: "bithumb:KRW"`, `to: "binance:USDC"`, `amount: 50000000`) | 정상가 $0.10 (오픈 베타 기간 무료) | 11개 브릿지 코인 비교, 최저비용 경로 추천.
 
 ```
 "바이낸스에서 업비트로 1000 USDC 보내는 가장 빠른 방법은?"
 ```
 
-도구: `find_optimal_route` (`from: "binance:USDC"`, `to: "upbit:KRW"`, `amount: 1000`, `strategy: "fastest"`) | $0.10 | XRP/SOL/TRX 등 빠른 코인 우선 추천.
+도구: `find_optimal_route` (`from: "binance:USDC"`, `to: "upbit:KRW"`, `amount: 1000`, `strategy: "fastest"`) | 정상가 $0.10 (오픈 베타 기간 무료) | XRP/SOL/TRX 등 빠른 코인 우선 추천.
 
 ### 유료 서비스 호출
 
@@ -122,13 +122,13 @@ Tool: `get_guide` | Free | Complete agent guide with all endpoints, pricing, and
 "한국 시장 모닝 브리핑 보여줘"
 ```
 
-도구: `call_paid_service` (`serviceId: "crossfin_morning_brief"`) | $0.20 | 김치프리미엄 + 환율 + KOSPI/KOSDAQ + 주요뉴스.
+도구: `call_paid_service` (`serviceId: "crossfin_morning_brief"`) | 정상가 $0.20 (오픈 베타 기간 무료) | 김치프리미엄 + 환율 + 주요뉴스.
 
 ```
-"삼성전자 종합 분석 해줘"
+"오늘 크립토 스냅샷 보여줘"
 ```
 
-도구: `call_paid_service` (`serviceId: "crossfin_stock_brief"`, `params: { "stock": "005930" }`) | $0.10 | 기본분석 + 뉴스 + 투자자 동향 + 공시.
+도구: `call_paid_service` (`serviceId: "crossfin_crypto_snapshot"`) | 정상가 $0.15 (오픈 베타 기간 무료) | 4개 거래소 가격 + 스프레드 + 거래량 + 환율 요약.
 
 ---
 
@@ -140,13 +140,13 @@ Tool: `get_guide` | Free | Complete agent guide with all endpoints, pricing, and
 "Find the cheapest way to move $50,000 USDC from Bithumb to Binance"
 ```
 
-Tool: `find_optimal_route` with `from: "bithumb:KRW"`, `to: "binance:USDC"`, `amount: 72500000` (at ~1450 KRW/USD) | $0.10
+Tool: `find_optimal_route` with `from: "bithumb:KRW"`, `to: "binance:USDC"`, `amount: 72500000` (at ~1450 KRW/USD) | Normally $0.10 (free during open beta)
 
 ```
 "What's the fastest route from Binance USDC to Coinone KRW?"
 ```
 
-Tool: `find_optimal_route` with `from: "binance:USDC"`, `to: "coinone:KRW"`, `amount: 1000`, `strategy: "fastest"` | $0.10
+Tool: `find_optimal_route` with `from: "binance:USDC"`, `to: "coinone:KRW"`, `amount: 1000`, `strategy: "fastest"` | Normally $0.10 (free during open beta)
 
 ### Call Any Paid Service
 
@@ -154,19 +154,19 @@ Tool: `find_optimal_route` with `from: "binance:USDC"`, `to: "coinone:KRW"`, `am
 "Get the full kimchi premium data for all coins"
 ```
 
-Tool: `call_paid_service` with `serviceId: "crossfin_kimchi_premium"` | $0.05
+Tool: `call_paid_service` with `serviceId: "crossfin_kimchi_premium"` | Normally $0.05 (free during open beta)
 
 ```
 "Show me Bithumb's BTC orderbook"
 ```
 
-Tool: `call_paid_service` with `serviceId: "crossfin_bithumb_orderbook"`, `params: { "pair": "BTC" }` | $0.02
+Tool: `call_paid_service` with `serviceId: "crossfin_bithumb_orderbook"`, `params: { "pair": "BTC" }` | Normally $0.02 (free during open beta)
 
 ```
 "Get today's crypto snapshot"
 ```
 
-Tool: `call_paid_service` with `serviceId: "crossfin_crypto_snapshot"` | $0.15
+Tool: `call_paid_service` with `serviceId: "crossfin_crypto_snapshot"` | Normally $0.15 (free during open beta)
 
 ---
 
@@ -267,14 +267,13 @@ Agent steps:
 Goal: Complete market overview in one session.
 
 ```
-"Give me a full Korean market briefing — crypto premium, stock indices,
-and top news."
+"Give me a full Korean market briefing — crypto premium and top news."
 ```
 
 Agent steps:
 1. `get_kimchi_premium` -- free spread preview
-2. `call_paid_service` with `serviceId: "crossfin_morning_brief"` -- $0.20 (KOSPI/KOSDAQ + FX + momentum + headlines)
-3. Agent synthesizes: "KOSPI up 1.2%, BTC premium at 2.8% (neutral), USD/KRW at 1,448."
+2. `call_paid_service` with `serviceId: "crossfin_morning_brief"` -- Normally $0.20 (free during open beta)
+3. Agent synthesizes: "BTC premium at 2.8% (neutral), USD/KRW at 1,448, headlines are risk-on."
 
 ### Workflow 5: Service Discovery and Exploration
 
@@ -312,22 +311,10 @@ Agent steps:
 | `crossfin_korea_sentiment` | $0.03 | Market sentiment (gainers, losers, mood) |
 | `crossfin_korea_headlines` | $0.03 | Korean crypto/finance news |
 | `crossfin_usdkrw` | $0.01 | USD/KRW exchange rate |
-| `crossfin_crypto_korea_fx_rate` | $0.01 | KRW/USD with 52-week context |
-| `crossfin_korea_indices` | $0.03 | KOSPI & KOSDAQ real-time |
-| `crossfin_korea_indices_history` | $0.05 | KOSPI/KOSDAQ daily OHLC (60 days) |
-| `crossfin_korea_stocks_momentum` | $0.05 | Top stocks by momentum |
-| `crossfin_korea_investor_flow` | $0.05 | Foreign/institutional/individual flow |
-| `crossfin_korea_index_flow` | $0.03 | Index-level investor flow |
-| `crossfin_korea_stock_detail` | $0.05 | PER, PBR, consensus, peers |
-| `crossfin_korea_stock_news` | $0.03 | Stock-specific news |
-| `crossfin_korea_themes` | $0.05 | Stock market themes/sectors |
-| `crossfin_korea_disclosure` | $0.03 | DART corporate filings |
-| `crossfin_korea_etf` | $0.03 | 1,070+ Korean ETFs |
-| `crossfin_global_indices_chart` | $0.02 | Global index charts |
+| `crossfin_crypto_korea_fx_rate` | $0.01 | KRW/USD FX quote from Korean crypto feed |
 | `crossfin_morning_brief` | $0.20 | All-in-one morning market overview |
 | `crossfin_crypto_snapshot` | $0.15 | Crypto market snapshot |
 | `crossfin_kimchi_stats` | $0.15 | Spread stats + trend + signal |
-| `crossfin_stock_brief` | $0.10 | Single stock comprehensive brief |
 | `crossfin_route_find` | $0.10 | Optimal cross-exchange route |
 | `crossfin_premium_report` | $0.001 | Premium report (x402 payment check) |
 | `crossfin_premium_enterprise` | $20.00 | Enterprise receipt/proof endpoint |
