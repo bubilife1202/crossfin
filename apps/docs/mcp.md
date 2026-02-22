@@ -28,6 +28,8 @@ npm: [crossfin-mcp](https://www.npmjs.com/package/crossfin-mcp)
 
 CrossFin API endpoints are currently free during open beta. Most MCP tools work without wallet setup, and payment-capable tools require `EVM_PRIVATE_KEY` for x402 flow compatibility.
 
+Remote MCP transport endpoint: `https://crossfin.dev/api/mcp` (Streamable HTTP). `GET /api/mcp/tools` is not a public REST listing endpoint.
+
 ---
 
 ## All 16 Tools
