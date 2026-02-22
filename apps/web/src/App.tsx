@@ -327,7 +327,7 @@ function App() {
             <div className="featureCard">
               <div className="featureIcon">&#x26A1;</div>
               <h3>x402 Payments</h3>
-              <p>No API keys. No subscriptions. Agents pay per call with USDC on Base. $0.01 for FX rates, $0.10 for full routing analysis.</p>
+              <p>No API keys. No subscriptions. x402 payment flow supports pay-per-call with USDC on Base. During open beta, endpoints are currently free.</p>
             </div>
             <div className="featureCard">
               <div className="featureIcon">&#x2699;</div>
@@ -667,7 +667,7 @@ function App() {
             <div className="stepCard">
               <div className="stepNumber">STEP 01</div>
               <h3 className="stepTitle">Create a Wallet</h3>
-              <p className="stepDesc">Generate an EVM wallet to pay for API calls.</p>
+              <p className="stepDesc">Generate an EVM wallet for x402 flow testing (optional during open beta).</p>
               <div className="codeBlock">
                 <div className="codeBlockHeader">
                   <span className="codeBlockLang">bash / javascript</span>
