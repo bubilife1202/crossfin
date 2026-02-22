@@ -963,7 +963,12 @@ export async function fetchUsdFxRates(): Promise<Record<'KRW' | 'JPY' | 'INR' | 
   const FX_RATE_SUCCESS_TTL_MS = 5 * 60_000
   const FX_RATE_FAILURE_TTL_MS = 60_000
 
-  type CachedRates = { value: Record<'KRW' | 'JPY' | 'INR' | 'IDR' | 'THB', number>; expiresAt: number }
+  type FxSource = 'open.er-api.com' | 'exchangerate.host' | 'fawazahmed0' | 'fallback-cache' | 'fallback-hardcoded'
+  type CachedRates = {
+    value: Record<'KRW' | 'JPY' | 'INR' | 'IDR' | 'THB', number>
+    expiresAt: number
+    source: FxSource
+  }
   const globalAny = globalThis as unknown as {
     __crossfinUsdFxRatesCache?: CachedRates
     __crossfinUsdFxRatesInFlight?: Promise<Record<'KRW' | 'JPY' | 'INR' | 'IDR' | 'THB', number>> | null
@@ -975,28 +980,94 @@ export async function fetchUsdFxRates(): Promise<Record<'KRW' | 'JPY' | 'INR' | 
   if (globalAny.__crossfinUsdFxRatesInFlight) return globalAny.__crossfinUsdFxRatesInFlight
 
   const fallback = cached?.value ?? { KRW: 1450, JPY: 150, INR: 85, IDR: 16200, THB: 36 }
+
+  const validateRates = (rates: Record<'KRW' | 'JPY' | 'INR' | 'IDR' | 'THB', number>) => {
+    const { KRW: krw, JPY: jpy, INR: inr, IDR: idr, THB: thb } = rates
+    if (!Number.isFinite(krw) || krw < 500 || krw > 5000) throw new Error('Invalid KRW FX rate')
+    if (!Number.isFinite(jpy) || jpy < 50 || jpy > 300) throw new Error('Invalid JPY FX rate')
+    if (!Number.isFinite(inr) || inr < 20 || inr > 200) throw new Error('Invalid INR FX rate')
+    if (!Number.isFinite(idr) || idr < 10000 || idr > 25000) throw new Error('Invalid IDR FX rate')
+    if (!Number.isFinite(thb) || thb < 20 || thb > 50) throw new Error('Invalid THB FX rate')
+  }
+
+  const sources: Array<{ id: FxSource; url: string; parse: (data: unknown) => Record<'KRW' | 'JPY' | 'INR' | 'IDR' | 'THB', number> }> = [
+    {
+      id: 'open.er-api.com',
+      url: 'https://open.er-api.com/v6/latest/USD',
+      parse: (data: unknown) => {
+        if (!isRecord(data) || !isRecord(data.rates)) throw new Error('Invalid er-api response')
+        return {
+          KRW: Number(data.rates.KRW),
+          JPY: Number(data.rates.JPY),
+          INR: Number(data.rates.INR),
+          IDR: Number(data.rates.IDR),
+          THB: Number(data.rates.THB),
+        }
+      },
+    },
+    {
+      id: 'exchangerate.host',
+      url: 'https://api.exchangerate.host/latest?base=USD&symbols=KRW,JPY,INR,IDR,THB',
+      parse: (data: unknown) => {
+        if (!isRecord(data) || !isRecord(data.rates)) throw new Error('Invalid exchangerate.host response')
+        return {
+          KRW: Number(data.rates.KRW),
+          JPY: Number(data.rates.JPY),
+          INR: Number(data.rates.INR),
+          IDR: Number(data.rates.IDR),
+          THB: Number(data.rates.THB),
+        }
+      },
+    },
+    {
+      id: 'fawazahmed0',
+      url: 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json',
+      parse: (data: unknown) => {
+        if (!isRecord(data) || !isRecord(data.usd)) throw new Error('Invalid fawazahmed0 response')
+        return {
+          KRW: Number(data.usd.krw),
+          JPY: Number(data.usd.jpy),
+          INR: Number(data.usd.inr),
+          IDR: Number(data.usd.idr),
+          THB: Number(data.usd.thb),
+        }
+      },
+    },
+  ]
+
   const promise = (async () => {
     try {
-      const res = await fetchWithTimeout('https://open.er-api.com/v6/latest/USD')
-      if (!res.ok) throw new Error(`FX rate fetch failed (${res.status})`)
-      const data = await res.json() as { rates?: Record<string, number> }
+      for (const source of sources) {
+        try {
+          const res = await fetchWithTimeout(source.url)
+          if (!res.ok) throw new Error(`FX rate fetch failed (${res.status})`)
+          const parsed = source.parse(await res.json() as unknown)
+          validateRates(parsed)
+          globalAny.__crossfinUsdFxRatesCache = {
+            value: parsed,
+            expiresAt: now + FX_RATE_SUCCESS_TTL_MS,
+            source: source.id,
+          }
+          return parsed
+        } catch {
+          continue
+        }
+      }
 
-      const krw = Number(data.rates?.KRW)
-      const jpy = Number(data.rates?.JPY)
-      const inr = Number(data.rates?.INR)
-      const idr = Number(data.rates?.IDR)
-      const thb = Number(data.rates?.THB)
-      if (!Number.isFinite(krw) || krw < 500 || krw > 5000) throw new Error('Invalid KRW FX rate')
-      if (!Number.isFinite(jpy) || jpy < 50 || jpy > 300) throw new Error('Invalid JPY FX rate')
-      if (!Number.isFinite(inr) || inr < 20 || inr > 200) throw new Error('Invalid INR FX rate')
-      if (!Number.isFinite(idr) || idr < 10000 || idr > 25000) throw new Error('Invalid IDR FX rate')
-      if (!Number.isFinite(thb) || thb < 20 || thb > 50) throw new Error('Invalid THB FX rate')
+      if (cached?.value) {
+        globalAny.__crossfinUsdFxRatesCache = {
+          value: cached.value,
+          expiresAt: now + FX_RATE_FAILURE_TTL_MS,
+          source: 'fallback-cache',
+        }
+        return cached.value
+      }
 
-      const rates = { KRW: krw, JPY: jpy, INR: inr, IDR: idr, THB: thb }
-      globalAny.__crossfinUsdFxRatesCache = { value: rates, expiresAt: now + FX_RATE_SUCCESS_TTL_MS }
-      return rates
-    } catch {
-      globalAny.__crossfinUsdFxRatesCache = { value: fallback, expiresAt: now + FX_RATE_FAILURE_TTL_MS }
+      globalAny.__crossfinUsdFxRatesCache = {
+        value: fallback,
+        expiresAt: now + FX_RATE_FAILURE_TTL_MS,
+        source: 'fallback-hardcoded',
+      }
       return fallback
     } finally {
       globalAny.__crossfinUsdFxRatesInFlight = null
@@ -1021,18 +1092,23 @@ export type FxRatesMeta = {
 
 export async function fetchFxRatesWithMeta(): Promise<FxRatesMeta> {
   const globalAny = globalThis as unknown as {
-    __crossfinUsdFxRatesCache?: { value: Record<'KRW' | 'JPY' | 'INR' | 'IDR' | 'THB', number>; expiresAt: number }
+    __crossfinUsdFxRatesCache?: {
+      value: Record<'KRW' | 'JPY' | 'INR' | 'IDR' | 'THB', number>
+      expiresAt: number
+      source: 'open.er-api.com' | 'exchangerate.host' | 'fawazahmed0' | 'fallback-cache' | 'fallback-hardcoded'
+    }
   }
   const rates = await fetchUsdFxRates()
   const cached = globalAny.__crossfinUsdFxRatesCache
-  // Detect if using hardcoded fallback by checking if values exactly match defaults
-  const isHardcodedFallback = rates.KRW === 1450 && rates.JPY === 150 && rates.INR === 85 && rates.IDR === 16200 && rates.THB === 36
-  const isFallback = isHardcodedFallback || !cached || Date.now() >= cached.expiresAt
+  const source = cached?.source ?? 'fallback-hardcoded'
+  const isFallback = source === 'fallback-hardcoded' || source === 'fallback-cache'
   const warnings: string[] = []
-  if (isHardcodedFallback) {
+  if (source === 'fallback-hardcoded') {
     warnings.push('Exchange rate is using hardcoded fallback value. Actual rate may differ significantly.')
+  } else if (source === 'fallback-cache') {
+    warnings.push('Exchange rate source temporarily unavailable. Using stale cached FX rate.')
   }
-  return { rates, isFallback, source: isFallback ? 'fallback' : 'open.er-api.com', warnings }
+  return { rates, isFallback, source, warnings }
 }
 
 // ============================================================

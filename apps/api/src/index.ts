@@ -5446,9 +5446,11 @@ interface RouteMeta {
   priceAge: {
     globalPrices: { ageMs: number; source: string; cacheTtlMs: number }
     koreanPrices: { source: string }
+    fxRates: { source: string; fallback: boolean }
   }
   feesSource: 'd1' | 'hardcoded-fallback'
-  dataFreshness: 'live' | 'cached' | 'stale'
+  dataFreshness: 'live' | 'cached' | 'stale' | 'fallback'
+  warnings?: string[]
 }
 
 type RegionalExchangePriceQuote = {
@@ -5684,23 +5686,29 @@ async function findOptimalRoute(
     tradingFeesResult,
     withdrawalFeesResult,
     withdrawalSuspensionsResult,
-    usdFxRatesResult,
+    fxMetaResult,
     bithumbAllResult,
     globalPricesResult,
   ] = await Promise.allSettled([
     getExchangeTradingFees(db),
     getExchangeWithdrawalFees(db),
     getWithdrawalSuspensions(db),
-    fetchUsdFxRates(),
+    fetchFxRatesWithMeta(),
     fetchBithumbAll(),
     fetchGlobalPrices(db),
   ])
   const tradingFees = tradingFeesResult.status === 'fulfilled' ? tradingFeesResult.value : cloneDefaultTradingFees()
   const withdrawalFees = withdrawalFeesResult.status === 'fulfilled' ? withdrawalFeesResult.value : cloneDefaultWithdrawalFees()
   const withdrawalSuspensions = withdrawalSuspensionsResult.status === 'fulfilled' ? withdrawalSuspensionsResult.value : {}
-  const usdFxRates = usdFxRatesResult.status === 'fulfilled'
-    ? usdFxRatesResult.value
-    : { KRW: 1450, JPY: 150, INR: 85, IDR: 16000, THB: 36 }
+  const fxMeta = fxMetaResult.status === 'fulfilled'
+    ? fxMetaResult.value
+    : {
+        rates: { KRW: 1450, JPY: 150, INR: 85, IDR: 16000, THB: 36 },
+        isFallback: true,
+        source: 'fallback-hardcoded',
+        warnings: ['FX source unavailable. Using hardcoded fallback rates.'],
+      }
+  const usdFxRates = fxMeta.rates
   const krwRate = usdFxRates.KRW
   const bithumbAll = bithumbAllResult.status === 'fulfilled' ? bithumbAllResult.value : {}
   const globalPrices: Record<string, number> = globalPricesResult.status === 'fulfilled' ? globalPricesResult.value : {}
@@ -6086,9 +6094,13 @@ async function findOptimalRoute(
       priceAge: {
         globalPrices: globalPricesSource,
         koreanPrices: { source: 'exchange-api-direct' },
+        fxRates: { source: fxMeta.source, fallback: fxMeta.isFallback },
       },
       feesSource: feesFromD1 ? 'd1' : 'hardcoded-fallback',
-      dataFreshness: globalPricesSource.ageMs < GLOBAL_PRICES_SUCCESS_TTL_MS ? (globalPricesSource.ageMs < 5000 ? 'live' : 'cached') : 'stale',
+      dataFreshness: fxMeta.isFallback
+        ? 'fallback'
+        : (globalPricesSource.ageMs < GLOBAL_PRICES_SUCCESS_TTL_MS ? (globalPricesSource.ageMs < 5000 ? 'live' : 'cached') : 'stale'),
+      warnings: fxMeta.warnings.length > 0 ? fxMeta.warnings : undefined,
     },
   }
 }
@@ -6716,12 +6728,15 @@ app.get('/api/premium/market/korea', async (c) => {
 })
 
 app.get('/api/premium/market/fx/usdkrw', async (c) => {
-  const krwRate = await fetchKrwRate()
+  const fxMeta = await fetchFxRatesWithMeta()
+  const krwRate = fxMeta.rates.KRW
   return c.json({
     paid: true,
     service: 'crossfin-usdkrw',
     usdKrw: krwRate,
-    source: 'open.er-api.com',
+    source: fxMeta.source,
+    fallback: fxMeta.isFallback,
+    warnings: fxMeta.warnings.length > 0 ? fxMeta.warnings : undefined,
     _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
