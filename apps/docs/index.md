@@ -14,8 +14,8 @@ hero:
 features:
   - title: Routing Engine
     details: Cheapest regional-fiat→stablecoin route across 9 exchanges with 11 bridge coins
-  - title: Route Spread Intelligence
-    details: Real-time regional-vs-global spread monitoring with AI decision layer
+  - title: Asian Premium Index
+    details: Real-time crypto premium across Korea, Japan, Indonesia, Thailand vs global markets
   - title: MCP Integration
     details: 16 tools for any MCP client — routing, pricing, wallet management
   - title: Telegram Bot
@@ -45,5 +45,6 @@ features:
 |--------|-----------|
 | **Korea** | Bithumb, Upbit, Coinone, GoPax |
 | **Regional Fiat** | bitFlyer (JPY), WazirX (INR) |
+| **Asian Premium** | bitbank (JPY), Indodax (IDR), Bitkub (THB) |
 | **Global** | Binance, OKX, Bybit |
 | **Bridge coins** | BTC, ETH, XRP, SOL, DOGE, ADA, DOT, LINK, AVAX, TRX, KAIA |

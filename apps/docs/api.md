@@ -72,6 +72,19 @@ Base URL: `https://crossfin.dev` — 9 exchanges: Bithumb, Upbit, Coinone, GoPax
 
 ---
 
+## 5.5 Asian Premium Index (v1.12.0)
+
+Real-time crypto premium analysis across 4 Asian countries. Compares local exchange prices vs Binance global prices.
+
+<ApiTable :endpoints="[
+  { method: 'GET', path: '/api/premium/asia/japan', description: 'Japan premium (bitbank.cc JPY vs Binance USD)', price: 'Free' },
+  { method: 'GET', path: '/api/premium/asia/indonesia', description: 'Indonesia premium (Indodax IDR vs Binance USD)', price: 'Free' },
+  { method: 'GET', path: '/api/premium/asia/thailand', description: 'Thailand premium (Bitkub THB vs Binance USD)', price: 'Free' },
+  { method: 'GET', path: '/api/premium/asia/overview', description: '4-country overview (Korea + Japan + Indonesia + Thailand)', price: 'Free' },
+]" />
+
+---
+
 ## 6. Bundles
 
 <ApiTable :endpoints="[

@@ -38,7 +38,7 @@ Restart your MCP client. Done. 16 tools available immediately.
 
 - "빗썸에서 바이낸스로 500만원 USDC 만들려면 가장 싼 방법이 뭐야?" → Routing engine evaluates 11 bridge coins across 9 exchanges, returns optimal path with fees
 - "지금 한국-글로벌 스프레드 얼마야?" → Real-time price spread between Korean and global exchanges for 11 crypto pairs
-- "삼성전자 외국인 매수 동향 알려줘" → Korean stock investor flow data (foreign/institutional/individual)
+- "일본이랑 태국 프리미엄 비교해줘" → Asian Premium Index across Korea, Japan, Indonesia, Thailand
 - "오늘 한국 시장 브리핑해줘" → Morning Brief bundle: route spread + FX + KOSPI/KOSDAQ + stock momentum + headlines
 
 **For developers/agents:**
@@ -46,7 +46,8 @@ Restart your MCP client. Done. 16 tools available immediately.
 - `find_optimal_route` — cheapest/fastest/balanced path across Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit using 11 bridge coins (BTC, ETH, XRP, SOL, DOGE, ADA, DOT, LINK, AVAX, TRX, KAIA)
 - `get_kimchi_premium` — real-time Korean vs. global route spread
 - `compare_exchange_prices` — live Bithumb KRW vs Binance USD price comparison
-- `call_paid_service` — call any of 35 paid APIs with automatic x402 USDC payment
+- `call_paid_service` — call any paid API with automatic x402 USDC payment
+- Asian Premium endpoints — Japan, Indonesia, Thailand crypto premiums vs global markets
 
 ---
 
@@ -103,6 +104,21 @@ Supports bidirectional routing: Korea → Global and Global → Korea.
 | `get_service` | Service details |
 | `list_categories` | Service categories |
 | `get_analytics` | Gateway usage stats |
+
+---
+
+## Asian Premium Index (v1.12.0)
+
+Real-time crypto premium analysis across 4 Asian countries. All free, no API key needed.
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/premium/asia/japan` | Japan premium — bitbank.cc JPY vs Binance USD |
+| `GET /api/premium/asia/indonesia` | Indonesia premium — Indodax IDR vs Binance USD |
+| `GET /api/premium/asia/thailand` | Thailand premium — Bitkub THB vs Binance USD |
+| `GET /api/premium/asia/overview` | 4-country overview (Korea + Japan + Indonesia + Thailand) |
+
+Data sources: bitbank.cc (Japan), Indodax (Indonesia), Bitkub (Thailand), Bithumb (Korea), Binance (Global)
 
 ---
 
