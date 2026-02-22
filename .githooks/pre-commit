@@ -38,12 +38,44 @@ redact_matches() {
     -e 's/eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/[REDACTED_JWT]/g'
 }
 
+search_lines() {
+  local pattern="$1"
+
+  if command -v rg >/dev/null 2>&1; then
+    printf '%s\n' "$added_lines" | rg -n -S --no-heading "$pattern" || true
+    return
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    ADDED_LINES="$added_lines" python3 - "$pattern" <<'PY'
+import os
+import re
+import sys
+
+pattern = sys.argv[1]
+text = os.environ.get("ADDED_LINES", "")
+
+try:
+    rx = re.compile(pattern)
+except re.error:
+    sys.exit(0)
+
+for idx, line in enumerate(text.splitlines(), 1):
+    if rx.search(line):
+        print(f"{idx}:{line}")
+PY
+    return
+  fi
+
+  printf '%s\n' "$added_lines" | grep -nE "$pattern" || true
+}
+
 check_pattern() {
   local label="$1"
   local pattern="$2"
   local matches
 
-  matches="$(printf '%s\n' "$added_lines" | rg -n -S --no-heading "$pattern" || true)"
+  matches="$(search_lines "$pattern")"
   if [ -n "$matches" ]; then
     echo "BLOCKED: $label" >&2
     printf '%s\n' "$matches" | redact_matches >&2
