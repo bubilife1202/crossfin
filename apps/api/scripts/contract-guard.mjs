@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 
 const baseUrl = (process.env.CONTRACT_BASE_URL ?? 'https://crossfin.dev').trim().replace(/\/+$/, '')
+const contractAgentKey = (
+  process.env.CONTRACT_AGENT_KEY
+  ?? process.env.CROSSFIN_AGENT_KEY
+  ?? process.env.X_AGENT_KEY
+  ?? ''
+).trim()
 
 function assert(condition, message) {
   if (!condition) {
@@ -26,24 +32,30 @@ async function expectStatus(res, expected, label) {
 }
 
 async function postJson(path, payload) {
+  const headers = {
+    'content-type': 'application/json',
+    'x-crossfin-internal': '1',
+    'user-agent': 'crossfin-contract-guard/1.0',
+  }
+  if (contractAgentKey) headers['x-agent-key'] = contractAgentKey
+
   return fetch(`${baseUrl}${path}`, {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-crossfin-internal': '1',
-      'user-agent': 'crossfin-contract-guard/1.0',
-    },
+    headers,
     body: JSON.stringify(payload),
   })
 }
 
 async function getJson(path) {
+  const headers = {
+    'x-crossfin-internal': '1',
+    'user-agent': 'crossfin-contract-guard/1.0',
+  }
+  if (contractAgentKey) headers['x-agent-key'] = contractAgentKey
+
   return fetch(`${baseUrl}${path}`, {
     method: 'GET',
-    headers: {
-      'x-crossfin-internal': '1',
-      'user-agent': 'crossfin-contract-guard/1.0',
-    },
+    headers,
   })
 }
 
@@ -81,15 +93,22 @@ async function run() {
   await expectStatus(invalidStrategyRes, 400, 'ACP quote invalid strategy')
 
   const executeRes = await postJson('/api/acp/execute', { quote_id: quoteFromTo.quote_id })
-  await expectStatus(executeRes, 200, 'ACP execute start')
-  const execution = await parseJson(executeRes, 'ACP execute start')
-  assert(typeof execution.execution_id === 'string' && execution.execution_id.length > 0, 'ACP execute start: execution_id missing')
-  assert(execution.status === 'running' || execution.status === 'completed', `ACP execute start: unexpected status ${execution.status}`)
+  if (!contractAgentKey) {
+    await expectStatus(executeRes, 401, 'ACP execute start (no agent key)')
+    const executeUnauthorized = await parseJson(executeRes, 'ACP execute start (no agent key)')
+    const errorText = String(executeUnauthorized.error ?? '')
+    assert(errorText.toLowerCase().includes('x-agent-key'), 'ACP execute start (no agent key): expected missing key error')
+  } else {
+    await expectStatus(executeRes, 200, 'ACP execute start')
+    const execution = await parseJson(executeRes, 'ACP execute start')
+    assert(typeof execution.execution_id === 'string' && execution.execution_id.length > 0, 'ACP execute start: execution_id missing')
+    assert(execution.status === 'running' || execution.status === 'completed', `ACP execute start: unexpected status ${execution.status}`)
 
-  const executionStatusRes = await getJson(`/api/acp/executions/${encodeURIComponent(execution.execution_id)}`)
-  await expectStatus(executionStatusRes, 200, 'ACP execution status')
-  const executionStatus = await parseJson(executionStatusRes, 'ACP execution status')
-  assert(executionStatus.execution_id === execution.execution_id, 'ACP execution status: execution_id mismatch')
+    const executionStatusRes = await getJson(`/api/acp/executions/${encodeURIComponent(execution.execution_id)}`)
+    await expectStatus(executionStatusRes, 200, 'ACP execution status')
+    const executionStatus = await parseJson(executionStatusRes, 'ACP execution status')
+    assert(executionStatus.execution_id === execution.execution_id, 'ACP execution status: execution_id mismatch')
+  }
 
   const pairsBtcRes = await getJson('/api/route/pairs?coin=BTC')
   await expectStatus(pairsBtcRes, 200, 'Route pairs coin=BTC')
