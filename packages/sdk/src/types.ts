@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// CrossFin SDK — Response types derived from OpenAPI spec v1.10.0
+// CrossFin SDK — Response types derived from OpenAPI spec v1.10.1
 // ---------------------------------------------------------------------------
 
 /** GET /api/health */

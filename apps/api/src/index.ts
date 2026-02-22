@@ -471,7 +471,7 @@ async function glmChatCompletion(apiKey: string, messages: GlmMessage[], tools: 
   try {
     const res = await fetch('https://api.z.ai/api/coding/paas/v4/chat/completions', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', Authorization: `Bearer ${apiKey}`, 'User-Agent': 'CrossFin-API/1.10.0' },
+      headers: { 'content-type': 'application/json', Authorization: `Bearer ${apiKey}`, 'User-Agent': 'CrossFin-API/1.10.1' },
       signal: controller.signal,
       body: JSON.stringify({
         model: 'glm-5',
@@ -734,7 +734,7 @@ const publicRateLimit: MiddlewareHandler<Env> = async (c, next) => {
 
 app.use('*', cors({
   origin: (requestOrigin) => CORS_ALLOWED_ORIGINS.has(requestOrigin) ? requestOrigin : '',
-  allowHeaders: ['Content-Type', 'Authorization', 'X-Agent-Key', 'X-CrossFin-Admin-Token', 'X-CrossFin-Internal', 'PAYMENT-SIGNATURE'],
+  allowHeaders: ['Content-Type', 'Authorization', 'X-Agent-Key', 'X-CrossFin-Signup-Token', 'PAYMENT-SIGNATURE'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   exposeHeaders: ['PAYMENT-REQUIRED', 'PAYMENT-RESPONSE'],
 }))
@@ -3385,9 +3385,10 @@ const agentAuth: MiddlewareHandler<Env> = async (c, next) => {
   if (agent.status !== 'active') throw new HTTPException(403, { message: 'Agent suspended' })
 
   if (usedLegacyPlaintextKey) {
+    console.warn(`[DEPRECATION] Agent ${agent.id} used plaintext API key. Auto-migrating to hash.`)
     c.executionCtx.waitUntil(
       c.env.DB.prepare(
-        'UPDATE agents SET api_key = ?, updated_at = datetime("now") WHERE id = ?'
+        'UPDATE agents SET api_key = ?, key_migrated_at = datetime("now"), updated_at = datetime("now") WHERE id = ?'
       ).bind(apiKeyHash, agent.id).run().catch((error) => {
         console.error('Failed to migrate legacy agent API key', error)
       })
@@ -9427,7 +9428,10 @@ app.post('/api/guardian/rules', async (c) => {
 app.delete('/api/guardian/rules/:id', async (c) => {
   requireGuardianEnabled(c)
   requireAdmin(c)
-  const ruleId = c.req.param('id')
+  const ruleId = c.req.param('id')?.trim()
+  if (!ruleId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ruleId)) {
+    throw new HTTPException(400, { message: 'Invalid rule ID format' })
+  }
   await c.env.DB.prepare(
     'UPDATE guardian_rules SET active = 0, updated_at = datetime(\'now\') WHERE id = ?'
   ).bind(ruleId).run()
@@ -10824,7 +10828,7 @@ app.post('/api/acp/quote', async (c) => {
 })
 
 // POST /api/acp/execute — Start tracked execution orchestration (free)
-app.post('/api/acp/execute', async (c) => {
+app.post('/api/acp/execute', agentAuth, async (c) => {
   let body: Record<string, unknown>
   try {
     body = await c.req.json() as Record<string, unknown>
@@ -10936,7 +10940,7 @@ app.post('/api/acp/execute', async (c) => {
 })
 
 // GET /api/acp/executions/:executionId — ACP execution progress (free)
-app.get('/api/acp/executions/:executionId', async (c) => {
+app.get('/api/acp/executions/:executionId', agentAuth, async (c) => {
   const executionId = String(c.req.param('executionId') ?? '').trim()
   if (!executionId) throw new HTTPException(400, { message: 'executionId is required' })
 

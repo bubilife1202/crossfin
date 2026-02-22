@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.10.1] - 2026-02-22
+
+### Security
+- **ACP execute/status 엔드포인트에 `agentAuth` 인증 추가** — `POST /api/acp/execute`, `GET /api/acp/executions/:id` 호출 시 `X-Agent-Key` 헤더 필수
+- **CORS allowHeaders 강화** — admin 토큰 헤더 제거, signup 토큰 헤더 추가
+- **Guardian rule ID UUID 검증 추가** — 잘못된 형식 입력 시 400 반환
+- **레거시 평문 API 키 deprecation 경고** — 평문 키 사용 시 콘솔 경고 출력 + `key_migrated_at` 추적
+
+### Changed
+- `CROSSFIN_AGENT_SIGNUP_TOKEN` Cloudflare secret 설정 (에이전트 자가등록 활성화)
+
+
 ## [1.10.0] - 2026-02-22
 
 ### Added
