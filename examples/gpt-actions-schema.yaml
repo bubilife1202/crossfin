@@ -90,9 +90,9 @@ paths:
       operationId: getExchangeFees
       summary: Exchange fee comparison table
       description: >
-        Trading fees, withdrawal fees, and transfer times for all 9 supported
-        exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance,
-        OKX, Bybit). Optionally filter by coin.
+        Trading fees, withdrawal fees, and transfer times for all 12 supported
+        exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank,
+        Indodax, Bitkub, Binance, OKX, Bybit). Optionally filter by coin.
       parameters:
         - name: coin
           in: query

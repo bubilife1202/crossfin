@@ -34,7 +34,7 @@ Tool: `compare_exchange_prices` (no params) | Free | All tracked coins with brid
 "Compare withdrawal fees for XRP across all exchanges"
 ```
 
-Tool: `list_exchange_fees` | Free | Trading + withdrawal fees for 9 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit).
+Tool: `list_exchange_fees` | Free | Trading + withdrawal fees for 12 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit).
 
 ### Browse the Service Catalog
 

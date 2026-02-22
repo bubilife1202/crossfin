@@ -254,6 +254,9 @@ const ROUTE_EXCHANGES = [
   { value: "gopax", label: "GoPax", region: "korean", fiat: "KRW" },
   { value: "bitflyer", label: "bitFlyer", region: "regional", fiat: "JPY" },
   { value: "wazirx", label: "WazirX", region: "regional", fiat: "INR" },
+  { value: "bitbank", label: "bitbank", region: "regional", fiat: "JPY" },
+  { value: "indodax", label: "Indodax", region: "regional", fiat: "IDR" },
+  { value: "bitkub", label: "Bitkub", region: "regional", fiat: "THB" },
   { value: "binance", label: "Binance", region: "global", fiat: "USDC" },
   { value: "okx", label: "OKX", region: "global", fiat: "USDC" },
   { value: "bybit", label: "Bybit", region: "global", fiat: "USDC" },
@@ -819,7 +822,7 @@ export default function App() {
               </span>
             </div>
             <p className="panelSubtext">
-              Korea: Bithumb, Upbit, Coinone, GoPax · Regional Fiat: bitFlyer (JPY), WazirX (INR) · Global: Binance, OKX, Bybit
+              Korea: Bithumb, Upbit, Coinone, GoPax · Regional: bitFlyer, WazirX, bitbank, Indodax, Bitkub · Global: Binance, OKX, Bybit
             </p>
             <div className="exchangeHubGrid">
               <div className="exchangeHubCard korea">
@@ -848,7 +851,7 @@ export default function App() {
                 <div className="exchangeHubHead">
                   <div>
                     <h3 className="exchangeHubTitle">Regional Fiat Hub</h3>
-                    <p className="exchangeHubDesc">JPY/INR local rails (Japan, India)</p>
+                    <p className="exchangeHubDesc">JPY/INR/IDR/THB local rails</p>
                   </div>
                   <span className="exchangeHubMeta">
                     {regionalHubExchanges.filter((e) => e.status === "online").length}/{regionalHubExchanges.length || defaultRegionalExchangeCount} online
@@ -888,35 +891,14 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="exchangeHubCard premium">
-                <div className="exchangeHubHead">
-                  <div>
-                    <h3 className="exchangeHubTitle">Premium Data</h3>
-                    <p className="exchangeHubDesc">Asian premium comparison sources</p>
-                  </div>
-                  <span className="exchangeHubMeta">3 sources</span>
-                </div>
-                <div className="exchangeHubList">
-                  {[
-                    { name: "bitbank", label: "🇯🇵 JPY" },
-                    { name: "Indodax", label: "🇮🇩 IDR" },
-                    { name: "Bitkub", label: "🇹🇭 THB" },
-                  ].map((src) => (
-                    <div key={src.name} className="exchangePill online">
-                      <span className="exchangePillName">{src.name}</span>
-                      <span className="statusDotSmall green" />
-                      <span className="exchangePillStatus">{src.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+
             </div>
           </section>
 
           <section className="panel">
             <div className="panelHeader">
               <h2 className="panelTitle">Exchange Fee Comparison</h2>
-              <span className="panelBadge">9 exchanges</span>
+              <span className="panelBadge">12 exchanges</span>
             </div>
             <p className="panelSub" style={{ color: "var(--text-muted, #888)", fontSize: "0.82rem", margin: "-0.25rem 0 0.75rem" }}>
               How much it costs to route through each exchange — using XRP as the bridge coin (fastest, ~30 sec transfer).

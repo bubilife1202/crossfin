@@ -94,6 +94,9 @@ const EXCHANGE_LABELS: Record<string, string> = {
   binance: 'Binance',
   okx: 'OKX',
   bybit: 'Bybit',
+  bitbank: 'bitbank',
+  indodax: 'Indodax',
+  bitkub: 'Bitkub',
 }
 
 const ROTATING_SCENARIOS: readonly RouteScenario[] = [
@@ -105,6 +108,9 @@ const ROTATING_SCENARIOS: readonly RouteScenario[] = [
   { from: 'binance:USDC', to: 'bithumb:KRW', amount: 1_000 },
   { from: 'bybit:USDC', to: 'upbit:KRW', amount: 1_000 },
   { from: 'okx:USDC', to: 'wazirx:INR', amount: 1_000 },
+  { from: 'bitbank:JPY', to: 'binance:USDC', amount: 100_000 },
+  { from: 'indodax:IDR', to: 'okx:USDC', amount: 10_000_000 },
+  { from: 'bitkub:THB', to: 'bybit:USDC', amount: 30_000 },
 ] as const
 
 const INITIAL_SCENARIO: RouteScenario = ROTATING_SCENARIOS[0] ?? { from: 'bithumb:KRW', to: 'binance:USDC', amount: 1_000_000 }
@@ -118,6 +124,9 @@ const EXCHANGE_CONFIG: { value: string; label: string; currencies: string[] }[] 
   { value: 'gopax', label: 'GoPax', currencies: ['KRW'] },
   { value: 'bitflyer', label: 'bitFlyer', currencies: ['JPY'] },
   { value: 'wazirx', label: 'WazirX', currencies: ['INR'] },
+  { value: 'bitbank', label: 'bitbank', currencies: ['JPY'] },
+  { value: 'indodax', label: 'Indodax', currencies: ['IDR'] },
+  { value: 'bitkub', label: 'Bitkub', currencies: ['THB'] },
   { value: 'binance', label: 'Binance', currencies: ['USDC', 'USDT'] },
   { value: 'okx', label: 'OKX', currencies: ['USDC', 'USDT'] },
   { value: 'bybit', label: 'Bybit', currencies: ['USDC', 'USDT'] },
@@ -151,6 +160,8 @@ function defaultAmountForExchange(exchange: string): string {
   const cur = cfg?.currencies[0] ?? 'USDC'
   if (cur === 'KRW') return '1,000,000'
   if (cur === 'JPY' || cur === 'INR') return '100,000'
+  if (cur === 'IDR') return '10,000,000'
+  if (cur === 'THB') return '30,000'
   return '1,000'
 }
 
