@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.11.0] - 2026-02-22
+
+### Changed
+- **FREE TIER**: All 35 paid endpoints now free — x402 payment middleware disabled (pass-through)
+- Total endpoint count unchanged; no x402 USDC payment required for any call
+
+### Removed
+- **12 Naver Finance endpoints disabled (503)** — legal risk from scraping undocumented internal mobile APIs (`m.stock.naver.com`)
+  - `/api/premium/market/korea/indices` — KOSPI/KOSDAQ indices
+  - `/api/premium/market/korea/indices/history` — Index OHLC history
+  - `/api/premium/market/korea/stocks/momentum` — Top stocks momentum
+  - `/api/premium/market/korea/investor-flow` — Stock investor flow
+  - `/api/premium/market/korea/index-flow` — Index investor flow
+  - `/api/premium/market/korea/stock-detail` — Stock fundamentals
+  - `/api/premium/market/korea/stock-news` — Stock news
+  - `/api/premium/market/korea/themes` — Market themes
+  - `/api/premium/market/korea/disclosure` — Corporate disclosures
+  - `/api/premium/market/korea/stock-brief` — Stock brief bundle
+  - `/api/premium/market/korea/etf` — Korean ETF list
+  - `/api/premium/market/global/indices-chart` — Global indices chart
+- Each disabled endpoint returns HTTP 503 with migration notice and `migrationTarget: "KRX official data API"`
+
+### Fixed
+- `/api/premium/morning/brief` — Naver-dependent fields (`indices`, `momentum`) gracefully return `null` with notice instead of failing
+
+
 ## [1.10.1] - 2026-02-22
 
 ### Security

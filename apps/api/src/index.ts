@@ -2683,684 +2683,15 @@ app.get('/api/openapi.json', (c) => {
   })
 })
 
+// === x402 Payment Middleware (DISABLED v1.11.0) ===
+// All premium endpoints are now free to acquire users.
+// Revenue $0, real users single digits — paywall removed.
+// Original payment configuration preserved in PATCH-1.11.0.md.
+// To re-enable: restore paymentMiddleware() from git history (commit before v1.11.0).
 app.use(
   '/api/premium/*',
-  async (c, next) => {
-    const network = requireCaip2(c.env.X402_NETWORK)
-    const facilitatorClient = new HTTPFacilitatorClient({ url: c.env.FACILITATOR_URL })
-    const resourceServer = new x402ResourceServer(facilitatorClient)
-      .register(network, new ExactEvmScheme())
-      .registerExtension(bazaarResourceServerExtension)
-      .onAfterSettle(async (ctx) => {
-        if (!ctx.result.success) return
-        try {
-          await ensurePremiumPaymentsTable(c.env.DB)
-          const id = crypto.randomUUID()
-          await c.env.DB.prepare(
-            `INSERT INTO premium_payments (id, payer, tx_hash, network, endpoint, amount, asset, scheme)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-          ).bind(
-            id,
-            ctx.result.payer ?? 'unknown',
-            ctx.result.transaction,
-            ctx.result.network,
-            c.req.path,
-            ctx.requirements.amount,
-            ctx.requirements.asset,
-            ctx.requirements.scheme,
-          ).run()
-        } catch (err) {
-          console.error('Failed to record premium payment', err)
-        }
-      })
-
-    const middleware = paymentMiddleware(
-      {
-        'GET /api/premium/report': {
-          accepts: {
-            scheme: 'exact',
-            price: '$0.001',
-            network,
-            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-            maxTimeoutSeconds: 300,
-          },
-          description: 'CrossFin premium report — lightweight health/status check for agents verifying the x402 payment flow.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              output: {
-                example: { paid: true, service: 'crossfin-premium-report', message: 'Payment verified', paidAt: '2026-02-16T00:00:00.000Z' },
-                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, message: { type: 'string' } }, required: ['paid', 'service'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/enterprise': {
-          accepts: {
-            scheme: 'exact',
-            price: '$20.00',
-            network,
-            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-            maxTimeoutSeconds: 300,
-          },
-          description: 'CrossFin enterprise receipt — full settlement proof for institutional agents. High-value endpoint for compliance and audit trails.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              output: {
-                example: { paid: true, service: 'crossfin-enterprise', receipt: { amount: '$20.00', network: 'eip155:8453', settledAt: '2026-02-16T00:00:00.000Z' } },
-                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, receipt: { type: 'object' } }, required: ['paid', 'service', 'receipt'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/arbitrage/kimchi': {
-          accepts: {
-            scheme: 'exact',
-            price: '$0.05',
-            network,
-            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-            maxTimeoutSeconds: 300,
-          },
-          description: 'Real-time Route Spread Index — price spread between Korean exchanges (Bithumb) and global exchanges (Binance) for top crypto pairs. Unique Korean market data unavailable anywhere else in x402 ecosystem.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              output: {
-                example: { paid: true, service: 'crossfin-kimchi-premium', krwUsdRate: 1450, pairsTracked: 10, avgPremiumPct: 2.15, premiums: [{ coin: 'BTC', bithumbKrw: 145000000, bithumbUsd: 100000, binanceUsd: 97850, premiumPct: 2.2, volume24hUsd: 5000000 }] },
-                schema: { properties: { paid: { type: 'boolean' }, pairsTracked: { type: 'number' }, avgPremiumPct: { type: 'number' }, premiums: { type: 'array' } }, required: ['paid', 'pairsTracked', 'avgPremiumPct', 'premiums'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/arbitrage/kimchi/history': {
-          accepts: {
-            scheme: 'exact',
-            price: '$0.05',
-            network,
-            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-            maxTimeoutSeconds: 300,
-          },
-          description: 'Historical Route Spread snapshots grouped by hour (from CrossFin cron). Query by coin and lookback hours.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              input: { hours: 24, coin: 'BTC' },
-              inputSchema: {
-                properties: {
-                  hours: { type: 'number', description: 'Lookback window in hours (1-168)' },
-                  coin: { type: 'string', description: 'Optional coin filter (e.g., BTC, ETH)' },
-                },
-              },
-              output: {
-                example: { paid: true, service: 'crossfin-kimchi-premium-history', hours: 24, groupedBy: 'hour', snapshots: [{ coin: 'BTC', premiumPct: 2.2, hour: '2026-02-15T03:00:00Z' }], count: 1 },
-                schema: { properties: { paid: { type: 'boolean' }, hours: { type: 'number' }, groupedBy: { type: 'string' }, snapshots: { type: 'array' }, count: { type: 'number' } }, required: ['paid', 'hours', 'groupedBy', 'snapshots', 'count'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/arbitrage/opportunities': {
-          accepts: {
-            scheme: 'exact',
-            price: '$0.10',
-            network,
-            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-            maxTimeoutSeconds: 300,
-          },
-          description: 'AI-ready market condition analysis. Returns POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD indicators with slippage estimates, premium trends, transfer time risk, and signal strength scores for Korean vs global exchange arbitrage.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              output: {
-                example: { paid: true, service: 'crossfin-arbitrage-opportunities', totalOpportunities: 10, profitableCount: 3, positiveSpreadCount: 2, marketCondition: 'positive', bestOpportunity: { coin: 'BTC', direction: 'buy-global-sell-korea', netProfitPct: 1.85, indicator: 'POSITIVE_SPREAD', signalStrength: 0.87 }, opportunities: [] },
-                schema: { properties: { paid: { type: 'boolean' }, totalOpportunities: { type: 'number' }, profitableCount: { type: 'number' }, positiveSpreadCount: { type: 'number' }, marketCondition: { type: 'string' }, opportunities: { type: 'array' } }, required: ['paid', 'totalOpportunities', 'profitableCount', 'positiveSpreadCount', 'marketCondition', 'opportunities'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/bithumb/orderbook': {
-          accepts: {
-            scheme: 'exact',
-            price: '$0.02',
-            network,
-            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-            maxTimeoutSeconds: 300,
-          },
-          description: 'Live Bithumb (Korean exchange) orderbook depth for any trading pair. Raw bid/ask data from a market typically inaccessible to non-Korean users.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              input: { pair: 'BTC' },
-              inputSchema: { properties: { pair: { type: 'string', description: 'Trading pair symbol (BTC, ETH, XRP, etc.)' } } },
-              output: {
-                example: { paid: true, service: 'crossfin-bithumb-orderbook', pair: 'BTC/KRW', exchange: 'Bithumb', bestBidKrw: 144900000, bestAskKrw: 145000000, spreadPct: 0.07, depth: { bids: [], asks: [] } },
-                schema: { properties: { paid: { type: 'boolean' }, pair: { type: 'string' }, bestBidKrw: { type: 'number' }, bestAskKrw: { type: 'number' }, spreadPct: { type: 'number' } }, required: ['paid', 'pair', 'bestBidKrw', 'bestAskKrw'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/bithumb/volume-analysis': {
-          accepts: {
-            scheme: 'exact',
-            price: '$0.03',
-            network,
-            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-            maxTimeoutSeconds: 300,
-          },
-          description: 'Bithumb 24h volume analysis: total market volume, volume concentration, volume-weighted change, and unusual volume detection (2x+ average).',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              output: {
-                example: { paid: true, service: 'crossfin-bithumb-volume', totalVolume24hKrw: 1234567890, totalVolume24hUsd: 850000, totalCoins: 200, volumeConcentration: { top5Pct: 62.5, top5Coins: [{ coin: 'BTC', volume24hKrw: 400000000, volumeSharePct: 32.4 }] }, volumeWeightedChangePct: 0.75, unusualVolume: [], topByVolume: [], at: '2026-02-15T00:00:00.000Z' },
-                schema: {
-                  properties: {
-                    paid: { type: 'boolean' },
-                    service: { type: 'string' },
-                    totalVolume24hKrw: { type: 'number' },
-                    totalVolume24hUsd: { type: 'number' },
-                    totalCoins: { type: 'number' },
-                    volumeConcentration: { type: 'object' },
-                    volumeWeightedChangePct: { type: 'number' },
-                    unusualVolume: { type: 'array' },
-                    topByVolume: { type: 'array' },
-                    at: { type: 'string' },
-                  },
-                  required: ['paid', 'service', 'totalVolume24hKrw', 'totalVolume24hUsd', 'totalCoins', 'volumeConcentration', 'volumeWeightedChangePct', 'unusualVolume', 'topByVolume', 'at'],
-                },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/korea': {
-          accepts: {
-            scheme: 'exact',
-            price: '$0.03',
-            network,
-            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-            maxTimeoutSeconds: 300,
-          },
-          description: 'Korean crypto market sentiment — top movers, volume leaders, 24h gainers/losers on Bithumb. Unique Korean market intelligence for trading agents.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              output: {
-                example: { paid: true, service: 'crossfin-korea-sentiment', exchange: 'Bithumb', totalCoins: 200, totalVolume24hUsd: 500000000, marketMood: 'neutral', topGainers: [], topLosers: [], topVolume: [] },
-                schema: { properties: { paid: { type: 'boolean' }, totalCoins: { type: 'number' }, totalVolume24hUsd: { type: 'number' }, marketMood: { type: 'string', enum: ['bullish', 'bearish', 'neutral'] } }, required: ['paid', 'totalCoins', 'marketMood'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/fx/usdkrw': {
-          accepts: {
-            scheme: 'exact',
-            price: '$0.01',
-            network,
-            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-            maxTimeoutSeconds: 300,
-          },
-          description: 'Real-time USD/KRW exchange rate from Korean FX markets. Essential for converting Korean Won prices to USD for arbitrage calculations.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              output: {
-                example: { paid: true, service: 'crossfin-fx-usdkrw', rate: 1450.25, source: 'exchangerate-api', at: '2026-02-16T00:00:00.000Z' },
-                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, rate: { type: 'number' }, source: { type: 'string' } }, required: ['paid', 'rate'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/upbit/ticker': {
-          accepts: {
-            scheme: 'exact',
-            price: '$0.02',
-            network,
-            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-            maxTimeoutSeconds: 300,
-          },
-          description: 'Upbit spot ticker (KRW market).',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              input: { market: 'KRW-BTC' },
-              inputSchema: { properties: { market: { type: 'string', description: 'Upbit market symbol (e.g., KRW-BTC, KRW-ETH)' } } },
-              output: {
-                example: { paid: true, service: 'crossfin-upbit-ticker', market: 'KRW-BTC', tradePriceKrw: 100000000, tradePriceUsd: 68900, change24hPct: 1.25 },
-                schema: { properties: { paid: { type: 'boolean' }, market: { type: 'string' }, tradePriceKrw: { type: 'number' }, tradePriceUsd: { type: 'number' } }, required: ['paid', 'market', 'tradePriceKrw'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/upbit/orderbook': {
-          accepts: {
-            scheme: 'exact',
-            price: '$0.02',
-            network,
-            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-            maxTimeoutSeconds: 300,
-          },
-          description: 'Upbit orderbook snapshot (KRW market).',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              input: { market: 'KRW-BTC' },
-              inputSchema: { properties: { market: { type: 'string', description: 'Upbit market symbol (e.g., KRW-BTC, KRW-ETH)' } } },
-              output: {
-                example: { paid: true, service: 'crossfin-upbit-orderbook', market: 'KRW-BTC', bestBidKrw: 99990000, bestAskKrw: 100000000, spreadPct: 0.01 },
-                schema: { properties: { paid: { type: 'boolean' }, market: { type: 'string' }, bestBidKrw: { type: 'number' }, bestAskKrw: { type: 'number' }, spreadPct: { type: 'number' } }, required: ['paid', 'market', 'bestBidKrw', 'bestAskKrw'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/upbit/signals': {
-          accepts: {
-            scheme: 'exact',
-            price: '$0.05',
-            network,
-            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-            maxTimeoutSeconds: 300,
-          },
-          description: 'Upbit trading signals with momentum, relative volume signal, and volatility for KRW-BTC, KRW-ETH, KRW-XRP, KRW-SOL, KRW-DOGE, KRW-ADA.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              output: {
-                example: { paid: true, service: 'crossfin-upbit-signals', signals: [{ market: 'KRW-BTC', priceKrw: 100000000, change24hPct: 1.25, volume24hKrw: 5000000000, volatilityPct: 2.1, volumeSignal: 'high', momentum: 'up', signal: 'bullish', confidence: 'medium' }], marketSummary: { bullishCount: 2, bearishCount: 1, neutralCount: 3, overallSentiment: 'neutral' }, at: '2026-02-15T00:00:00.000Z' },
-                schema: {
-                  properties: {
-                    paid: { type: 'boolean' },
-                    service: { type: 'string' },
-                    signals: { type: 'array' },
-                    marketSummary: { type: 'object' },
-                    at: { type: 'string' },
-                  },
-                  required: ['paid', 'service', 'signals', 'marketSummary', 'at'],
-                },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/coinone/ticker': {
-          accepts: {
-            scheme: 'exact',
-            price: '$0.02',
-            network,
-            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-            maxTimeoutSeconds: 300,
-          },
-          description: 'Coinone spot ticker (KRW market).',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              input: { currency: 'BTC' },
-              inputSchema: { properties: { currency: { type: 'string', description: 'Asset symbol (e.g., BTC, ETH, XRP)' } } },
-              output: {
-                example: { paid: true, service: 'crossfin-coinone-ticker', currency: 'BTC', lastKrw: 100000000, lastUsd: 68900 },
-                schema: { properties: { paid: { type: 'boolean' }, currency: { type: 'string' }, lastKrw: { type: 'number' }, lastUsd: { type: 'number' } }, required: ['paid', 'currency', 'lastKrw'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/cross-exchange': {
-          accepts: {
-            scheme: 'exact',
-            price: '$0.08',
-            network,
-            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-            maxTimeoutSeconds: 300,
-          },
-          description: 'Cross-exchange condition analysis. Compares prices across Bithumb, Upbit, Coinone, and Binance with SPREAD_OPPORTUNITY/NEUTRAL_SIGNAL/MONITORING indicators, best buy/sell exchange per coin, and spread analysis.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              output: {
-                example: { paid: true, service: 'crossfin-cross-exchange', coinsAnalyzed: 10, signals: [{ coin: 'BTC', indicator: 'SPREAD_OPPORTUNITY', bestBuy: 'Binance', bestSell: 'Bithumb', spreadPct: 2.1, signalStrength: 0.85 }], overallCondition: 'positive' },
-                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, coinsAnalyzed: { type: 'number' }, signals: { type: 'array' }, overallCondition: { type: 'string' } }, required: ['paid', 'coinsAnalyzed', 'signals'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/korea/indices': {
-          accepts: {
-            scheme: 'exact',
-            price: '$0.03',
-            network,
-            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-            maxTimeoutSeconds: 300,
-          },
-          description: 'Real-time KOSPI and KOSDAQ Korean stock market indices. Includes price, change, direction, and market status. Data from Naver Finance — unavailable via standard global APIs.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              output: {
-                example: { paid: true, service: 'crossfin-korea-indices', kospi: { code: 'KOSPI', price: 2650.25, change: 15.3, changePct: 0.58, direction: 'RISING', marketStatus: 'CLOSE' }, kosdaq: { code: 'KOSDAQ', price: 870.15, change: -3.2, changePct: -0.37, direction: 'FALLING', marketStatus: 'CLOSE' }, source: 'naver-finance' },
-                schema: { properties: { paid: { type: 'boolean' }, kospi: { type: 'object' }, kosdaq: { type: 'object' }, source: { type: 'string' } }, required: ['paid', 'kospi', 'kosdaq'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/korea/indices/history': {
-          accepts: {
-            scheme: 'exact',
-            price: '$0.05',
-            network,
-            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-            maxTimeoutSeconds: 300,
-          },
-          description: 'Historical KOSPI or KOSDAQ daily OHLC data (up to 60 trading days). Open, high, low, close, change, direction per day.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              input: { index: 'KOSPI', days: 20 },
-              inputSchema: {
-                properties: {
-                  index: { type: 'string', description: 'KOSPI or KOSDAQ' },
-                  days: { type: 'number', description: 'Number of trading days (1-60, default 20)' },
-                },
-              },
-              output: {
-                example: { paid: true, service: 'crossfin-korea-indices-history', index: 'KOSPI', days: 20, history: [{ date: '2026-02-14', open: 2640.5, high: 2665.3, low: 2635.1, close: 2650.25, change: 15.3, changePct: 0.58 }], source: 'naver-finance' },
-                schema: { properties: { paid: { type: 'boolean' }, index: { type: 'string' }, days: { type: 'number' }, history: { type: 'array' } }, required: ['paid', 'index', 'days', 'history'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/korea/stocks/momentum': {
-          accepts: {
-            scheme: 'exact',
-            price: '$0.05',
-            network,
-            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-            maxTimeoutSeconds: 300,
-          },
-          description: 'Korean stock market momentum — top 10 by market cap (Samsung, SK Hynix, etc.), top 5 gainers, top 5 losers on KOSPI or KOSDAQ. Real-time rankings from Naver Finance.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              input: { market: 'KOSPI' },
-              inputSchema: { properties: { market: { type: 'string', description: 'KOSPI or KOSDAQ' } } },
-              output: {
-                example: { paid: true, service: 'crossfin-korea-stocks-momentum', market: 'KOSPI', topMarketCap: [{ code: '005930', name: 'Samsung Electronics', price: 72000, changePct: 1.5, direction: 'RISING' }], topGainers: [], topLosers: [], source: 'naver-finance' },
-                schema: { properties: { paid: { type: 'boolean' }, market: { type: 'string' }, topMarketCap: { type: 'array' }, topGainers: { type: 'array' }, topLosers: { type: 'array' } }, required: ['paid', 'market', 'topMarketCap', 'topGainers', 'topLosers'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/korea/investor-flow': {
-          accepts: { scheme: 'exact', price: '$0.05', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Korean stock investor flow — 10-day history of foreign, institutional, and individual net buying for any KOSPI/KOSDAQ stock. Data unavailable outside Bloomberg Terminal ($24K/yr).',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              input: { stock: '005930' },
-              inputSchema: { properties: { stock: { type: 'string', description: '6-digit Korean stock code (e.g., 005930 for Samsung Electronics)' } } },
-              output: {
-                example: { paid: true, service: 'crossfin-korea-investor-flow', stock: '005930', days: 10, flow: [{ date: '20260213', foreignNetBuy: '-4,715,928', foreignHoldRatio: '51.44%', institutionNetBuy: '+556,164', individualNetBuy: '+3,099,928', closePrice: '181,200' }] },
-                schema: { properties: { paid: { type: 'boolean' }, stock: { type: 'string' }, days: { type: 'number' }, flow: { type: 'array' } }, required: ['paid', 'stock', 'days', 'flow'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/korea/index-flow': {
-          accepts: { scheme: 'exact', price: '$0.03', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'KOSPI/KOSDAQ index-level investor flow — foreign, institutional, individual net buying in billions of KRW for today.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              input: { index: 'KOSPI' },
-              inputSchema: { properties: { index: { type: 'string', description: 'KOSPI, KOSDAQ, or KPI200' } } },
-              output: {
-                example: { paid: true, service: 'crossfin-korea-index-flow', index: 'KOSPI', date: '20260213', foreignNetBuyBillionKrw: '-9,220', institutionNetBuyBillionKrw: '+831', individualNetBuyBillionKrw: '+7,141' },
-                schema: { properties: { paid: { type: 'boolean' }, index: { type: 'string' }, foreignNetBuyBillionKrw: { type: 'string' }, institutionNetBuyBillionKrw: { type: 'string' }, individualNetBuyBillionKrw: { type: 'string' } }, required: ['paid', 'index'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/crypto/korea/5exchange': {
-          accepts: { scheme: 'exact', price: '$0.08', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Compare crypto prices across 4 Korean exchanges (Upbit, Bithumb, Coinone, GoPax) for any coin. Shows inter-exchange spread for arbitrage.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              input: { coin: 'BTC' },
-              inputSchema: { properties: { coin: { type: 'string', description: 'Crypto symbol (BTC, ETH, XRP, etc.)' } } },
-              output: {
-                example: { paid: true, service: 'crossfin-crypto-5exchange', coin: 'BTC', exchangeCount: 4, exchanges: [{ exchange: 'Upbit', priceKrw: 102130000, volume24h: 1579 }], spread: { minPriceKrw: 102072000, maxPriceKrw: 102890000, spreadPct: 0.8 } },
-                schema: { properties: { paid: { type: 'boolean' }, coin: { type: 'string' }, exchangeCount: { type: 'number' }, exchanges: { type: 'array' }, spread: { type: 'object' } }, required: ['paid', 'coin', 'exchanges', 'spread'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/crypto/korea/exchange-status': {
-          accepts: { scheme: 'exact', price: '$0.03', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Bithumb deposit/withdrawal status for ALL 600+ coins. Disabled deposits/withdrawals signal exchange risk, regulatory action, or chain issues. Unique risk monitoring data.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              output: {
-                example: { paid: true, service: 'crossfin-crypto-exchange-status', exchange: 'Bithumb', totalCoins: 668, disabledCount: 230, coins: [{ symbol: 'BTC', withdrawalEnabled: true, depositEnabled: true }] },
-                schema: { properties: { paid: { type: 'boolean' }, exchange: { type: 'string' }, totalCoins: { type: 'number' }, disabledCount: { type: 'number' }, coins: { type: 'array' } }, required: ['paid', 'totalCoins', 'disabledCount', 'coins'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/korea/stock-detail': {
-          accepts: { scheme: 'exact', price: '$0.05', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Comprehensive Korean stock analysis — PER, PBR, EPS, dividend yield, 52-week range, market cap, analyst consensus target price, and same-industry peer comparison.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              input: { stock: '005930' },
-              inputSchema: { properties: { stock: { type: 'string', description: '6-digit Korean stock code' } } },
-              output: {
-                example: { paid: true, service: 'crossfin-korea-stock-detail', stock: '005930', name: 'Samsung Electronics', metrics: { 'PER': '37.62배', 'PBR': '2.99배', '배당수익률': '0.92%' }, consensus: { targetPrice: '216,417', recommendation: '4.00' }, industryPeers: [{ code: '000660', name: 'SK Hynix' }] },
-                schema: { properties: { paid: { type: 'boolean' }, stock: { type: 'string' }, name: { type: 'string' }, metrics: { type: 'object' }, consensus: { type: 'object' }, industryPeers: { type: 'array' } }, required: ['paid', 'stock', 'metrics'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/korea/stock-news': {
-          accepts: { scheme: 'exact', price: '$0.03', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Korean stock-specific news feed from Naver Finance with article title, body, publisher, and timestamp.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              input: { stock: '005930' },
-              inputSchema: { properties: { stock: { type: 'string', description: '6-digit Korean stock code (e.g., 005930 for Samsung Electronics)' } } },
-              output: {
-                example: { paid: true, service: 'crossfin-korea-stock-news', stock: '005930', total: 1284, items: [{ id: 9912345, title: 'Samsung Electronics rises on AI memory demand', body: 'Analysts cited stronger-than-expected server DRAM orders...', publisher: 'Yonhap', datetime: '2026-02-16 09:15:00' }], source: 'naver-finance', at: '2026-02-16T00:00:00.000Z' },
-                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, stock: { type: 'string' }, total: { type: 'number' }, items: { type: 'array' }, source: { type: 'string' }, at: { type: 'string' } }, required: ['paid', 'service', 'stock', 'total', 'items', 'source', 'at'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/korea/stock-brief': {
-          accepts: { scheme: 'exact', price: '$0.10', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Stock Brief — one-call comprehensive Korean stock analysis combining fundamentals (PER/PBR/consensus), recent news, investor flow (foreign/institutional), and disclosure filings. Replaces 4 individual API calls.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              input: { stock: '005930' },
-              inputSchema: { properties: { stock: { type: 'string', description: 'Korean stock code (e.g., 005930 for Samsung Electronics)' } } },
-              output: {
-                example: {
-                  paid: true,
-                  service: 'crossfin-stock-brief',
-                  stock: '005930',
-                  name: 'Samsung Electronics',
-                  detail: { stock: '005930', name: 'Samsung Electronics', metrics: { PER: '12.5\uBC30', PBR: '1.3\uBC30' }, consensus: { targetPrice: '216,417', recommendation: '4.00' } },
-                  news: [],
-                  investorFlow: { stock: '005930', days: 10, flow: [{ date: '20260213', foreignNetBuy: '-4,715,928' }] },
-                  disclosures: [],
-                  at: '2026-02-17T00:00:00.000Z',
-                },
-                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, stock: { type: 'string' }, name: { type: ['string', 'null'] }, detail: { type: ['object', 'null'] }, news: { type: 'array' }, investorFlow: { type: ['object', 'null'] }, disclosures: { type: 'array' }, at: { type: 'string', format: 'date-time' } }, required: ['paid', 'service', 'stock', 'detail', 'news', 'investorFlow', 'disclosures', 'at'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/korea/themes': {
-          accepts: { scheme: 'exact', price: '$0.05', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Korean market theme groups with performance and breadth statistics from Naver Finance.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              output: {
-                example: { paid: true, service: 'crossfin-korea-themes', themes: [{ no: 371, name: 'AI Semiconductor', totalCount: 24, changeRate: 2.13, riseCount: 16, fallCount: 8 }], source: 'naver-finance', at: '2026-02-16T00:00:00.000Z' },
-                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, themes: { type: 'array' }, source: { type: 'string' }, at: { type: 'string' } }, required: ['paid', 'service', 'themes', 'source', 'at'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/korea/disclosure': {
-          accepts: { scheme: 'exact', price: '$0.03', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Recent stock disclosures for a Korean listed company from Naver Finance.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              input: { stock: '005930' },
-              inputSchema: { properties: { stock: { type: 'string', description: '6-digit Korean stock code (e.g., 005930 for Samsung Electronics)' } } },
-              output: {
-                example: { paid: true, service: 'crossfin-korea-disclosure', stock: '005930', items: [{ title: 'Report on major management matters', datetime: '2026-02-14 17:48:00' }], source: 'naver-finance', at: '2026-02-16T00:00:00.000Z' },
-                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, stock: { type: 'string' }, items: { type: 'array' }, source: { type: 'string' }, at: { type: 'string' } }, required: ['paid', 'service', 'stock', 'items', 'source', 'at'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/crypto/korea/fx-rate': {
-          accepts: { scheme: 'exact', price: '$0.01', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Real-time KRW/USD forex quote from Upbit CRIX, including base price and daily change.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              output: {
-                example: { paid: true, service: 'crossfin-korea-fx-rate', pair: 'KRW/USD', basePrice: 1332.5, change: 'RISE', changePrice: 4.1, openingPrice: 1328.4, high52w: 1451.0, low52w: 1248.7, source: 'upbit-crix', at: '2026-02-16T00:00:00.000Z' },
-                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, pair: { type: 'string' }, basePrice: { type: 'number' }, change: { type: 'string' }, changePrice: { type: 'number' }, openingPrice: { type: 'number' }, high52w: { type: 'number' }, low52w: { type: 'number' }, source: { type: 'string' }, at: { type: 'string' } }, required: ['paid', 'service', 'pair', 'basePrice', 'change', 'changePrice', 'openingPrice', 'high52w', 'low52w', 'source', 'at'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/korea/etf': {
-          accepts: { scheme: 'exact', price: '$0.03', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Top Korean ETF list with price, NAV, return, and market cap from Naver Finance.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              output: {
-                example: { paid: true, service: 'crossfin-korea-etf', totalCount: 1070, items: [{ name: 'KODEX 200', code: '069500', price: 81860, changeVal: -115, changeRate: -0.14, nav: 81847, volume: 15969201, threeMonthReturn: 38.73, marketCap: 160691 }], source: 'naver-finance', at: '2026-02-16T00:00:00.000Z' },
-                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, totalCount: { type: 'number' }, items: { type: 'array' }, source: { type: 'string' }, at: { type: 'string' } }, required: ['paid', 'service', 'totalCount', 'items', 'source', 'at'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/crypto/korea/upbit-candles': {
-          accepts: { scheme: 'exact', price: '$0.02', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Upbit OHLCV candle data for any KRW-listed crypto. Supports minutes (1/3/5/10/15/30/60/240), daily, weekly, monthly intervals. Up to 200 candles per request.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              input: { coin: 'BTC', type: 'days', count: '30' },
-              inputSchema: { properties: { coin: { type: 'string', description: 'Coin symbol (e.g., BTC, ETH, XRP)' }, type: { type: 'string', description: 'Candle type: minutes/1, minutes/5, minutes/15, minutes/60, minutes/240, days, weeks, months' }, count: { type: 'string', description: 'Number of candles (max 200)' } } },
-              output: {
-                example: { paid: true, service: 'crossfin-upbit-candles', market: 'KRW-BTC', type: 'days', count: 30, candles: [{ date: '2026-02-16T00:00:00', open: 102158000, high: 103120000, low: 100795000, close: 102776000, volume: 694.1 }] },
-                schema: { properties: { paid: { type: 'boolean' }, market: { type: 'string' }, type: { type: 'string' }, count: { type: 'number' }, candles: { type: 'array' } }, required: ['paid', 'market', 'type', 'candles'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/market/global/indices-chart': {
-          accepts: { scheme: 'exact', price: '$0.02', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Global stock index OHLCV chart data — Dow Jones (.DJI), NASDAQ (.IXIC), Hang Seng (.HSI), Nikkei (.N225) and more. Monthly aggregated history.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              input: { index: '.DJI', period: 'month' },
-              inputSchema: { properties: { index: { type: 'string', description: 'Naver index code: .DJI (Dow), .IXIC (NASDAQ), .HSI (Hang Seng), .N225 (Nikkei)' }, period: { type: 'string', description: 'month (monthly aggregation)' } } },
-              output: {
-                example: { paid: true, service: 'crossfin-global-indices-chart', index: '.DJI', period: 'month', candles: [{ date: '20260201', open: 48777.77, high: 50512.79, low: 48673.58, close: 49500.93, volume: 6697887 }] },
-                schema: { properties: { paid: { type: 'boolean' }, index: { type: 'string' }, period: { type: 'string' }, candles: { type: 'array' } }, required: ['paid', 'index', 'candles'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/news/korea/headlines': {
-          accepts: {
-            scheme: 'exact',
-            price: '$0.03',
-            network,
-            payTo: c.env.PAYMENT_RECEIVER_ADDRESS,
-            maxTimeoutSeconds: 300,
-          },
-          description: 'Korean news headlines translated/summarized from Google News Korea RSS. Market-moving news, crypto regulation updates, and economic announcements from Korean media.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              output: {
-                example: { paid: true, service: 'crossfin-korea-headlines', headlines: [{ title: 'Bitcoin surges past 100M KRW on Bithumb', source: 'MaeKyung', publishedAt: '2026-02-16T00:00:00.000Z', url: 'https://...' }], count: 10, at: '2026-02-16T00:00:00.000Z' },
-                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, headlines: { type: 'array' }, count: { type: 'number' } }, required: ['paid', 'headlines', 'count'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/morning/brief': {
-          accepts: { scheme: 'exact', price: '$0.20', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Morning Brief — one-call daily market summary combining route spread, FX rate, KOSPI/KOSDAQ indices, stock momentum, and Korean headlines. Replaces 5+ individual API calls.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              output: {
-                example: { paid: true, service: 'crossfin-morning-brief', kimchiPremium: { avgPremiumPct: 2.15, topPair: 'BTC', pairsTracked: 10 }, fxRate: { usdKrw: 1450 }, indices: { kospi: { price: 2650, changePct: 0.5 }, kosdaq: { price: 850, changePct: -0.3 } }, momentum: { topGainers: [], topLosers: [] }, headlines: [], at: '2026-02-17T00:00:00.000Z' },
-                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, kimchiPremium: { type: 'object' }, fxRate: { type: 'object' }, indices: { type: 'object' }, momentum: { type: 'object' }, headlines: { type: 'array' } }, required: ['paid', 'service', 'kimchiPremium', 'fxRate', 'indices'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/crypto/snapshot': {
-          accepts: { scheme: 'exact', price: '$0.15', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Crypto Snapshot — one-call crypto market overview combining 4-exchange price comparison (Upbit/Bithumb/Coinone/GoPax), route spread, Bithumb volume analysis, and FX rate. Replaces 4+ individual API calls.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              output: {
-                example: { paid: true, service: 'crossfin-crypto-snapshot', kimchiPremium: { avgPremiumPct: 2.15, pairsTracked: 10 }, fxRate: { usdKrw: 1450 }, exchanges: { upbit: {}, bithumb: {}, coinone: {}, gopax: {} }, volumeAnalysis: { totalVolume24hUsd: 5000000 }, at: '2026-02-17T00:00:00.000Z' },
-                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, kimchiPremium: { type: 'object' }, fxRate: { type: 'object' }, exchanges: { type: 'object' }, volumeAnalysis: { type: 'object' } }, required: ['paid', 'service', 'kimchiPremium', 'fxRate'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/kimchi/stats': {
-          accepts: { scheme: 'exact', price: '$0.15', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Route Spread Stats — comprehensive route spread analysis combining current premiums, 24h trend, top opportunity with POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD indicator, and cross-exchange spread. One call replaces 3+ individual endpoints.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              output: {
-                example: { paid: true, service: 'crossfin-kimchi-stats', current: { avgPremiumPct: 2.15, pairsTracked: 10 }, trend: { direction: 'rising', change24hPct: 0.3 }, bestOpportunity: { coin: 'BTC', indicator: 'NEUTRAL', signalStrength: 0.6 }, crossExchangeSpread: { spreadPct: 0.18 }, at: '2026-02-17T00:00:00.000Z' },
-                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, current: { type: 'object' }, trend: { type: 'object' }, bestOpportunity: { type: 'object' }, crossExchangeSpread: { type: 'object' } }, required: ['paid', 'service', 'current'] },
-              },
-            }),
-          },
-        },
-        'GET /api/premium/route/find': {
-          accepts: { scheme: 'exact', price: '$0.10', network, payTo: c.env.PAYMENT_RECEIVER_ADDRESS, maxTimeoutSeconds: 300 },
-          description: 'Optimal Route Finder — finds the cheapest/fastest crypto transfer route across 9 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit). Compares bridge coins, fees, and transfer times.',
-          mimeType: 'application/json',
-          extensions: {
-            ...declareDiscoveryExtension({
-              input: { from: 'bithumb:KRW', to: 'binance:USDC', amount: 1000000, strategy: 'cheapest' },
-              inputSchema: { properties: { from: { type: 'string', description: 'Source exchange:currency (e.g., bithumb:KRW)' }, to: { type: 'string', description: 'Destination exchange:currency (e.g., binance:USDC)' }, amount: { type: 'number', description: 'Amount in source currency' }, strategy: { type: 'string', description: 'cheapest | fastest | balanced' } } },
-              output: {
-                example: { paid: true, service: 'crossfin-route-finder', request: { from: 'bithumb:KRW', to: 'binance:USDC', amount: 1000000, strategy: 'cheapest' }, optimal: { bridgeCoin: 'XRP', totalCostPct: 0.45, totalTimeMinutes: 5, steps: [] }, alternatives: [], meta: { routesEvaluated: 12 } },
-                schema: { properties: { paid: { type: 'boolean' }, service: { type: 'string' }, optimal: { type: 'object' }, alternatives: { type: 'array' }, meta: { type: 'object' } }, required: ['paid', 'service', 'optimal'] },
-              },
-            }),
-          },
-        },
-      },
-      resourceServer,
-    )
-
-    return middleware(c, next)
+  async (_c, next) => {
+    await next()
   },
 )
 
@@ -7444,6 +6775,7 @@ async function fetchNaverCached(url: string, ttlMs = 60_000): Promise<unknown> {
 
 // ── KOSPI / KOSDAQ Korean Stock Market Index ──────────────────────────
 app.get('/api/premium/market/korea/indices', async (c) => {
+  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
   const [kospiRawValue, kosdaqRawValue] = await Promise.all([
     fetchNaverCached('https://m.stock.naver.com/api/index/KOSPI/basic'),
     fetchNaverCached('https://m.stock.naver.com/api/index/KOSDAQ/basic'),
@@ -7476,6 +6808,7 @@ app.get('/api/premium/market/korea/indices', async (c) => {
 })
 
 app.get('/api/premium/market/korea/indices/history', async (c) => {
+  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
   const days = Math.min(60, Math.max(1, Number(c.req.query('days') ?? '20')))
   const index = (c.req.query('index') ?? 'KOSPI').toUpperCase()
   if (index !== 'KOSPI' && index !== 'KOSDAQ') {
@@ -7511,6 +6844,7 @@ app.get('/api/premium/market/korea/indices/history', async (c) => {
 })
 
 app.get('/api/premium/market/korea/stocks/momentum', async (c) => {
+  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
   const market = (c.req.query('market') ?? 'KOSPI').toUpperCase()
   if (market !== 'KOSPI' && market !== 'KOSDAQ') {
     throw new HTTPException(400, { message: 'market must be KOSPI or KOSDAQ' })
@@ -7555,6 +6889,7 @@ app.get('/api/premium/market/korea/stocks/momentum', async (c) => {
 })
 
 app.get('/api/premium/market/korea/investor-flow', async (c) => {
+  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
   const stock = (c.req.query('stock') ?? '005930').trim()
   if (!/^\d{6}$/.test(stock)) throw new HTTPException(400, { message: 'stock must be 6-digit code (e.g., 005930)' })
 
@@ -7587,6 +6922,7 @@ app.get('/api/premium/market/korea/investor-flow', async (c) => {
 })
 
 app.get('/api/premium/market/korea/index-flow', async (c) => {
+  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
   const index = (c.req.query('index') ?? 'KOSPI').toUpperCase()
   if (index !== 'KOSPI' && index !== 'KOSDAQ' && index !== 'KPI200') {
     throw new HTTPException(400, { message: 'index must be KOSPI, KOSDAQ, or KPI200' })
@@ -7752,6 +7088,7 @@ app.get('/api/premium/crypto/korea/exchange-status', async (c) => {
 })
 
 app.get('/api/premium/market/korea/stock-detail', async (c) => {
+  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
   const stock = (c.req.query('stock') ?? '005930').trim()
   if (!/^\d{6}$/.test(stock)) throw new HTTPException(400, { message: 'stock must be 6-digit code' })
 
@@ -7795,6 +7132,7 @@ app.get('/api/premium/market/korea/stock-detail', async (c) => {
 })
 
 app.get('/api/premium/market/korea/stock-news', async (c) => {
+  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
   const stock = (c.req.query('stock') ?? '005930').trim()
   const page = Math.max(1, Number(c.req.query('page') ?? '1') || 1)
   const pageSize = Math.min(20, Math.max(1, Number(c.req.query('pageSize') ?? '10') || 10))
@@ -7820,6 +7158,7 @@ app.get('/api/premium/market/korea/stock-news', async (c) => {
 })
 
 app.get('/api/premium/market/korea/themes', async (c) => {
+  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
   const page = Math.max(1, Number(c.req.query('page') ?? '1') || 1)
   const pageSize = Math.min(50, Math.max(1, Number(c.req.query('pageSize') ?? '20') || 20))
 
@@ -7847,6 +7186,7 @@ app.get('/api/premium/market/korea/themes', async (c) => {
 })
 
 app.get('/api/premium/market/korea/disclosure', async (c) => {
+  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
   const stock = (c.req.query('stock') ?? '005930').trim()
   const page = Math.max(1, Number(c.req.query('page') ?? '1') || 1)
   const pageSize = Math.min(20, Math.max(1, Number(c.req.query('pageSize') ?? '10') || 10))
@@ -7869,6 +7209,7 @@ app.get('/api/premium/market/korea/disclosure', async (c) => {
 })
 
 app.get('/api/premium/market/korea/stock-brief', async (c) => {
+  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
   const stock = (c.req.query('stock') ?? '').trim()
   if (!stock) throw new HTTPException(400, { message: 'stock is required' })
   if (!/^\d{6}$/.test(stock)) throw new HTTPException(400, { message: 'stock must be 6-digit code (e.g., 005930)' })
@@ -8057,6 +7398,7 @@ app.get('/api/premium/crypto/korea/fx-rate', async (c) => {
 })
 
 app.get('/api/premium/market/korea/etf', async (c) => {
+  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
   const etfCacheKey = 'naver-etf-list'
   const now = Date.now()
   const etfCached = naverCache.get(etfCacheKey)
@@ -8138,6 +7480,7 @@ app.get('/api/premium/crypto/korea/upbit-candles', async (c) => {
 })
 
 app.get('/api/premium/market/global/indices-chart', async (c) => {
+  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
   const index = (c.req.query('index') ?? '.DJI').trim()
   const period = (c.req.query('period') ?? 'month').trim()
 
@@ -8626,21 +7969,12 @@ app.get('/api/premium/kimchi/stats', async (c) => {
 
 app.get('/api/premium/morning/brief', async (c) => {
   const at = new Date().toISOString()
-  const market = 'KOSPI'
 
   const fxMetaPromise = fetchFxRatesWithMeta()
   const priceMetaPromise = fetchGlobalPricesWithMeta(c.env.DB)
 
   type KimchiPremiumRow = ReturnType<typeof calcPremiums>[number]
   type HeadlinesItem = { title: string; publisher: string | null; link: string; publishedAt: string }
-  type MomentumStock = {
-    code: string
-    name: string
-    price: number
-    changePct: number
-    direction: string
-    volume: number
-  }
 
   const kimchiTask = (async () => {
     const [bithumbData, pMeta, fMeta] = await Promise.all([
@@ -8665,8 +7999,8 @@ app.get('/api/premium/morning/brief', async (c) => {
 
   const indicesTask = (async () => {
     const [kospiRaw, kosdaqRaw] = await Promise.all([
-      fetchNaverCached('https://m.stock.naver.com/api/index/KOSPI/basic'),
-      fetchNaverCached('https://m.stock.naver.com/api/index/KOSDAQ/basic'),
+      Promise.resolve(null),
+      Promise.resolve(null),
     ])
 
     const parseIndex = (raw: unknown) => {
@@ -8694,40 +8028,12 @@ app.get('/api/premium/morning/brief', async (c) => {
   })()
 
   const momentumTask = (async () => {
-    const baseUrl = 'https://m.stock.naver.com/api/stocks'
-    const [upDataRaw, downDataRaw] = await Promise.all([
-      fetchNaverCached(`${baseUrl}/up/${market}?page=1&pageSize=5`),
-      fetchNaverCached(`${baseUrl}/down/${market}?page=1&pageSize=5`),
+    await Promise.all([
+      Promise.resolve(null),
+      Promise.resolve(null),
+      Promise.resolve(null),
     ])
-    const upStocksRaw = isRecord(upDataRaw) && Array.isArray(upDataRaw.stocks) ? upDataRaw.stocks : []
-    const downStocksRaw = isRecord(downDataRaw) && Array.isArray(downDataRaw.stocks) ? downDataRaw.stocks : []
-
-    const parseStock = (s: unknown): MomentumStock | null => {
-      if (!isRecord(s)) return null
-
-      const code = typeof s.itemCode === 'string' ? s.itemCode : String(s.itemCode ?? '')
-      const name = typeof s.stockName === 'string' ? s.stockName : String(s.stockName ?? '')
-      const price = parseFloat(String(s.closePrice ?? '0').replace(/,/g, ''))
-      const changePct = parseFloat(String(s.fluctuationsRatio ?? '0').replace(/,/g, ''))
-      const direction = isRecord(s.compareToPreviousPrice) && typeof s.compareToPreviousPrice.name === 'string'
-        ? s.compareToPreviousPrice.name
-        : 'UNCHANGED'
-      const volume = parseFloat(String(s.accumulatedTradingVolume ?? '0').replace(/,/g, ''))
-
-      return {
-        code,
-        name,
-        price: Number.isFinite(price) ? price : 0,
-        changePct: Number.isFinite(changePct) ? changePct : 0,
-        direction,
-        volume: Number.isFinite(volume) ? volume : 0,
-      }
-    }
-
-    const topGainers = upStocksRaw.map(parseStock).filter((v): v is MomentumStock => v !== null).slice(0, 5)
-    const topLosers = downStocksRaw.map(parseStock).filter((v): v is MomentumStock => v !== null).slice(0, 5)
-
-    return { market, topGainers, topLosers }
+    return null
   })()
 
   const headlinesTask = (async () => {
@@ -8772,16 +8078,9 @@ app.get('/api/premium/morning/brief', async (c) => {
     ? kimchiSet.value
     : { avgPremiumPct: 0, topPair: '', pairsTracked: 0, premiums: [] as KimchiPremiumRow[] }
 
-  const indices = indicesSet.status === 'fulfilled'
-    ? indicesSet.value
-    : {
-      kospi: { price: 0, changePct: 0, volume: 0, status: 'UNKNOWN' },
-      kosdaq: { price: 0, changePct: 0, volume: 0, status: 'UNKNOWN' },
-    }
+  const indices = indicesSet.status === 'fulfilled' ? null : null
 
-  const momentum = momentumSet.status === 'fulfilled'
-    ? momentumSet.value
-    : { market, topGainers: [] as MomentumStock[], topLosers: [] as MomentumStock[] }
+  const momentum = momentumSet.status === 'fulfilled' ? null : null
 
   const headlines = headlinesSet.status === 'fulfilled' ? headlinesSet.value : []
 
@@ -8795,6 +8094,7 @@ app.get('/api/premium/morning/brief', async (c) => {
     },
     indices,
     momentum,
+    notice: 'Korean stock indices and momentum data temporarily unavailable — migrating to KRX official data source',
     headlines,
     _dataMeta: buildDataMeta(priceMeta ?? undefined, fxMeta ?? undefined),
     _disclaimer: CROSSFIN_DISCLAIMER,

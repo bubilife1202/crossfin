@@ -1,5 +1,5 @@
 {
-  "apiVersion": "1.10.1",
+  "apiVersion": "1.11.0",
   "mcpTools": [
     "search_services",
     "list_services",
