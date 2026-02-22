@@ -126,7 +126,7 @@ export default function LiveSignals() {
       </div>
 
       <div className="liveFootnote">
-        Free preview — {data.pairsShown} of {data.totalPairsAvailable}+ pairs shown. Full data via x402 payment.
+        Free preview — {data.pairsShown} of {data.totalPairsAvailable}+ pairs shown. Full data is currently free during open beta.
       </div>
 
       <div className="liveRefreshMeta" key={lastRefresh}>

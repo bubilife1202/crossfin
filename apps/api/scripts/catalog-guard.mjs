@@ -24,7 +24,7 @@ function buildPlaygroundEndpoints(catalog) {
 
   const paid = catalog.paidEndpoints.map((entry) => ({
     path: withSampleQuery(entry.path, entry.sampleQuery),
-    label: `[Paid] ${entry.playgroundLabel} (${entry.price})`,
+    label: `[Free (Open Beta)] ${entry.playgroundLabel} (normally ${entry.price})`,
   }))
 
   return [...free, ...paid]
@@ -75,7 +75,7 @@ function buildWellKnown(catalog) {
 function extractPremiumMiddlewarePaths(indexSource) {
   const middlewareStart = indexSource.indexOf('const middleware = paymentMiddleware(')
   if (middlewareStart < 0) {
-    throw new Error('Could not find payment middleware block in API index.ts')
+    return null
   }
 
   const middlewareEnd = indexSource.indexOf('resourceServer,', middlewareStart)
@@ -135,10 +135,14 @@ async function run() {
   const expectedPaidPaths = catalog.paidEndpoints.map((entry) => entry.path).sort()
   const middlewarePaidPaths = extractPremiumMiddlewarePaths(apiIndex)
 
-  assert(
-    JSON.stringify(expectedPaidPaths) === JSON.stringify(middlewarePaidPaths),
-    `API paid middleware paths mismatch. expected=${expectedPaidPaths.length}, actual=${middlewarePaidPaths.length}`,
-  )
+  if (middlewarePaidPaths) {
+    assert(
+      JSON.stringify(expectedPaidPaths) === JSON.stringify(middlewarePaidPaths),
+      `API paid middleware paths mismatch. expected=${expectedPaidPaths.length}, actual=${middlewarePaidPaths.length}`,
+    )
+  } else {
+    console.warn('catalog-guard: payment middleware block not found (open-beta free mode); skipping middleware path verification')
+  }
 
   assert(
     apiIndex.includes('pricing: CROSSFIN_PAID_PRICING'),
