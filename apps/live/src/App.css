@@ -1991,6 +1991,55 @@
   }
 }
 
+
+/* ─── 768px Tablet Breakpoint ─── */
+@media (max-width: 768px) {
+  .routeInputRow {
+    grid-template-columns: 1fr;
+  }
+  .heroPanel .routeInputRow:first-child {
+    grid-template-columns: 1fr;
+  }
+  .routeSwapWrap {
+    flex-direction: row;
+    padding: 4px 0;
+  }
+  .swapIcon {
+    transform: rotate(90deg);
+  }
+  .routeSummaryDetail {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .routeStatsRow {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .panel {
+    padding: 16px 18px;
+  }
+  .panelHeader {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .dataTable th,
+  .dataTable td {
+    padding: 8px 10px;
+  }
+  .recentHeader,
+  .recentRow {
+    grid-template-columns: 1fr 0.7fr 0.6fr 0.7fr;
+    gap: 8px;
+  }
+  .chatBubble.user,
+  .chatBubble.agent {
+    max-width: 92%;
+  }
+  .installCodeBlock {
+    padding: 14px 16px;
+  }
+  .installCodeBlock pre {
+    font-size: var(--text-xs);
+  }
+}
 @media (max-width: 640px) {
   .heroPanel {
     padding: 20px 15px;
