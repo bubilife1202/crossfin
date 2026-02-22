@@ -15,8 +15,11 @@ export type Bindings = {
   CROSSFIN_AGENT_SIGNUP_TOKEN?: string
 }
 
+export type A2aSkillResult = { data: unknown; error?: undefined } | { error: string; data?: undefined }
+export type A2aSkillHandler = (skill: string | undefined, message: string) => Promise<A2aSkillResult>
 export type Variables = {
   agentId: string
+  a2aSkillHandler?: A2aSkillHandler
 }
 
 export type Env = { Bindings: Bindings; Variables: Variables }

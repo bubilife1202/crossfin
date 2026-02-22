@@ -621,6 +621,71 @@ export async function fetchBybitPrices(): Promise<Record<string, number>> {
   })
 }
 
+export async function fetchKucoinPrices(): Promise<Record<string, number>> {
+  const globalAny = globalThis as unknown as {
+    __crossfinKucoinPricesCache?: CachedExchangePriceFeed
+    __crossfinKucoinPricesInFlight?: Promise<Record<string, number>> | null
+  }
+
+  const now = Date.now()
+  const cached = globalAny.__crossfinKucoinPricesCache
+  if (cached && now < cached.expiresAt && Object.keys(cached.value).length > 0) return cached.value
+  if (globalAny.__crossfinKucoinPricesInFlight) return globalAny.__crossfinKucoinPricesInFlight
+
+  const fallback = cached?.value ?? {}
+  const trackedSymbols = new Set(Object.values(TRACKED_PAIRS))
+
+  const promise = (async () => {
+    try {
+      const res = await fetchWithTimeout('https://api.kucoin.com/api/v1/market/allTickers')
+      if (!res.ok) throw new Error(`KuCoin price feed unavailable (${res.status})`)
+      const data: unknown = await res.json()
+      if (!isRecord(data) || !isRecord(data.data) || !Array.isArray(data.data.ticker)) {
+        throw new Error('KuCoin price feed invalid response')
+      }
+
+      const prices: Record<string, number> = {}
+      for (const row of data.data.ticker) {
+        if (!isRecord(row)) continue
+        const sym = typeof row.symbol === 'string' ? row.symbol.trim().toUpperCase() : ''
+        if (!sym.endsWith('-USDT')) continue
+        const normalised = sym.replace('-', '')
+        if (!trackedSymbols.has(normalised)) continue
+        const lastRaw = typeof row.last === 'string' ? row.last.trim() : ''
+        const price = Number(lastRaw)
+        if (!Number.isFinite(price) || price <= 0) continue
+        prices[normalised] = price
+      }
+
+      const btcSymbol = TRACKED_PAIRS.BTC
+      const btc = btcSymbol ? prices[btcSymbol] : undefined
+      if (typeof btc !== 'number' || !Number.isFinite(btc) || btc <= 1000) {
+        throw new Error('KuCoin price feed returned no valid BTCUSDT')
+      }
+
+      globalAny.__crossfinKucoinPricesCache = {
+        value: prices,
+        expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS,
+        source: 'kucoin',
+      }
+      return prices
+    } catch {
+      globalAny.__crossfinKucoinPricesCache = {
+        value: fallback,
+        expiresAt: now + GLOBAL_PRICES_FAILURE_TTL_MS,
+        source: cached?.source ?? 'kucoin:cached',
+      }
+      if (Object.keys(fallback).length > 0) return fallback
+      throw new Error('KuCoin price feed unavailable')
+    }
+  })()
+
+  globalAny.__crossfinKucoinPricesInFlight = promise
+  return promise.finally(() => {
+    globalAny.__crossfinKucoinPricesInFlight = null
+  })
+}
+
 export function getExchangePrice(exchange: string, symbol: string): number | undefined {
   const ex = exchange.trim().toLowerCase()
   const sym = symbol.trim().toUpperCase()
@@ -658,16 +723,18 @@ export async function fetchGlobalPrices(db?: D1Database): Promise<Record<string,
       return Object.keys(prices).length >= 1
     }
 
-    const [binanceSet, okxSet, bybitSet] = await Promise.allSettled([
+    const [binanceSet, okxSet, bybitSet, kucoinSet] = await Promise.allSettled([
       fetchBinancePrices(),
       fetchOkxPrices(),
       fetchBybitPrices(),
+      fetchKucoinPrices(),
     ])
 
     const exchangePrices: ExchangePrices = {
       binance: binanceSet.status === 'fulfilled' ? binanceSet.value : {},
       okx: okxSet.status === 'fulfilled' ? okxSet.value : {},
       bybit: bybitSet.status === 'fulfilled' ? bybitSet.value : {},
+      kucoin: kucoinSet.status === 'fulfilled' ? kucoinSet.value : {},
     }
 
     const mergedPrices: Record<string, number> = {
@@ -675,10 +742,14 @@ export async function fetchGlobalPrices(db?: D1Database): Promise<Record<string,
     }
     const okxPrices: Record<string, number> = exchangePrices.okx ?? {}
     const bybitPrices: Record<string, number> = exchangePrices.bybit ?? {}
+    const kucoinPrices: Record<string, number> = exchangePrices.kucoin ?? {}
     for (const [symbol, price] of Object.entries(okxPrices)) {
       if (!(symbol in mergedPrices)) mergedPrices[symbol] = price
     }
     for (const [symbol, price] of Object.entries(bybitPrices)) {
+      if (!(symbol in mergedPrices)) mergedPrices[symbol] = price
+    }
+    for (const [symbol, price] of Object.entries(kucoinPrices)) {
       if (!(symbol in mergedPrices)) mergedPrices[symbol] = price
     }
 
@@ -687,6 +758,7 @@ export async function fetchGlobalPrices(db?: D1Database): Promise<Record<string,
       if (binanceSet.status === 'fulfilled') sourceParts.push('binance')
       if (okxSet.status === 'fulfilled') sourceParts.push('okx')
       if (bybitSet.status === 'fulfilled') sourceParts.push('bybit')
+      if (kucoinSet.status === 'fulfilled') sourceParts.push('kucoin')
       const source = sourceParts.length > 0 ? sourceParts.join('+') : 'global'
 
       globalAny.__crossfinExchangePricesCache = exchangePrices

@@ -1,6 +1,6 @@
 # MCP Integration
 
-16 tools for any MCP client. Routes across 12 exchanges with 11 bridge coins.
+16 tools for any MCP client. Routes across 13 exchanges with 11 bridge coins.
 
 ## Install
 
@@ -33,7 +33,7 @@ All tools are free. No API key or wallet required.
 ## All 16 Tools
 
 <ToolGrid :tools="[
-  { name: 'find_optimal_route', description: 'Optimal path across 12 exchanges', price: 'Free' },
+  { name: 'find_optimal_route', description: 'Optimal path across 13 exchanges', price: 'Free' },
   { name: 'list_exchange_fees', description: 'Trading + withdrawal fees', price: 'Free' },
   { name: 'compare_exchange_prices', description: 'Bithumb KRW vs Binance USD', price: 'Free' },
   { name: 'get_kimchi_premium', description: 'Route spread data — Korean vs. global price spread (top 3 pairs)', price: 'Free' },

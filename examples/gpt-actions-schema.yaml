@@ -90,9 +90,9 @@ paths:
       operationId: getExchangeFees
       summary: Exchange fee comparison table
       description: >
-        Trading fees, withdrawal fees, and transfer times for all 12 supported
+        Trading fees, withdrawal fees, and transfer times for all 13 supported
         exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank,
-        Indodax, Bitkub, Binance, OKX, Bybit). Optionally filter by coin.
+        Indodax, Bitkub, Binance, OKX, Bybit, KuCoin). Optionally filter by coin.
       parameters:
         - name: coin
           in: query
@@ -184,7 +184,7 @@ paths:
       operationId: getExchanges
       summary: List supported exchanges
       description: >
-        All 9 supported exchanges with country, trading fee, supported coins,
+        All 13 supported exchanges with country, trading fee, supported coins,
         and type (korean/regional/global).
       responses:
         "200":
@@ -225,7 +225,7 @@ paths:
       operationId: getExchangeStatus
       summary: Exchange API health check
       description: >
-        Real-time health check for all 9 exchange APIs. Shows online/offline
+        Real-time health check for all 13 exchange APIs. Shows online/offline
         status per exchange and overall system health.
       responses:
         "200":

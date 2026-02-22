@@ -17,7 +17,7 @@ const client = new CrossFinClient()
 
 // Free endpoints — no API key needed
 const health = await client.health()
-console.log(health) // { name: 'crossfin-api', version: '1.12.1', status: 'ok' }
+console.log(health) // { name: 'crossfin-api', version: '1.13.0', status: 'ok' }
 
 // Route Spread preview (free)
 const demo = await client.arbitrage.demo()

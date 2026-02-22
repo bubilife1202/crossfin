@@ -5,7 +5,7 @@
 [![MCP](https://img.shields.io/badge/MCP-compatible-blue)](https://modelcontextprotocol.io)
 [![x402](https://img.shields.io/badge/payments-x402%20USDC-purple)](https://x402.org)
 
-**Give your AI agent access to Asian crypto markets.** 16 tools for real-time Korean exchange data, cross-exchange routing, and x402 paid API execution across 12 exchanges.
+**Give your AI agent access to Asian crypto markets.** 16 tools for real-time Korean exchange data, cross-exchange routing, and x402 paid API execution across 13 exchanges.
 
 ---
 
@@ -120,7 +120,7 @@ EVM_PRIVATE_KEY=0x... npx -y crossfin-mcp
 
 | Tool | Price | Description |
 |------|-------|-------------|
-| `find_optimal_route` | $0.10 | Optimal crypto transfer path across 12 exchanges with 11 bridge coins |
+| `find_optimal_route` | $0.10 | Optimal crypto transfer path across 13 exchanges with 11 bridge coins |
 | `list_exchange_fees` | Free | Trading + withdrawal fee comparison for all exchanges |
 | `compare_exchange_prices` | Free | Live Bithumb KRW vs Binance USD price comparison |
 | `get_kimchi_premium` | Free | Korean vs. global route spread preview (top 3 pairs) |
@@ -182,7 +182,7 @@ EVM_PRIVATE_KEY=0x... npx -y crossfin-mcp
 
 **Korea:** Bithumb, Upbit, Coinone, GoPax
 **Regional Fiat:** bitFlyer, WazirX, bitbank, Indodax, Bitkub
-**Global:** Binance, OKX, Bybit
+**Global:** Binance, OKX, Bybit, KuCoin
 
 ### Bridge Coins
 

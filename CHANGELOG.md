@@ -1,6 +1,28 @@
 # Changelog
 
 
+## [1.14.0] - 2026-02-22
+
+### Added
+- **KuCoin** — 13th exchange added to routing engine (global, USDC/USDT)
+  - `fetchKucoinPrices()` fetcher using KuCoin v1 `/api/v1/market/allTickers`
+  - Trading fees: 0.10% maker / 0.10% taker
+  - Withdrawal fees: BTC 0.0005, ETH 0.005, XRP 0.5, SOL 0.01, DOGE 5, ADA 1, DOT 0.1, LINK 0.3, AVAX 0.01, TRX 1, KAIA 1
+- **Global↔Global routing** — new `else if (fromIsGlobal && toIsGlobal)` branch in routing engine
+  - Routes between any two global exchanges (Binance↔OKX, OKX↔KuCoin, etc.)
+  - 28/28 exchange-pair routing paths now pass
+- **Main page stats fact-checked** — corrected false claims on web + live sites
+  - 35+ APIs → 40+, 99+ Routes → 11 Coins compared, <2s → <5s, 23 APIs → 40+
+
+### Fixed
+- **A2A protocol bug** — `fetchInternal()` in `a2a.ts` used HTTP self-fetch which fails on Cloudflare Workers (receives HTML challenge page instead of JSON). Replaced with direct function calls via Hono context middleware injection.
+- **SDK README** — example output version 1.12.1 → 1.13.0
+
+### Changed
+- All docs, README, live demo, MCP manifests, agent prompts updated from 9/12 → 13 exchanges
+- Live demo hub grid layout updated for 13 exchanges with country grouping
+- RouteGraph component updated with 13-exchange scenarios and labels
+
 ## [1.13.0] - 2026-02-22
 
 ### Removed

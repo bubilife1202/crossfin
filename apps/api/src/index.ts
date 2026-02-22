@@ -418,13 +418,13 @@ const CROSSFIN_TELEGRAM_TOOLS: GlmTool[] = [
     type: 'function',
     function: {
       name: 'find_route',
-      description: 'Find the cheapest/fastest crypto transfer route across 12 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit). Use when user asks about sending crypto, transferring money, or finding best exchange path.',
+      description: 'Find the cheapest/fastest crypto transfer route across 13 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin). Use when user asks about sending crypto, transferring money, or finding best exchange path.',
       parameters: {
         type: 'object',
         properties: {
-          from_exchange: { type: 'string', description: 'Source exchange (bithumb/upbit/coinone/gopax/bitflyer/wazirx/bitbank/indodax/bitkub/binance/okx/bybit)', enum: ['bithumb', 'upbit', 'coinone', 'gopax', 'bitflyer', 'wazirx', 'bitbank', 'indodax', 'bitkub', 'binance', 'okx', 'bybit'] },
+          from_exchange: { type: 'string', description: 'Source exchange (bithumb/upbit/coinone/gopax/bitflyer/wazirx/bitbank/indodax/bitkub/binance/okx/bybit/kucoin)', enum: ['bithumb', 'upbit', 'coinone', 'gopax', 'bitflyer', 'wazirx', 'bitbank', 'indodax', 'bitkub', 'binance', 'okx', 'bybit', 'kucoin'] },
           from_currency: { type: 'string', description: 'Source currency (KRW/JPY/INR/USDC/USDT/USD)', enum: ['KRW', 'JPY', 'INR', 'USDC', 'USDT', 'USD'] },
-          to_exchange: { type: 'string', description: 'Destination exchange', enum: ['bithumb', 'upbit', 'coinone', 'gopax', 'bitflyer', 'wazirx', 'bitbank', 'indodax', 'bitkub', 'binance', 'okx', 'bybit'] },
+          to_exchange: { type: 'string', description: 'Destination exchange', enum: ['bithumb', 'upbit', 'coinone', 'gopax', 'bitflyer', 'wazirx', 'bitbank', 'indodax', 'bitkub', 'binance', 'okx', 'bybit', 'kucoin'] },
           to_currency: { type: 'string', description: 'Destination currency', enum: ['KRW', 'JPY', 'INR', 'USDC', 'USDT', 'USD'] },
           amount: { type: 'number', description: 'Amount to transfer' },
           strategy: { type: 'string', description: 'Routing strategy', enum: ['cheapest', 'fastest', 'balanced'] },
@@ -467,7 +467,7 @@ const CROSSFIN_TELEGRAM_TOOLS: GlmTool[] = [
   },
 ]
 
-const CROSSFIN_TELEGRAM_SYSTEM_PROMPT = 'You are CrossFin Bot — an AI assistant that finds the cheapest crypto transfer routes across 12 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit). You also check live prices, exchange status, route spread, and fees. Rules: 1) Never use emojis. 2) Be concise — short sentences, no filler. 3) Match the user\'s language (Korean or English). 4) When you have enough info, call tools immediately instead of asking more questions. 5) If info is missing, ask in one short sentence, not a numbered list. 6) Only answer questions about crypto routing, exchange prices, fees, route spread, and Korean/global crypto markets. For unrelated topics, say you only handle crypto routing and suggest what you can help with. 7) You are read-only — you CANNOT execute trades, send crypto, or move funds. You only FIND and RECOMMEND routes. Never ask "실행하시겠습니까" or suggest you can execute anything. 8) After showing a route, suggest the user can try different amounts or exchange pairs.'
+const CROSSFIN_TELEGRAM_SYSTEM_PROMPT = 'You are CrossFin Bot — an AI assistant that finds the cheapest crypto transfer routes across 13 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin). You also check live prices, exchange status, route spread, and fees. Rules: 1) Never use emojis. 2) Be concise — short sentences, no filler. 3) Match the user\'s language (Korean or English). 4) When you have enough info, call tools immediately instead of asking more questions. 5) If info is missing, ask in one short sentence, not a numbered list. 6) Only answer questions about crypto routing, exchange prices, fees, route spread, and Korean/global crypto markets. For unrelated topics, say you only handle crypto routing and suggest what you can help with. 7) You are read-only — you CANNOT execute trades, send crypto, or move funds. You only FIND and RECOMMEND routes. Never ask "실행하시겠습니까" or suggest you can execute anything. 8) After showing a route, suggest the user can try different amounts or exchange pairs.'
 
 async function glmChatCompletion(apiKey: string, messages: GlmMessage[], tools: GlmTool[]): Promise<GlmMessage> {
   const controller = new AbortController()
@@ -1104,11 +1104,11 @@ app.get('/api/docs/guide', (c) => {
         { id: 'crossfin_kimchi_stats', endpoint: '/api/premium/kimchi/stats', price: '$0.15', description: 'Route Spread Stats — current spreads + 24h trend + arbitrage signal + cross-exchange spread in one call.' },
       ],
       routing_engine: [
-        { id: 'crossfin_route_find', endpoint: '/api/premium/route/find?from=bithumb:KRW&to=binance:USDC&amount=1000000', price: '$0.10', description: 'Find optimal crypto transfer route across 12 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit). Compares 11 bridge coins, estimates fees and slippage. Bidirectional: regional fiat↔global.' },
+        { id: 'crossfin_route_find', endpoint: '/api/premium/route/find?from=bithumb:KRW&to=binance:USDC&amount=1000000', price: '$0.10', description: 'Find optimal crypto transfer route across 13 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin). Compares 11 bridge coins, estimates fees and slippage. Bidirectional: regional fiat↔global.' },
       ],
     },
     routingEngine: {
-      overview: 'CrossFin Routing Engine finds the cheapest, fastest, or balanced crypto transfer route across 12 exchanges. It compares 11 bridge coins, models trading fees, withdrawal fees, slippage, and transfer times.',
+      overview: 'CrossFin Routing Engine finds the cheapest, fastest, or balanced crypto transfer route across 13 exchanges. It compares 11 bridge coins, models trading fees, withdrawal fees, slippage, and transfer times.',
       supportedExchanges: [
         { id: 'bithumb', country: 'South Korea', tradingFee: '0.25%', note: 'Lowest withdrawal fee policy' },
         { id: 'upbit', country: 'South Korea', tradingFee: '0.05%', note: 'Largest Korean exchange by volume (KRW market)' },
@@ -1117,6 +1117,7 @@ app.get('/api/docs/guide', (c) => {
         { id: 'binance', country: 'Global', tradingFee: '0.10%', note: 'Global exchange, trades in USDT/USDC' },
         { id: 'okx', country: 'Global', tradingFee: '0.08%', note: 'Deep global spot liquidity, strong USDT market depth' },
         { id: 'bybit', country: 'Global', tradingFee: '0.10%', note: 'High Asian spot liquidity with stable public API' },
+        { id: 'kucoin', country: 'Global', tradingFee: '0.10%', note: 'Global exchange, trades in USDC/USDT/USD with deep altcoin liquidity' },
         { id: 'bitflyer', country: 'Japan', tradingFee: '0.15%', note: 'Largest Japanese exchange, synthetic pricing via global feed × FX' },
         { id: 'wazirx', country: 'India', tradingFee: '0.20%', note: 'Indian exchange with INR pairs' },
       ],
@@ -1138,7 +1139,7 @@ app.get('/api/docs/guide', (c) => {
       },
       responseIncludes: ['Optimal route with step-by-step execution plan', 'Up to 10 alternative routes ranked by strategy', 'Fee breakdown (trading + withdrawal)', 'Estimated output amount and net profit/loss %', 'Transfer time estimate per bridge coin', 'User-friendly summary with recommendation (GOOD_DEAL/PROCEED/EXPENSIVE/VERY_EXPENSIVE)', 'Live exchange rates used for calculation'],
       freeEndpoints: [
-        { path: '/api/route/exchanges', description: 'List all 12 exchanges with supported coins and fees' },
+        { path: '/api/route/exchanges', description: 'List all 13 exchanges with supported coins and fees' },
         { path: '/api/route/fees', description: 'Full fee comparison table (add ?coin=KAIA to filter)' },
         { path: '/api/route/pairs', description: 'All trading pairs with live Binance prices' },
         { path: '/api/route/status', description: 'Exchange API health check' },
@@ -1237,9 +1238,9 @@ app.get('/api/docs/guide', (c) => {
         { name: 'list_transactions', description: 'List recent transactions' },
         { name: 'set_budget', description: 'Set daily spend limit' },
         { name: 'call_paid_service', description: 'Call a paid API with automatic x402 USDC payment (returns data + txHash + basescan link)' },
-        { name: 'find_optimal_route', description: 'Find optimal crypto transfer route across 12 exchanges using 11 bridge coins (routing engine)' },
+        { name: 'find_optimal_route', description: 'Find optimal crypto transfer route across 13 exchanges using 11 bridge coins (routing engine)' },
         { name: 'list_exchange_fees', description: 'List supported exchange fees — trading and withdrawal fees for all exchanges (routing engine)' },
-        { name: 'compare_exchange_prices', description: 'Compare live exchange prices for routing across 12 exchanges (routing engine)' },
+        { name: 'compare_exchange_prices', description: 'Compare live exchange prices for routing across 13 exchanges (routing engine)' },
       ],
       mcpClientConfig: {
         mcpServers: {
@@ -1318,7 +1319,7 @@ app.get('/.well-known/x402.json', (c) => {
     x402Version: 2,
     provider: {
       name: 'CrossFin',
-      description: 'Cross-border crypto routing engine for AI agents. Routes capital across 12 Korean/Japan/India/Indonesia/Thailand/global exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit). Real-time spread and route signals with 11 bridge coins.',
+      description: 'Cross-border crypto routing engine for AI agents. Routes capital across 13 Korean/Japan/India/Indonesia/Thailand/global exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin). Real-time spread and route signals with 11 bridge coins.',
       url: 'https://crossfin.dev',
       docs: 'https://docs.crossfin.dev',
       github: 'https://github.com/bubilife1202/crossfin',
@@ -1337,7 +1338,7 @@ app.get('/.well-known/x402.json', (c) => {
     endpoints: [
       { resource: `${origin}/api/premium/arbitrage/kimchi`, method: 'GET', price: '$0.05', description: 'Real-time Route Spread Index — Korean vs global exchange price spread for 11 crypto pairs' },
       { resource: `${origin}/api/premium/arbitrage/opportunities`, method: 'GET', price: '$0.10', description: 'AI-ready market condition indicators: POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD with signal strength scores' },
-      { resource: `${origin}/api/premium/route/find`, method: 'GET', price: '$0.10', description: 'Optimal crypto transfer route across 12 exchanges using 11 bridge coins' },
+      { resource: `${origin}/api/premium/route/find`, method: 'GET', price: '$0.10', description: 'Optimal crypto transfer route across 13 exchanges using 11 bridge coins' },
       { resource: `${origin}/api/premium/bithumb/orderbook`, method: 'GET', price: '$0.02', description: 'Live Bithumb orderbook depth (30 levels)' },
       { resource: `${origin}/api/premium/market/upbit/ticker`, method: 'GET', price: '$0.02', description: 'Upbit real-time ticker' },
       { resource: `${origin}/api/premium/market/upbit/orderbook`, method: 'GET', price: '$0.02', description: 'Upbit orderbook depth' },
@@ -1376,7 +1377,7 @@ app.get('/.well-known/agent.json', (c) => {
     name: 'CrossFin',
     url: origin,
     version: CROSSFIN_API_VERSION,
-    description: 'Cross-border crypto routing engine for AI agents. Routes capital across 9 Korean and global exchanges with 11 bridge coins. Pay-per-request via x402 USDC micropayments.',
+    description: 'Cross-border crypto routing engine for AI agents. Routes capital across 13 Korean and global exchanges with 11 bridge coins. Pay-per-request via x402 USDC micropayments.',
     provider: {
       organization: 'CrossFin',
       url: 'https://crossfin.dev',
@@ -1390,7 +1391,7 @@ app.get('/.well-known/agent.json', (c) => {
       {
         id: 'crypto-routing',
         name: 'Cross-Exchange Crypto Routing',
-        description: 'Find the cheapest path to move crypto between Korean exchanges (Bithumb, Upbit, Coinone, GoPax) and global exchanges (Binance, OKX, Bybit) using 11 bridge coins.',
+        description: 'Find the cheapest path to move crypto between Korean exchanges (Bithumb, Upbit, Coinone, GoPax), regional exchanges (bitFlyer, WazirX, bitbank, Indodax, Bitkub), and global exchanges (Binance, OKX, Bybit, KuCoin) using 11 bridge coins.',
         tags: ['crypto', 'routing', 'arbitrage', 'korea'],
         examples: ['Find cheapest route from Bithumb KRW to Binance USDC for 5,000,000 KRW'],
       },
@@ -1463,7 +1464,7 @@ app.get('/.well-known/ai-plugin.json', (c) => {
     name_for_human: 'CrossFin',
     name_for_model: 'crossfin',
     description_for_human: 'Korean and global crypto exchange routing, arbitrage signals, and market data for AI agents.',
-    description_for_model: 'CrossFin provides: (1) optimal crypto routing across 12 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit) with 11 bridge coins, (2) real-time route spread (kimchi premium) index with POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD indicators, (3) Korean market data including KOSPI/KOSDAQ, ETFs, investor flow, and crypto prices, (4) USD/KRW exchange rates. Free endpoints available. Paid endpoints use x402 USDC micropayments on Base.',
+    description_for_model: 'CrossFin provides: (1) optimal crypto routing across 13 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin) with 11 bridge coins, (2) real-time route spread (kimchi premium) index with POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD indicators, (3) Korean market data including KOSPI/KOSDAQ, ETFs, investor flow, and crypto prices, (4) USD/KRW exchange rates. Free endpoints available. Paid endpoints use x402 USDC micropayments on Base.',
     auth: { type: 'none' },
     api: {
       type: 'openapi',
@@ -1481,7 +1482,7 @@ app.get('/llms.txt', (c) => {
   const origin = new URL(c.req.url).origin
   const text = `# CrossFin
 
-> Cross-border crypto routing engine for AI agents. Routes capital across 9 Korean and global exchanges with x402 USDC micropayments.
+> Cross-border crypto routing engine for AI agents. Routes capital across 13 Korean and global exchanges with x402 USDC micropayments.
 
 ## Docs
 
@@ -1493,7 +1494,7 @@ app.get('/llms.txt', (c) => {
 ## Free Endpoints
 
 - [Route Spread Demo](${origin}/api/arbitrage/demo): Top 3 Korean-vs-global price spreads
-- [Exchange List](${origin}/api/route/exchanges): 9 supported exchanges and coins
+- [Exchange List](${origin}/api/route/exchanges): 13 supported exchanges and coins
 - [Fee Table](${origin}/api/route/fees): Trading and withdrawal fees
 - [Exchange Prices](${origin}/api/route/pairs): Live bridge coin prices
 - [Exchange Status](${origin}/api/route/status): Network health
@@ -5909,6 +5910,36 @@ async function findOptimalRoute(
           [`${fromEx}_${fromCur.toLowerCase()}`]: buyPriceUsed,
           ...(toIsGlobal ? { [`${toEx}_usd`]: sellPriceUsed } : { [`${toEx}_${toCur.toLowerCase()}`]: sellPriceUsed }),
         }
+      } else if (fromIsGlobal && toIsGlobal) {
+        // Global → Global: buy coin with USDC on source, transfer, sell for USDC on destination
+        const sourceGlobalPrice = getGlobalPriceUsd(fromEx, bridgeCoin)
+        if (!sourceGlobalPrice) continue
+
+        buyFeePct = fromFeePct
+        buySlippagePct = 0.10
+        buyPriceUsed = sourceGlobalPrice
+
+        const effectiveBuyPriceUsd = sourceGlobalPrice * (1 + (buySlippagePct / 100))
+        const amountAfterBuyFee = amount * (1 - buyFeePct / 100)
+        coinsBought = amountAfterBuyFee / effectiveBuyPriceUsd
+
+        coinsAfterWithdraw = coinsBought - withdrawFee
+        if (coinsAfterWithdraw <= 0) continue
+        transferTime = getTransferTime(bridgeCoin)
+
+        const targetGlobalPrice = getGlobalPriceUsd(toEx, bridgeCoin)
+        if (!targetGlobalPrice) continue
+        sellPriceUsed = targetGlobalPrice
+        finalOutput = coinsAfterWithdraw * targetGlobalPrice * (1 - toFeePct / 100)
+
+        const outputUsd = toUsdAmount(finalOutput, toCur)
+        if (!outputUsd) continue
+        outputValueUsdForCost = outputUsd
+
+        pricesUsed[bridgeCoin] = {
+          [`${fromEx}_usd`]: buyPriceUsed,
+          [`${toEx}_usd`]: sellPriceUsed,
+        }
       } else {
         continue
       }
@@ -9207,7 +9238,7 @@ async function getRouteStatusPayload(db: D1Database): Promise<Record<string, unk
     })
     .catch(() => false)
 
-  const [bithumbOnline, upbitOnline, coinoneOnline, gopaxOnline, bitflyerOnline, wazirxOnline, bitbankOnline, indodaxOnline, bitkubOnline, globalFeedOnline] = await Promise.all([
+  const [bithumbOnline, upbitOnline, coinoneOnline, gopaxOnline, bitflyerOnline, wazirxOnline, bitbankOnline, indodaxOnline, bitkubOnline, kucoinOnline, globalFeedOnline] = await Promise.all([
     checkRouteHttpOk('https://api.bithumb.com/public/ticker/BTC_KRW', ROUTE_HEALTH_TIMEOUT_MS),
     checkRouteHttpOk('https://api.upbit.com/v1/ticker?markets=KRW-BTC', ROUTE_HEALTH_TIMEOUT_MS),
     checkRouteHttpOk('https://api.coinone.co.kr/public/v2/ticker_new/KRW/BTC', ROUTE_HEALTH_TIMEOUT_MS),
@@ -9217,6 +9248,7 @@ async function getRouteStatusPayload(db: D1Database): Promise<Record<string, unk
     checkRouteHttpOk('https://public.bitbank.cc/btc_jpy/ticker', ROUTE_HEALTH_TIMEOUT_MS),
     checkRouteHttpOk('https://indodax.com/api/ticker/btcidr', ROUTE_HEALTH_TIMEOUT_MS),
     checkRouteHttpOk('https://api.bitkub.com/api/market/ticker?sym=THB_BTC', ROUTE_HEALTH_TIMEOUT_MS),
+    checkRouteHttpOk('https://api.kucoin.com/api/v1/prices?currencies=BTC', ROUTE_HEALTH_TIMEOUT_MS),
     globalFeedOnlinePromise,
   ])
 
@@ -9233,6 +9265,7 @@ async function getRouteStatusPayload(db: D1Database): Promise<Record<string, unk
     binance: globalFeedOnline ? 'online' : 'offline',
     okx: globalFeedOnline ? 'online' : 'offline',
     bybit: globalFeedOnline ? 'online' : 'offline',
+    kucoin: (kucoinOnline || globalFeedOnline) ? 'online' : 'offline',
   }
 
   const statuses = ROUTING_EXCHANGES.map((exchange) => ({
@@ -10317,6 +10350,59 @@ app.post('/api/telegram/webhook', async (c) => {
 
 app.route('/api/admin', adminRoutes)
 app.route('/api/mcp', mcpRoutes)
+// --- A2A skill handler injection (avoids self-fetch on CF Workers) ---
+app.use('/api/a2a/*', async (c, next) => {
+  const db = c.env.DB
+  c.set('a2aSkillHandler', async (skill: string | undefined, message: string) => {
+    try {
+      switch (skill) {
+        case 'crypto-routing': {
+          const extractP = (text: string, key: string): string | undefined => {
+            const regex = new RegExp(`${key}[=:\\s]+([^\\s,]+)`, 'i')
+            return text.match(regex)?.[1]
+          }
+          const fromRaw = extractP(message, 'from') ?? 'bithumb:KRW'
+          const toRaw = extractP(message, 'to') ?? 'binance:USDC'
+          const amountStr = extractP(message, 'amount') ?? '1000000'
+          const strategy = (extractP(message, 'strategy') ?? 'cheapest') as import('./constants').RoutingStrategy
+          const [fromEx = 'bithumb', fromCur = 'KRW'] = fromRaw.split(':')
+          const [toEx = 'binance', toCur = 'USDC'] = toRaw.split(':')
+          const data = await findOptimalRoute(fromEx, fromCur, toEx, toCur, Number(amountStr), strategy, db)
+          return { data }
+        }
+        case 'route-spread': {
+          const data = await getArbitrageDemoPayload(db)
+          return { data }
+        }
+        case 'korean-market-data': {
+          const data = await getRoutePairsPayload(db)
+          return { data }
+        }
+        case 'agent-finance': {
+          return {
+            data: {
+              protocol: 'acp', version: '1.0', provider: 'crossfin',
+              capabilities: ['quote', 'execute', 'execution_status'],
+              supported_exchanges: [...ROUTING_EXCHANGES],
+              supported_currencies: { source: [...ROUTING_SUPPORTED_CURRENCIES], destination: [...ROUTING_SUPPORTED_CURRENCIES] },
+              bridge_coins: [...BRIDGE_COINS],
+              execution_mode: 'tracked_orchestration',
+              tracking: { step_level: true, endpoint: '/api/acp/executions/{execution_id}' },
+              live_execution: 'requires_exchange_api_credentials',
+              compatible_with: ['locus', 'x402', 'openai-acp'],
+              at: new Date().toISOString(),
+            },
+          }
+        }
+        default:
+          return { error: `Unknown skill: ${skill ?? '(none)'}. Available skills: crypto-routing, route-spread, korean-market-data, agent-finance` }
+      }
+    } catch (err) {
+      return { error: `Skill dispatch failed: ${err instanceof Error ? err.message : String(err)}` }
+    }
+  })
+  await next()
+})
 app.route('/api/a2a', a2aRoutes)
 app.route('/api/status', statusRoutes)
 app.route('/api', api)

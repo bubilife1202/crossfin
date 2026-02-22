@@ -1,12 +1,15 @@
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
-import type { Env } from '../types'
-import { fetchWithTimeout } from '../lib/fetchers'
+import type { Env, A2aSkillHandler } from '../types'
 
 // ---------------------------------------------------------------------------
 // A2A (Agent-to-Agent) Protocol — JSON-RPC-style task management
 // Google A2A spec: agents create tasks, poll status, cancel.
 // Each task maps a skill + freeform message to a CrossFin API call.
+//
+// Skill dispatch is injected via Hono context middleware (index.ts) to avoid
+// self-fetch on Cloudflare Workers, which would receive an HTML challenge page
+// instead of JSON.
 // ---------------------------------------------------------------------------
 
 const a2a = new Hono<Env>()
@@ -38,48 +41,8 @@ async function ensureA2aTable(db: D1Database): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Skill dispatch — maps A2A skill id to a CrossFin API call
+// Skill inference — resolves freeform message to a skill id
 // ---------------------------------------------------------------------------
-
-type SkillResult = { data: unknown; error?: undefined } | { error: string; data?: undefined }
-
-async function dispatchSkill(
-  skill: string | undefined,
-  message: string,
-  origin: string,
-): Promise<SkillResult> {
-  const resolved = skill ?? inferSkill(message)
-
-  switch (resolved) {
-    case 'crypto-routing': {
-      // Parse simple natural language: "from bithumb:KRW to binance:USDC amount 5000000"
-      const from = extractParam(message, 'from') ?? 'bithumb:KRW'
-      const to = extractParam(message, 'to') ?? 'binance:USDC'
-      const amount = extractParam(message, 'amount') ?? '1000000'
-      const strategy = extractParam(message, 'strategy') ?? 'cheapest'
-      const url = `${origin}/api/routing/optimal?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&amount=${encodeURIComponent(amount)}&strategy=${encodeURIComponent(strategy)}`
-      return fetchInternal(url)
-    }
-
-    case 'route-spread': {
-      const url = `${origin}/api/arbitrage/demo`
-      return fetchInternal(url)
-    }
-
-    case 'korean-market-data': {
-      const url = `${origin}/api/route/pairs`
-      return fetchInternal(url)
-    }
-
-    case 'agent-finance': {
-      const url = `${origin}/api/acp/status`
-      return fetchInternal(url)
-    }
-
-    default:
-      return { error: `Unknown skill: ${resolved ?? '(none)'}. Available skills: crypto-routing, route-spread, korean-market-data, agent-finance` }
-  }
-}
 
 function inferSkill(message: string): string | undefined {
   const lower = message.toLowerCase()
@@ -88,29 +51,6 @@ function inferSkill(message: string): string | undefined {
   if (lower.includes('market') || lower.includes('korea') || lower.includes('kospi') || lower.includes('stock') || lower.includes('price')) return 'korean-market-data'
   if (lower.includes('wallet') || lower.includes('budget') || lower.includes('agent') || lower.includes('acp') || lower.includes('finance')) return 'agent-finance'
   return undefined
-}
-
-function extractParam(text: string, key: string): string | undefined {
-  // Match "key value" or "key=value" or "key:value"
-  const regex = new RegExp(`${key}[=:\\s]+([^\\s,]+)`, 'i')
-  const match = text.match(regex)
-  return match?.[1]
-}
-
-async function fetchInternal(url: string): Promise<SkillResult> {
-  try {
-    const resp = await fetchWithTimeout(url, {
-      headers: { 'Accept': 'application/json', 'User-Agent': 'CrossFin-A2A/1.0' },
-    }, 10000)
-    if (!resp.ok) {
-      const text = await resp.text()
-      return { error: `Upstream ${resp.status}: ${text.slice(0, 500)}` }
-    }
-    const data = await resp.json()
-    return { data }
-  } catch (err) {
-    return { error: `Internal fetch failed: ${err instanceof Error ? err.message : String(err)}` }
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -164,12 +104,20 @@ a2a.post('/tasks', async (c) => {
   if (skill && skill.length > A2A_MAX_SKILL_CHARS) {
     throw new HTTPException(400, { message: `skill is too long (max ${A2A_MAX_SKILL_CHARS} chars)` })
   }
-  const origin = new URL(c.req.url).origin
+
+  // Get injected skill handler from middleware (avoids self-fetch on CF Workers)
+  const skillHandler = c.get('a2aSkillHandler') as A2aSkillHandler | undefined
+  if (!skillHandler) {
+    throw new HTTPException(500, { message: 'A2A skill handler not configured' })
+  }
 
   await ensureA2aTable(c.env.DB)
 
   const id = taskId()
   const now = new Date().toISOString()
+
+  // Resolve skill from explicit parameter or message inference
+  const resolvedSkill = skill ?? inferSkill(message)
 
   // Insert task as "working"
   await c.env.DB.prepare(
@@ -177,8 +125,8 @@ a2a.post('/tasks', async (c) => {
      VALUES (?, 'working', ?, ?, ?, ?)`,
   ).bind(id, skill ?? null, message, now, now).run()
 
-  // Dispatch skill synchronously (CrossFin APIs are fast)
-  const result = await dispatchSkill(skill, message, origin)
+  // Dispatch skill via injected handler (direct function call, no HTTP)
+  const result = await skillHandler(resolvedSkill, message)
   const finalStatus = result.error ? 'failed' : 'completed'
   const resultJson = JSON.stringify(result.error ? { error: result.error } : result.data)
 
@@ -191,7 +139,7 @@ a2a.post('/tasks', async (c) => {
     version: '1.0',
     taskId: id,
     status: finalStatus,
-    skill: skill ?? inferSkill(message) ?? null,
+    skill: resolvedSkill ?? null,
     result: result.error ? { error: result.error } : result.data,
     created_at: now,
   })

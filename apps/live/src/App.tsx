@@ -260,6 +260,7 @@ const ROUTE_EXCHANGES = [
   { value: "binance", label: "Binance", region: "global", fiat: "USDC" },
   { value: "okx", label: "OKX", region: "global", fiat: "USDC" },
   { value: "bybit", label: "Bybit", region: "global", fiat: "USDC" },
+  { value: "kucoin", label: "KuCoin", region: "global", fiat: "USDC" },
 ] as const;
 
 function getExchangeMeta(ex: string) {
@@ -526,7 +527,7 @@ export default function App() {
             <div className="agentDemoLeft">
               <h3 className="agentDemoHeading">Your agent speaks Korean crypto</h3>
               <p className="agentDemoDesc">
-                Connect via MCP server or Telegram bot — query Korean exchanges, find optimal routes, and access 23 APIs through natural language.
+                Connect via MCP server or Telegram bot — query Korean exchanges, find optimal routes, and access 40+ APIs through natural language.
               </p>
               <div className="agentDemoFeatures">
                 <div className="agentDemoFeature">
@@ -543,7 +544,7 @@ export default function App() {
                 </div>
                 <div className="agentDemoFeature">
                   <span className="agentFeatureIcon">⚡</span>
-                  <span>23 APIs — all free during open beta</span>
+                  <span>40+ APIs — all free during open beta</span>
                 </div>
               </div>
             </div>
@@ -822,7 +823,7 @@ export default function App() {
               </span>
             </div>
             <p className="panelSubtext">
-              Korea: Bithumb, Upbit, Coinone, GoPax · Regional: bitFlyer, WazirX, bitbank, Indodax, Bitkub · Global: Binance, OKX, Bybit
+              Korea: Bithumb, Upbit, Coinone, GoPax · Regional: bitFlyer, WazirX, bitbank, Indodax, Bitkub · Global: Binance, OKX, Bybit, KuCoin
             </p>
             <div className="exchangeHubGrid">
               <div className="exchangeHubCard korea">
@@ -898,7 +899,7 @@ export default function App() {
           <section className="panel">
             <div className="panelHeader">
               <h2 className="panelTitle">Exchange Fee Comparison</h2>
-              <span className="panelBadge">12 exchanges</span>
+              <span className="panelBadge">13 exchanges</span>
             </div>
             <p className="panelSub" style={{ color: "var(--text-muted, #888)", fontSize: "0.82rem", margin: "-0.25rem 0 0.75rem" }}>
               How much it costs to route through each exchange — using XRP as the bridge coin (fastest, ~30 sec transfer).

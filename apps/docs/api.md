@@ -1,12 +1,12 @@
 # API Reference
 
-Base URL: `https://crossfin.dev` — 12 exchanges: Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit
+Base URL: `https://crossfin.dev` — 13 exchanges: Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin
 
 ## 1. Routing
 
 <ApiTable :endpoints="[
   { method: 'GET', path: '/api/route/exchanges', description: 'Supported exchanges and coins', price: 'Free' },
-  { method: 'GET', path: '/api/route/status', description: 'Exchange network health (live status across 12 exchanges)', price: 'Free' },
+  { method: 'GET', path: '/api/route/status', description: 'Exchange network health (live status across 13 exchanges)', price: 'Free' },
   { method: 'GET', path: '/api/route/pairs', description: 'Bridge pairs with live prices', price: 'Free' },
   { method: 'GET', path: '/api/route/fees', description: 'Trading + withdrawal fee table', price: 'Free' },
   { method: 'GET', path: '/api/routing/optimal', description: 'Live optimal route + real exchange fees (for RouteGraph)', price: 'Free' },

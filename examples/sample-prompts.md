@@ -34,7 +34,7 @@ Tool: `compare_exchange_prices` (no params) | Free | All tracked coins with brid
 "Compare withdrawal fees for XRP across all exchanges"
 ```
 
-Tool: `list_exchange_fees` | Free | Trading + withdrawal fees for 12 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit).
+Tool: `list_exchange_fees` | Free | Trading + withdrawal fees for 13 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin).
 
 ### Browse the Service Catalog
 
@@ -94,7 +94,7 @@ Tool: `get_guide` | Free | Complete agent guide with all endpoints, pricing, and
 "출금 수수료 비교표 보여줘"
 ```
 
-도구: `list_exchange_fees` | 무료 | 9개 거래소 거래+출금 수수료.
+도구: `list_exchange_fees` | 무료 | 13개 거래소 거래+출금 수수료.
 
 ```
 "어떤 유료 서비스가 있어?"

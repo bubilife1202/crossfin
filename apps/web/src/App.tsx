@@ -303,11 +303,11 @@ function App() {
           </div>
 
           <div className="heroPills">
-            <span className="pill">9 Exchanges</span>
+            <span className="pill">13 Exchanges</span>
             <span className="pill">11 Bridge Coins</span>
             <span className="pill">x402 Native</span>
             <span className="pill">MCP + ACP</span>
-            <span className="pill">35+ APIs</span>
+            <span className="pill">40+ APIs</span>
           </div>
         </section>
 
@@ -317,7 +317,7 @@ function App() {
             <div className="featureCard">
               <div className="featureIcon">&#x21C4;</div>
               <h3>Routing Engine</h3>
-              <p>Find the cheapest path across Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit, bitFlyer, and WazirX. Compares 11 bridge coins factoring fees, slippage, and transfer time.</p>
+              <p>Find the cheapest path across 13 exchanges including Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, and KuCoin. Compares 11 bridge coins factoring fees, slippage, and transfer time.</p>
             </div>
             <div className="featureCard">
               <div className="featureIcon">&#x25B2;</div>
@@ -465,7 +465,7 @@ function App() {
               <div className="routeFlowDiagram">
                 <div className="routeFlowNode routeFlowNodeSource">
                   <div className="routeFlowNodeLabel">Source</div>
-                  <div className="routeFlowNodeExchanges">Bithumb / Upbit / Coinone / GoPax</div>
+                  <div className="routeFlowNodeExchanges">Bithumb / Upbit / Coinone / GoPax / bitFlyer / WazirX / bitbank / Indodax / Bitkub</div>
                 </div>
                 <div className="routeFlowArrow">
                   <div className="routeFlowArrowLine" />
@@ -474,7 +474,7 @@ function App() {
                 </div>
                 <div className="routeFlowNode routeFlowNodeDest">
                   <div className="routeFlowNodeLabel">Destination</div>
-                  <div className="routeFlowNodeExchanges">Binance / OKX / Bybit / bitFlyer / WazirX</div>
+                  <div className="routeFlowNodeExchanges">Binance / OKX / Bybit / KuCoin</div>
                 </div>
               </div>
 
@@ -488,7 +488,7 @@ function App() {
             </div>
 
             <div className="routeShowcaseInfo">
-              <h3 className="routeShowcaseTitle">Compare routes across 9 exchanges, 11 bridge coins</h3>
+              <h3 className="routeShowcaseTitle">Compare routes across 13 exchanges, 11 bridge coins</h3>
               <p className="routeShowcaseDesc">
                 CrossFin evaluates every possible cross-border path in real-time, aggregating 5 cost layers
                 into a single comparable number per route. Find the cheapest way to move crypto between
@@ -496,15 +496,15 @@ function App() {
               </p>
               <div className="routeShowcaseStats">
                 <div className="routeShowcaseStat">
-                  <span className="routeShowcaseStatValue">99+</span>
-                  <span className="routeShowcaseStatLabel">Routes evaluated</span>
+                  <span className="routeShowcaseStatValue">11</span>
+                  <span className="routeShowcaseStatLabel">Coins compared</span>
                 </div>
                 <div className="routeShowcaseStat">
                   <span className="routeShowcaseStatValue">5</span>
                   <span className="routeShowcaseStatLabel">Cost layers</span>
                 </div>
                 <div className="routeShowcaseStat">
-                  <span className="routeShowcaseStatValue">&lt;2s</span>
+                  <span className="routeShowcaseStatValue">&lt;5s</span>
                   <span className="routeShowcaseStatLabel">Analysis time</span>
                 </div>
               </div>

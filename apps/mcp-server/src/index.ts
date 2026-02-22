@@ -517,7 +517,7 @@ server.registerTool(
     description:
       'Find the cheapest/fastest path to move money across Asian exchanges. ' +
       'Example: KRW on Bithumb → USDC on Binance. ' +
-      'Supports 12 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit) and 11 bridge coins (incl. KAIA). ' +
+      'Supports 13 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin) and 11 bridge coins (incl. KAIA). ' +
       'Paid tool: calls /api/premium/route/find ($0.10) via x402 (requires EVM_PRIVATE_KEY).',
     inputSchema: z.object({
       from: z
@@ -586,7 +586,7 @@ server.registerTool(
     title: 'List exchange fees',
     description:
       'Show trading fees, withdrawal fees, and transfer times for all supported exchanges ' +
-      '(Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit)',
+      '(Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin)',
     inputSchema: z.object({}),
   },
   async (_params): Promise<CallToolResult> => {

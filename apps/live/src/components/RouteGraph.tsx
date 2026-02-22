@@ -97,6 +97,7 @@ const EXCHANGE_LABELS: Record<string, string> = {
   bitbank: 'bitbank',
   indodax: 'Indodax',
   bitkub: 'Bitkub',
+  kucoin: 'KuCoin',
 }
 
 const ROTATING_SCENARIOS: readonly RouteScenario[] = [
@@ -111,6 +112,7 @@ const ROTATING_SCENARIOS: readonly RouteScenario[] = [
   { from: 'bitbank:JPY', to: 'binance:USDC', amount: 100_000 },
   { from: 'indodax:IDR', to: 'okx:USDC', amount: 10_000_000 },
   { from: 'bitkub:THB', to: 'bybit:USDC', amount: 30_000 },
+  { from: 'kucoin:USDC', to: 'upbit:KRW', amount: 500 },
 ] as const
 
 const INITIAL_SCENARIO: RouteScenario = ROTATING_SCENARIOS[0] ?? { from: 'bithumb:KRW', to: 'binance:USDC', amount: 1_000_000 }
@@ -130,6 +132,7 @@ const EXCHANGE_CONFIG: { value: string; label: string; currencies: string[] }[] 
   { value: 'binance', label: 'Binance', currencies: ['USDC', 'USDT'] },
   { value: 'okx', label: 'OKX', currencies: ['USDC', 'USDT'] },
   { value: 'bybit', label: 'Bybit', currencies: ['USDC', 'USDT'] },
+  { value: 'kucoin', label: 'KuCoin', currencies: ['USDC', 'USDT'] },
 ]
 
 const BRIDGE_COINS = ['BTC', 'ETH', 'XRP', 'SOL', 'DOGE', 'ADA', 'DOT', 'LINK', 'AVAX', 'TRX', 'KAIA'] as const
@@ -725,7 +728,7 @@ export default function RouteGraph() {
           <h2 className="rg-title">Route Explorer</h2>
           <p className="rg-sub">
             {mode === 'auto'
-              ? 'Live routing across 9 exchanges \u00d7 11 bridge coins'
+              ? 'Live routing across 13 exchanges \u00d7 11 bridge coins'
               : 'Try your own route \u2014 pick exchanges, amount, and bridge coin'}
           </p>
           <p className="rg-sub">

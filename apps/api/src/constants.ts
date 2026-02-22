@@ -38,7 +38,7 @@ export const EXCHANGE_FEES: Record<string, number> = {
   bithumb: 0.25, upbit: 0.05, coinone: 0.20,
   gopax: 0.20, bitflyer: 0.15, wazirx: 0.20,
   bitbank: 0.12, indodax: 0.30, bitkub: 0.25,
-  binance: 0.10, okx: 0.08, bybit: 0.10,
+  binance: 0.10, okx: 0.08, bybit: 0.10, kucoin: 0.10,
 }
 
 // --- Routing Engine: Withdrawal fees per exchange per coin (fixed amount in coin units) ---
@@ -52,6 +52,7 @@ export const WITHDRAWAL_FEES: Record<string, Record<string, number>> = {
   binance: { BTC: 0.0002, ETH: 0.0016, XRP: 0.25, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.3, AVAX: 0.01, TRX: 1.0, USDT: 1.0, USDC: 1.0, KAIA: 0.005 },
   okx: { BTC: 0.0002, ETH: 0.0008, XRP: 0.2, SOL: 0.008, DOGE: 4.0, ADA: 0.8, DOT: 0.08, LINK: 0.3, AVAX: 0.01, TRX: 1.0, USDT: 1.0, USDC: 1.0, KAIA: 0.005 },
   bybit: { BTC: 0.0002, ETH: 0.0016, XRP: 0.25, SOL: 0.01, DOGE: 5.0, ADA: 1.0, DOT: 0.1, LINK: 0.3, AVAX: 0.01, TRX: 1.0, USDT: 1.0, USDC: 1.0, KAIA: 0.005 },
+  kucoin: { BTC: 0.00009, ETH: 0.0015, XRP: 0.3, SOL: 0.008, DOGE: 3.35, ADA: 1.8, DOT: 0.4, LINK: 0.32, AVAX: 0.03, TRX: 1, KAIA: 5.06, USDT: 5.5, USDC: 5.5 },
   bitbank: { BTC: 0.0006, ETH: 0.005, XRP: 0.1, SOL: 0.009, DOGE: 5.0, ADA: 1.0, DOT: 0.05, LINK: 0.5, AVAX: 0.01, TRX: 3.0 },
   bitkub: { BTC: 0.000015, ETH: 0.0003, XRP: 0.2, SOL: 0.001, DOGE: 4.0, ADA: 0.8, DOT: 0.08, LINK: 0.066, AVAX: 0.004, TRX: 1.5 },
   indodax: { BTC: 0.0005, ETH: 0.005 },
@@ -65,10 +66,10 @@ export const TRANSFER_TIME_MIN: Record<string, number> = {
 export const DEFAULT_TRANSFER_TIME_MIN = 10
 
 // --- Routing Engine: Supported exchanges ---
-export const ROUTING_EXCHANGES = ['bithumb', 'upbit', 'coinone', 'gopax', 'bitflyer', 'wazirx', 'bitbank', 'indodax', 'bitkub', 'binance', 'okx', 'bybit'] as const
+export const ROUTING_EXCHANGES = ['bithumb', 'upbit', 'coinone', 'gopax', 'bitflyer', 'wazirx', 'bitbank', 'indodax', 'bitkub', 'binance', 'okx', 'bybit', 'kucoin'] as const
 export type RoutingExchange = typeof ROUTING_EXCHANGES[number]
 
-export const GLOBAL_ROUTING_EXCHANGE_SET = new Set<string>(['binance', 'okx', 'bybit'])
+export const GLOBAL_ROUTING_EXCHANGE_SET = new Set<string>(['binance', 'okx', 'bybit', 'kucoin'])
 export const KOREAN_ROUTING_EXCHANGE_SET = new Set<string>(['bithumb', 'upbit', 'coinone', 'gopax'])
 
 export const ROUTING_EXCHANGE_CURRENCIES: Record<RoutingExchange, readonly string[]> = {
@@ -84,6 +85,7 @@ export const ROUTING_EXCHANGE_CURRENCIES: Record<RoutingExchange, readonly strin
   binance: ['USDC', 'USDT', 'USD'],
   okx: ['USDC', 'USDT', 'USD'],
   bybit: ['USDC', 'USDT', 'USD'],
+  kucoin: ['USDC', 'USDT', 'USD'],
 }
 
 export const ROUTING_SUPPORTED_CURRENCIES = ['KRW', 'JPY', 'INR', 'IDR', 'THB', 'USDC', 'USDT', 'USD'] as const
@@ -101,6 +103,7 @@ export const EXCHANGE_DISPLAY_NAME: Record<RoutingExchange, string> = {
   binance: 'Binance',
   okx: 'OKX',
   bybit: 'Bybit',
+  kucoin: 'KuCoin',
 }
 
 export const ROUTING_EXCHANGE_COUNTRY: Record<RoutingExchange, string> = {
@@ -116,6 +119,7 @@ export const ROUTING_EXCHANGE_COUNTRY: Record<RoutingExchange, string> = {
   binance: 'Global',
   okx: 'Global',
   bybit: 'Global',
+  kucoin: 'Global',
 }
 
 // --- Routing Engine: Bridge coins for cross-exchange transfers ---
