@@ -88,6 +88,7 @@ import statusRoutes from './routes/status'
 import discoveryRoutes from './routes/discovery'
 import legalRoutes from './routes/legal'
 import { createDocsRoutes } from './routes/docs'
+import { createMetaRoutes } from './routes/meta'
 import { createAnalyticsRoutes } from './routes/analytics'
 import {
   createRoutingRoutes,
@@ -8277,18 +8278,25 @@ api.get('/audit', async (c) => {
   return c.json({ data: results })
 })
 
-app.get('/api/stats', async (c) => {
-  const results = await c.env.DB.batch([
-    c.env.DB.prepare("SELECT COUNT(*) as count FROM agents WHERE status = 'active'"),
-    c.env.DB.prepare('SELECT COUNT(*) as count FROM wallets'),
-    c.env.DB.prepare('SELECT COUNT(*) as count FROM transactions'),
+async function getPublicStatsPayload(db: D1Database): Promise<{
+  agents: number
+  wallets: number
+  transactions: number
+  blocked: number
+  note: string
+  at: string
+}> {
+  const results = await db.batch([
+    db.prepare("SELECT COUNT(*) as count FROM agents WHERE status = 'active'"),
+    db.prepare('SELECT COUNT(*) as count FROM wallets'),
+    db.prepare('SELECT COUNT(*) as count FROM transactions'),
   ])
 
   const agents = Number((results[0]?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
   const wallets = Number((results[1]?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
   const transactions = Number((results[2]?.results?.[0] as { count?: number | string } | undefined)?.count ?? 0)
 
-  const blocked = await c.env.DB.prepare(
+  const blocked = await db.prepare(
     "SELECT COUNT(*) as count FROM audit_logs WHERE result = 'blocked'"
   ).first<{ count: number | string }>()
 
@@ -8299,15 +8307,15 @@ app.get('/api/stats', async (c) => {
     return Math.ceil(value / 100) * 100
   }
 
-  return c.json({
+  return {
     agents: bucket(agents),
     wallets: bucket(wallets),
     transactions: bucket(transactions),
     blocked: bucket(Number(blocked?.count ?? 0)),
     note: 'Public counters are rounded for privacy',
     at: new Date().toISOString(),
-  })
-})
+  }
+}
 
 function parseAcpExchangeCurrency(
   body: Record<string, unknown>,
@@ -8927,9 +8935,21 @@ app.get('/api/acp/executions/:executionId', agentAuth, async (c) => {
   return c.json(response)
 })
 
-// GET /api/acp/status — ACP protocol status (free)
-app.get('/api/acp/status', (c) => {
-  return c.json({
+function getAcpStatusPayload(): {
+  protocol: 'acp'
+  version: string
+  provider: string
+  capabilities: string[]
+  supported_exchanges: string[]
+  supported_currencies: { source: string[]; destination: string[] }
+  bridge_coins: string[]
+  execution_mode: string
+  tracking: { step_level: boolean; endpoint: string }
+  live_execution: string
+  compatible_with: string[]
+  at: string
+} {
+  return {
     protocol: 'acp',
     version: '1.0',
     provider: 'crossfin',
@@ -8948,8 +8968,8 @@ app.get('/api/acp/status', (c) => {
     live_execution: 'requires_exchange_api_credentials',
     compatible_with: ['locus', 'x402', 'openai-acp'],
     at: new Date().toISOString(),
-  })
-})
+  }
+}
 
 app.post('/api/telegram/webhook', async (c) => {
   console.log('[telegram] webhook POST received')
@@ -9371,6 +9391,11 @@ const docsRoutes = createDocsRoutes({
   getOpenApiPayload,
 })
 
+const metaRoutes = createMetaRoutes({
+  getPublicStatsPayload,
+  getAcpStatusPayload,
+})
+
 app.route('/api/admin', adminRoutes)
 app.route('/api/mcp', mcpRoutes)
 app.route('/api/analytics', analyticsRoutes)
@@ -9378,6 +9403,7 @@ app.route('/api', routingRoutes)
 app.route('/', discoveryRoutes)
 app.route('/', legalRoutes)
 app.route('/', docsRoutes)
+app.route('/', metaRoutes)
 // --- A2A skill handler injection (avoids self-fetch on CF Workers) ---
 app.use('/api/a2a/*', async (c, next) => {
   const db = c.env.DB
