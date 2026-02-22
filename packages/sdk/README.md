@@ -64,22 +64,10 @@ All endpoints are currently free during the open beta period. No x402 payment or
 | `premium.upbitSignals()` | Upbit Trading Signals |
 | `premium.coinoneTicker(currency)` | Coinone Ticker |
 | `premium.crossExchange(coins)` | Cross-Exchange Decision Service |
-| `premium.koreaIndices()` | KOSPI/KOSDAQ Indices |
-| `premium.koreaIndicesHistory({ index, days })` | Korea Indices History |
-| `premium.koreaStocksMomentum(market)` | Korea Stocks Momentum |
-| `premium.koreaInvestorFlow(stock)` | Korea Investor Flow |
-| `premium.koreaIndexFlow(index)` | Korea Index Flow |
-| `premium.koreaStockDetail(stock)` | Korea Stock Detail |
-| `premium.koreaStockNews(stock)` | Korea Stock News |
-| `premium.koreaThemes()` | Korea Market Themes |
-| `premium.koreaDisclosure(stock)` | Korea Disclosure Feed |
-| `premium.koreaEtf()` | Korea ETF Universe |
-| `premium.stockBrief(stock)` | Stock Brief Bundle |
 | `premium.korea5Exchange(coin)` | Korea 5-Exchange Compare |
 | `premium.koreaExchangeStatus()` | Korea Exchange Status |
 | `premium.koreaFxRate()` | Korea FX Rate (CRIX) |
 | `premium.upbitCandles({ coin, type, count })` | Upbit Candles |
-| `premium.globalIndicesChart({ index, period })` | Global Indices Chart |
 | `premium.koreaHeadlines(limit)` | Korean Headlines |
 | `premium.morningBrief()` | Morning Brief Bundle |
 | `premium.cryptoSnapshot()` | Crypto Snapshot Bundle |
@@ -87,8 +75,6 @@ All endpoints are currently free during the open beta period. No x402 payment or
 | `premium.routeFind(params)` | Optimal Route Finder |
 | `premium.report()` | Premium Report (x402 check) |
 | `premium.enterprise()` | Enterprise Receipt |
-
-> ⚠️ **Naver-dependent endpoints** (koreaIndices, koreaIndicesHistory, koreaStocksMomentum, koreaInvestorFlow, koreaIndexFlow, koreaStockDetail, koreaStockNews, koreaThemes, koreaDisclosure, koreaEtf, stockBrief, globalIndicesChart) currently return HTTP 503. Migration to official data sources in progress.
 
 ## Free Endpoints
 

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// CrossFin SDK — Response types derived from OpenAPI spec v1.12.1
+// CrossFin SDK — Response types derived from OpenAPI spec v1.13.0
 // ---------------------------------------------------------------------------
 
 /** GET /api/health */
@@ -275,100 +275,6 @@ export interface CrossExchangeResponse {
   at: string
 }
 
-// ---------------------------------------------------------------------------
-// Korea Indices
-// ---------------------------------------------------------------------------
-
-/** GET /api/premium/market/korea/indices */
-export interface KoreaIndicesResponse {
-  paid: boolean
-  service: string
-  [key: string]: unknown
-}
-
-/** GET /api/premium/market/korea/indices/history */
-export interface KoreaIndicesHistoryResponse {
-  paid: boolean
-  service: string
-  [key: string]: unknown
-}
-
-// ---------------------------------------------------------------------------
-// Korea Stocks
-// ---------------------------------------------------------------------------
-
-/** GET /api/premium/market/korea/stocks/momentum */
-export interface KoreaStocksMomentumResponse {
-  paid: boolean
-  service: string
-  [key: string]: unknown
-}
-
-/** GET /api/premium/market/korea/investor-flow */
-export interface KoreaInvestorFlowResponse {
-  paid: boolean
-  service: string
-  [key: string]: unknown
-}
-
-/** GET /api/premium/market/korea/index-flow */
-export interface KoreaIndexFlowResponse {
-  paid: boolean
-  service: string
-  [key: string]: unknown
-}
-
-/** GET /api/premium/market/korea/stock-detail */
-export interface KoreaStockDetailResponse {
-  paid: boolean
-  service: string
-  [key: string]: unknown
-}
-
-/** GET /api/premium/market/korea/stock-news */
-export interface KoreaStockNewsResponse {
-  paid: boolean
-  service: string
-  [key: string]: unknown
-}
-
-/** GET /api/premium/market/korea/themes */
-export interface KoreaThemesResponse {
-  paid: boolean
-  service: string
-  [key: string]: unknown
-}
-
-/** GET /api/premium/market/korea/disclosure */
-export interface KoreaDisclosureResponse {
-  paid: boolean
-  service: string
-  [key: string]: unknown
-}
-
-/** GET /api/premium/market/korea/etf */
-export interface KoreaEtfResponse {
-  paid: boolean
-  service: string
-  [key: string]: unknown
-}
-
-// ---------------------------------------------------------------------------
-// Korea Stock Brief (bundle)
-// ---------------------------------------------------------------------------
-
-/** GET /api/premium/market/korea/stock-brief */
-export interface StockBriefResponse {
-  paid: boolean
-  service: string
-  stock: string
-  name: string | null
-  detail: Record<string, unknown> | null
-  news: Record<string, unknown>[]
-  investorFlow: Record<string, unknown> | null
-  disclosures: Record<string, unknown>[]
-  at: string
-}
 
 // ---------------------------------------------------------------------------
 // Crypto Korea

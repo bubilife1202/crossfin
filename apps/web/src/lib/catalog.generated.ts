@@ -136,26 +136,6 @@ export const CROSSFIN_PLAYGROUND_ENDPOINTS: { path: string; label: string }[] = 
     "label": "[Paid] Cross-Exchange Decision ($0.08)"
   },
   {
-    "path": "/api/premium/market/korea/indices",
-    "label": "[Paid] Korea Indices ($0.03)"
-  },
-  {
-    "path": "/api/premium/market/korea/indices/history?index=KOSPI&days=20",
-    "label": "[Paid] Korea Indices History ($0.05)"
-  },
-  {
-    "path": "/api/premium/market/korea/stocks/momentum?market=KOSPI",
-    "label": "[Paid] Korea Stocks Momentum ($0.05)"
-  },
-  {
-    "path": "/api/premium/market/korea/investor-flow?stock=005930",
-    "label": "[Paid] Korea Investor Flow ($0.05)"
-  },
-  {
-    "path": "/api/premium/market/korea/index-flow?index=KOSPI",
-    "label": "[Paid] Korea Index Flow ($0.03)"
-  },
-  {
     "path": "/api/premium/crypto/korea/5exchange?coin=BTC",
     "label": "[Paid] Korea 5-Exchange Compare ($0.08)"
   },
@@ -164,36 +144,12 @@ export const CROSSFIN_PLAYGROUND_ENDPOINTS: { path: string; label: string }[] = 
     "label": "[Paid] Korea Exchange Status ($0.03)"
   },
   {
-    "path": "/api/premium/market/korea/stock-detail?stock=005930",
-    "label": "[Paid] Korea Stock Detail ($0.05)"
-  },
-  {
-    "path": "/api/premium/market/korea/stock-news?stock=005930",
-    "label": "[Paid] Korea Stock News ($0.03)"
-  },
-  {
-    "path": "/api/premium/market/korea/themes",
-    "label": "[Paid] Korea Themes ($0.05)"
-  },
-  {
-    "path": "/api/premium/market/korea/disclosure?stock=005930",
-    "label": "[Paid] Korea Disclosure ($0.03)"
-  },
-  {
     "path": "/api/premium/crypto/korea/fx-rate",
     "label": "[Paid] Korea FX Rate (CRIX) ($0.01)"
   },
   {
-    "path": "/api/premium/market/korea/etf",
-    "label": "[Paid] Korea ETF ($0.03)"
-  },
-  {
     "path": "/api/premium/crypto/korea/upbit-candles?coin=BTC&type=days&count=30",
     "label": "[Paid] Upbit Candles ($0.02)"
-  },
-  {
-    "path": "/api/premium/market/global/indices-chart?index=.DJI&period=month",
-    "label": "[Paid] Global Indices Chart ($0.02)"
   },
   {
     "path": "/api/premium/news/korea/headlines",
@@ -210,10 +166,6 @@ export const CROSSFIN_PLAYGROUND_ENDPOINTS: { path: string; label: string }[] = 
   {
     "path": "/api/premium/kimchi/stats",
     "label": "[Paid] Route Spread Stats ($0.15)"
-  },
-  {
-    "path": "/api/premium/market/korea/stock-brief?stock=005930",
-    "label": "[Paid] Stock Brief ($0.10)"
   },
   {
     "path": "/api/premium/route/find?from=bithumb:KRW&to=binance:USDC&amount=1000000&strategy=cheapest",

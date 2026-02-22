@@ -39,7 +39,7 @@ Restart your MCP client. Done. 16 tools available immediately.
 - "빗썸에서 바이낸스로 500만원 USDC 만들려면 가장 싼 방법이 뭐야?" → Routing engine evaluates 11 bridge coins across 9 exchanges, returns optimal path with fees
 - "지금 한국-글로벌 스프레드 얼마야?" → Real-time price spread between Korean and global exchanges for 11 crypto pairs
 - "일본이랑 태국 프리미엄 비교해줘" → Asian Premium Index across Korea, Japan, Indonesia, Thailand
-- "오늘 한국 시장 브리핑해줘" → Morning Brief bundle: route spread + FX + KOSPI/KOSDAQ + stock momentum + headlines
+- "오늘 한국 시장 브리핑해줘" → Morning Brief bundle: route spread + FX + headlines
 
 **For developers/agents:**
 
@@ -152,33 +152,13 @@ All endpoints are currently free during open beta. x402 payment infrastructure i
 </details>
 
 <details>
-<summary><strong>Korean Stock APIs</strong></summary>
-
-| Endpoint | Price | Description |
-|----------|-------|-------------|
-| `/api/premium/market/korea/indices` | Free | ⚠️ Temporarily disabled (503) — KOSPI & KOSDAQ real-time |
-| `/api/premium/market/korea/indices/history` | Free | ⚠️ Temporarily disabled (503) — KOSPI/KOSDAQ daily OHLC (60 days) |
-| `/api/premium/market/korea/stocks/momentum` | Free | ⚠️ Temporarily disabled (503) — Top gainers/losers/market cap |
-| `/api/premium/market/korea/investor-flow` | Free | ⚠️ Temporarily disabled (503) — Stock investor flow (foreign/institutional) |
-| `/api/premium/market/korea/index-flow` | Free | ⚠️ Temporarily disabled (503) — Index-level investor flow |
-| `/api/premium/market/korea/stock-detail` | Free | ⚠️ Temporarily disabled (503) — Stock analysis (PER, PBR, consensus) |
-| `/api/premium/market/korea/stock-news` | Free | ⚠️ Temporarily disabled (503) — Stock-specific news |
-| `/api/premium/market/korea/themes` | Free | ⚠️ Temporarily disabled (503) — Market themes/sectors |
-| `/api/premium/market/korea/disclosure` | Free | ⚠️ Temporarily disabled (503) — Corporate disclosures |
-| `/api/premium/market/korea/etf` | Free | ⚠️ Temporarily disabled (503) — 1,070+ Korean ETFs |
-| `/api/premium/market/global/indices-chart` | Free | ⚠️ Temporarily disabled (503) — Global index charts (Dow, NASDAQ, etc.) |
-
-</details>
-
-<details>
 <summary><strong>Bundle APIs</strong></summary>
 
 | Endpoint | Price | Description |
 |----------|-------|-------------|
-| `/api/premium/morning/brief` | Free | Morning Brief (route spread + FX + stocks + headlines) |
+| `/api/premium/morning/brief` | Free | Morning Brief (route spread + FX + headlines) |
 | `/api/premium/crypto/snapshot` | Free | Crypto Snapshot (4-exchange + route spread + volume + FX) |
 | `/api/premium/kimchi/stats` | Free | Route Spread Stats (spreads + trend + arbitrage signal) |
-| `/api/premium/market/korea/stock-brief` | Free | ⚠️ Temporarily disabled (503) — Stock Brief (fundamentals + news + flow) |
 
 </details>
 

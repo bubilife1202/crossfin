@@ -44,19 +44,6 @@ import type {
   UpbitSignalsResponse,
   CoinoneTickerResponse,
   CrossExchangeResponse,
-  // Premium — Korea Indices
-  KoreaIndicesResponse,
-  KoreaIndicesHistoryResponse,
-  // Premium — Korea Stocks
-  KoreaStocksMomentumResponse,
-  KoreaInvestorFlowResponse,
-  KoreaIndexFlowResponse,
-  KoreaStockDetailResponse,
-  KoreaStockNewsResponse,
-  KoreaThemesResponse,
-  KoreaDisclosureResponse,
-  KoreaEtfResponse,
-  StockBriefResponse,
   // Premium — Crypto Korea
   Korea5ExchangeResponse,
   KoreaExchangeStatusResponse,
@@ -309,50 +296,6 @@ export class CrossFinClient {
     crossExchange: (coins?: string): Promise<CrossExchangeResponse> =>
       this.get(`/api/premium/market/cross-exchange${qs({ coins })}`),
 
-    // -- Korea Indices --
-
-    /** Korea Indices (KOSPI/KOSDAQ) — $0.03 USDC */
-    koreaIndices: (): Promise<KoreaIndicesResponse> => this.get('/api/premium/market/korea/indices'),
-
-    /** Korea Indices History — $0.05 USDC */
-    koreaIndicesHistory: (options?: { index?: string; days?: number }): Promise<KoreaIndicesHistoryResponse> =>
-      this.get(`/api/premium/market/korea/indices/history${qs({ index: options?.index, days: options?.days })}`),
-
-    // -- Korea Stocks --
-
-    /** Korea Stocks Momentum — $0.05 USDC */
-    koreaStocksMomentum: (market?: string): Promise<KoreaStocksMomentumResponse> =>
-      this.get(`/api/premium/market/korea/stocks/momentum${qs({ market })}`),
-
-    /** Korea Investor Flow — $0.05 USDC */
-    koreaInvestorFlow: (stock: string): Promise<KoreaInvestorFlowResponse> =>
-      this.get(`/api/premium/market/korea/investor-flow${qs({ stock })}`),
-
-    /** Korea Index Flow — $0.03 USDC */
-    koreaIndexFlow: (index?: string): Promise<KoreaIndexFlowResponse> =>
-      this.get(`/api/premium/market/korea/index-flow${qs({ index })}`),
-
-    /** Korea Stock Detail — $0.05 USDC */
-    koreaStockDetail: (stock: string): Promise<KoreaStockDetailResponse> =>
-      this.get(`/api/premium/market/korea/stock-detail${qs({ stock })}`),
-
-    /** Korea Stock News — $0.03 USDC */
-    koreaStockNews: (stock: string): Promise<KoreaStockNewsResponse> =>
-      this.get(`/api/premium/market/korea/stock-news${qs({ stock })}`),
-
-    /** Korea Market Themes — $0.05 USDC */
-    koreaThemes: (): Promise<KoreaThemesResponse> => this.get('/api/premium/market/korea/themes'),
-
-    /** Korea Disclosure Feed — $0.03 USDC */
-    koreaDisclosure: (stock?: string): Promise<KoreaDisclosureResponse> =>
-      this.get(`/api/premium/market/korea/disclosure${qs({ stock })}`),
-
-    /** Korea ETF Universe — $0.03 USDC */
-    koreaEtf: (): Promise<KoreaEtfResponse> => this.get('/api/premium/market/korea/etf'),
-
-    /** Stock Brief bundle — $0.10 USDC */
-    stockBrief: (stock: string): Promise<StockBriefResponse> =>
-      this.get(`/api/premium/market/korea/stock-brief${qs({ stock })}`),
 
     // -- Crypto Korea --
 

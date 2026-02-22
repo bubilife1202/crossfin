@@ -1,6 +1,36 @@
 # Changelog
 
 
+## [1.13.0] - 2026-02-22
+
+### Removed
+- **12 Naver Finance endpoints permanently removed** — previously returned HTTP 503 since v1.11.0
+  - `/api/premium/market/korea/indices` — KOSPI/KOSDAQ indices
+  - `/api/premium/market/korea/indices/history` — Index OHLC history
+  - `/api/premium/market/korea/stocks/momentum` — Top stocks momentum
+  - `/api/premium/market/korea/investor-flow` — Stock investor flow
+  - `/api/premium/market/korea/index-flow` — Index investor flow
+  - `/api/premium/market/korea/stock-detail` — Stock fundamentals
+  - `/api/premium/market/korea/stock-news` — Stock news
+  - `/api/premium/market/korea/themes` — Market themes
+  - `/api/premium/market/korea/disclosure` — Corporate disclosures
+  - `/api/premium/market/korea/stock-brief` — Stock brief bundle
+  - `/api/premium/market/korea/etf` — Korean ETF list
+  - `/api/premium/market/global/indices-chart` — Global indices chart (Naver data source)
+- Removed `naverCache` / `fetchNaverCached` infrastructure from API
+- Removed corresponding SDK types (`StockBriefResponse`, etc.) and client methods
+- Removed 12 entries from service catalog (35 → 23 services)
+- Removed 12 entries from web catalog generated file
+
+### Changed
+- **Morning Brief** (`/api/premium/morning/brief`) — `indices` and `momentum` fields now always return `null` with notice (Naver-dependent data removed)
+- Registry, agent guide, discovery metadata, and OpenAPI spec cleaned of all 12 removed endpoints
+- All documentation synced: README, docs site, SDK README
+
+### Added
+- **KRX Migration Plan** — `research/26-korean-stock-data-plan.md` documenting strategy to rebuild Korean stock data endpoints using official KRX + DART APIs
+
+
 ## [1.12.1] - 2026-02-22
 
 ### Fixed

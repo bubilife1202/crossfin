@@ -47,32 +47,7 @@ Base URL: `https://crossfin.dev` — 9 exchanges: Bithumb, Upbit, Coinone, GoPax
 
 ---
 
-## 4. Korean Stock APIs
-
-<ApiTable :endpoints="[
-  { method: 'GET', path: '/api/premium/market/korea/indices', description: '⚠️ Disabled — KOSPI & KOSDAQ', price: 'Free' },
-  { method: 'GET', path: '/api/premium/market/korea/indices/history?index=KOSPI&days=20', description: '⚠️ Disabled — Korea Indices History', price: 'Free' },
-  { method: 'GET', path: '/api/premium/market/korea/index-flow?index=KOSPI', description: '⚠️ Disabled — Korea Index Flow', price: 'Free' },
-  { method: 'GET', path: '/api/premium/market/korea/stocks/momentum', description: '⚠️ Disabled — Top movers', price: 'Free' },
-  { method: 'GET', path: '/api/premium/market/korea/stock-detail?stock=005930', description: '⚠️ Disabled — Korea Stock Detail', price: 'Free' },
-  { method: 'GET', path: '/api/premium/market/korea/stock-news?stock=005930', description: '⚠️ Disabled — Korea Stock News', price: 'Free' },
-  { method: 'GET', path: '/api/premium/market/korea/investor-flow', description: '⚠️ Disabled — Investor flow', price: 'Free' },
-  { method: 'GET', path: '/api/premium/market/korea/themes', description: '⚠️ Disabled — Korea Themes', price: 'Free' },
-  { method: 'GET', path: '/api/premium/market/korea/disclosure?stock=005930', description: '⚠️ Disabled — Korea Disclosure', price: 'Free' },
-  { method: 'GET', path: '/api/premium/market/korea/etf', description: '⚠️ Disabled — 1,070+ ETFs', price: 'Free' },
-]" />
-
----
-
-## 5. Global Market Data
-
-<ApiTable :endpoints="[
-  { method: 'GET', path: '/api/premium/market/global/indices-chart?index=.DJI&period=month', description: '⚠️ Disabled — Global Indices Chart', price: 'Free' },
-]" />
-
----
-
-## 5.5 Asian Premium Index (v1.12.0)
+## 4. Asian Premium Index (v1.12.0)
 
 Real-time crypto premium analysis across 4 Asian countries. Compares local exchange prices vs Binance global prices.
 
@@ -85,18 +60,17 @@ Real-time crypto premium analysis across 4 Asian countries. Compares local excha
 
 ---
 
-## 6. Bundles
+## 5. Bundles
 
 <ApiTable :endpoints="[
   { method: 'GET', path: '/api/premium/morning/brief', description: 'Morning Brief', price: 'Free' },
   { method: 'GET', path: '/api/premium/crypto/snapshot', description: 'Crypto Snapshot', price: 'Free' },
   { method: 'GET', path: '/api/premium/kimchi/stats', description: 'Route Spread Stats', price: 'Free' },
-  { method: 'GET', path: '/api/premium/market/korea/stock-brief', description: '⚠️ Disabled — Stock Brief', price: 'Free' },
 ]" />
 
 ---
 
-## 7. ACP (Agent Commerce Protocol)
+## 6. ACP (Agent Commerce Protocol)
 
 <ApiTable :endpoints="[
   { method: 'GET', path: '/api/acp/status', description: 'ACP protocol status', price: 'Free' },
@@ -106,7 +80,7 @@ Real-time crypto premium analysis across 4 Asian countries. Compares local excha
 
 ---
 
-## 8. Registry & Discovery
+## 7. Registry & Discovery
 
 <ApiTable :endpoints="[
   { method: 'GET', path: '/api/registry', description: 'All services', price: 'Free' },
@@ -118,7 +92,7 @@ Real-time crypto premium analysis across 4 Asian countries. Compares local excha
 
 ---
 
-## 9. Agent Discovery
+## 8. Agent Discovery
 
 Well-known endpoints for agent frameworks and LLM toolchains to auto-discover CrossFin capabilities.
 
@@ -132,7 +106,7 @@ Well-known endpoints for agent frameworks and LLM toolchains to auto-discover Cr
 
 ---
 
-## 10. Utility Paid APIs
+## 9. Utility Paid APIs
 
 <ApiTable :endpoints="[
   { method: 'GET', path: '/api/premium/report', description: 'Premium report (agents/wallets/transactions summary)', price: 'Free' },

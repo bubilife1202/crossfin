@@ -1098,26 +1098,10 @@ app.get('/api/docs/guide', (c) => {
         { id: 'crossfin_usdkrw', endpoint: '/api/premium/market/fx/usdkrw', price: '$0.01', description: 'USD/KRW exchange rate for converting Korean exchange prices.' },
         { id: 'crossfin_crypto_korea_fx_rate', endpoint: '/api/premium/crypto/korea/fx-rate', price: '$0.01', description: 'Real-time KRW/USD exchange rate from Upbit CRIX with 52-week high/low context.' },
       ],
-      korean_stocks: [
-        { id: 'crossfin_korea_indices', endpoint: '/api/premium/market/korea/indices', price: '$0.03', description: 'KOSPI & KOSDAQ real-time index (price, change, direction, market status).' },
-        { id: 'crossfin_korea_indices_history', endpoint: '/api/premium/market/korea/indices/history', price: '$0.05', description: 'KOSPI/KOSDAQ daily OHLC history up to 60 trading days.' },
-        { id: 'crossfin_korea_stocks_momentum', endpoint: '/api/premium/market/korea/stocks/momentum', price: '$0.05', description: 'Korean stock momentum — top market cap, gainers, losers.' },
-        { id: 'crossfin_korea_investor_flow', endpoint: '/api/premium/market/korea/investor-flow?stock=005930', price: '$0.05', description: 'Stock investor flow — 10-day foreign/institutional/individual net buying for any stock.' },
-        { id: 'crossfin_korea_index_flow', endpoint: '/api/premium/market/korea/index-flow?index=KOSPI', price: '$0.03', description: 'KOSPI/KOSDAQ investor flow — foreign/institutional/individual net buying (billion KRW).' },
-        { id: 'crossfin_korea_stock_detail', endpoint: '/api/premium/market/korea/stock-detail?stock=005930', price: '$0.05', description: 'Comprehensive stock analysis — PER, PBR, consensus target, industry peers.' },
-        { id: 'crossfin_korea_stock_news', endpoint: '/api/premium/market/korea/stock-news?stock=005930', price: '$0.03', description: 'Stock-specific news from Naver Finance.' },
-        { id: 'crossfin_korea_themes', endpoint: '/api/premium/market/korea/themes', price: '$0.05', description: 'Korean stock market themes/sectors with performance.' },
-        { id: 'crossfin_korea_disclosure', endpoint: '/api/premium/market/korea/disclosure?stock=005930', price: '$0.03', description: 'Corporate disclosure filings (DART).' },
-        { id: 'crossfin_korea_etf', endpoint: '/api/premium/market/korea/etf', price: '$0.03', description: 'Korean ETF list with NAV, price, 3-month returns (1,070+ ETFs).' },
-      ],
-      global_markets: [
-        { id: 'crossfin_global_indices_chart', endpoint: '/api/premium/market/global/indices-chart?index=.DJI', price: '$0.02', description: 'Global index chart — Dow (.DJI), NASDAQ (.IXIC), Hang Seng (.HSI), Nikkei (.N225).' },
-      ],
       bundle_apis: [
-        { id: 'crossfin_morning_brief', endpoint: '/api/premium/morning/brief', price: '$0.20', description: 'Morning Brief — route spread + FX + KOSPI/KOSDAQ + stock momentum + headlines in one call. Best value for daily market overview.' },
+        { id: 'crossfin_morning_brief', endpoint: '/api/premium/morning/brief', price: '$0.20', description: 'Morning Brief — route spread + FX rate + headlines in one call. Best value for daily market overview.' },
         { id: 'crossfin_crypto_snapshot', endpoint: '/api/premium/crypto/snapshot', price: '$0.15', description: 'Crypto Snapshot — 4-exchange BTC prices + route spread + Bithumb volume + FX rate in one call.' },
         { id: 'crossfin_kimchi_stats', endpoint: '/api/premium/kimchi/stats', price: '$0.15', description: 'Route Spread Stats — current spreads + 24h trend + arbitrage signal + cross-exchange spread in one call.' },
-        { id: 'crossfin_stock_brief', endpoint: '/api/premium/market/korea/stock-brief?stock=005930', price: '$0.10', description: 'Stock Brief — fundamentals + news + investor flow + disclosures for any Korean stock in one call.' },
       ],
       routing_engine: [
         { id: 'crossfin_route_find', endpoint: '/api/premium/route/find?from=bithumb:KRW&to=binance:USDC&amount=1000000', price: '$0.10', description: 'Find optimal crypto transfer route across 9 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, Binance, OKX, Bybit). Compares 11 bridge coins, estimates fees and slippage. Bidirectional: regional fiat↔global.' },
@@ -1189,7 +1173,7 @@ app.get('/api/docs/guide', (c) => {
       {
         name: 'Daily Market Brief Agent',
         description: 'Agent that sends a daily summary of Korean markets to a Slack/Discord channel.',
-        flow: '1. Call /api/premium/morning/brief ($0.20) for full market overview. 2. Parse route spread, KOSPI, FX rate, headlines. 3. Format and post to channel.',
+        flow: '1. Call /api/premium/morning/brief ($0.20) for full market overview. 2. Parse route spread, FX rate, headlines. 3. Format and post to channel.',
         cost: '$0.20/day',
       },
       {
@@ -1197,12 +1181,6 @@ app.get('/api/docs/guide', (c) => {
         description: 'Agent that monitors route spread and alerts when arbitrage opportunity appears.',
         flow: '1. Poll /api/premium/arbitrage/opportunities ($0.10) every 15 minutes. 2. When indicator=POSITIVE_SPREAD, call /api/premium/route/find ($0.10) for optimal route. 3. Alert user with route details.',
         cost: '~$10/day (polling every 15m)',
-      },
-      {
-        name: 'Korean Stock Researcher',
-        description: 'Agent that researches a Korean stock for investment analysis.',
-        flow: '1. Call /api/premium/market/korea/stock-brief?stock=005930 ($0.10) for Samsung. 2. Get fundamentals, news, investor flow, disclosures in one call. 3. Combine with /api/premium/market/korea/themes ($0.05) for sector context.',
-        cost: '$0.15 per stock',
       },
       {
         name: 'Cross-Exchange Arbitrage Bot',
@@ -1367,11 +1345,8 @@ app.get('/.well-known/x402.json', (c) => {
       { resource: `${origin}/api/premium/market/fx/usdkrw`, method: 'GET', price: '$0.01', description: 'USD/KRW exchange rate' },
       { resource: `${origin}/api/premium/market/korea`, method: 'GET', price: '$0.03', description: 'Korean market sentiment overview' },
       { resource: `${origin}/api/premium/crypto/korea/5exchange`, method: 'GET', price: '$0.08', description: '4-exchange Korean crypto price comparison' },
-      { resource: `${origin}/api/premium/morning/brief`, method: 'GET', price: '$0.20', description: 'Morning Brief bundle: route spread + FX + KOSPI/KOSDAQ + headlines' },
+      { resource: `${origin}/api/premium/morning/brief`, method: 'GET', price: '$0.20', description: 'Morning Brief bundle: route spread + FX + headlines' },
       { resource: `${origin}/api/premium/crypto/snapshot`, method: 'GET', price: '$0.15', description: 'Crypto Snapshot: 4-exchange prices + route spread + volume + FX' },
-      { resource: `${origin}/api/premium/market/korea/indices`, method: 'GET', price: '$0.03', description: 'KOSPI & KOSDAQ real-time indices' },
-      { resource: `${origin}/api/premium/market/korea/investor-flow`, method: 'GET', price: '$0.05', description: 'Stock investor flow: foreign/institutional/individual' },
-      { resource: `${origin}/api/premium/market/korea/stocks/momentum`, method: 'GET', price: '$0.05', description: 'Top gainers/losers/market cap' },
     ],
     free: [
       { resource: `${origin}/api/arbitrage/demo`, method: 'GET', description: 'Free route spread preview (top 3 pairs)' },
@@ -2242,34 +2217,6 @@ app.get('/api/openapi.json', (c) => {
               },
             },
             '402': { description: 'Payment required — $0.15 USDC on Base mainnet' },
-          },
-        },
-      },
-      '/api/premium/market/korea/stock-brief': {
-        get: {
-          operationId: 'stockBrief',
-          summary: 'Stock Brief bundle — $0.10 USDC',
-          description: 'One-call comprehensive Korean stock analysis combining stock detail (PER/PBR/consensus/peers), recent news, investor flow (foreign/institutional/individual), and disclosure filings. Payment: $0.10 USDC on Base via x402.',
-          tags: ['Paid — x402'],
-          parameters: [
-            { name: 'stock', in: 'query', required: true, description: 'Korean stock code (6-digit number, e.g., 005930 for Samsung Electronics)', schema: { type: 'string', default: '005930' } },
-          ],
-          responses: {
-            '200': {
-              description: 'Stock brief bundle response',
-              content: { 'application/json': { schema: { type: 'object', properties: {
-                paid: { type: 'boolean' },
-                service: { type: 'string' },
-                stock: { type: 'string' },
-                name: { type: ['string', 'null'] },
-                detail: { type: ['object', 'null'] },
-                news: { type: 'array', items: { type: 'object' } },
-                investorFlow: { type: ['object', 'null'] },
-                disclosures: { type: 'array', items: { type: 'object' } },
-                at: { type: 'string', format: 'date-time' },
-              }, required: ['paid', 'service', 'stock', 'detail', 'news', 'investorFlow', 'disclosures', 'at'] } } },
-            },
-            '402': { description: 'Payment required — $0.10 USDC on Base mainnet' },
           },
         },
       },
@@ -6893,194 +6840,6 @@ app.get('/api/premium/market/coinone/ticker', async (c) => {
   })
 })
 
-// ── Naver Finance cache helper ─────────────────────────────────────────
-const naverCache = new Map<string, { data: unknown; expiresAt: number }>()
-async function fetchNaverCached(url: string, ttlMs = 60_000): Promise<unknown> {
-  const now = Date.now()
-  const cached = naverCache.get(url)
-  if (cached && now < cached.expiresAt) return cached.data
-  const res = await fetchWithTimeout(url, { headers: { 'User-Agent': CROSSFIN_UA } }, 5000)
-  if (!res.ok) throw new HTTPException(502, { message: 'Naver API unavailable' })
-  const data: unknown = await res.json()
-  naverCache.set(url, { data, expiresAt: now + ttlMs })
-  return data
-}
-
-// ── KOSPI / KOSDAQ Korean Stock Market Index ──────────────────────────
-app.get('/api/premium/market/korea/indices', async (c) => {
-  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
-  const [kospiRawValue, kosdaqRawValue] = await Promise.all([
-    fetchNaverCached('https://m.stock.naver.com/api/index/KOSPI/basic'),
-    fetchNaverCached('https://m.stock.naver.com/api/index/KOSDAQ/basic'),
-  ])
-
-  const parseIndex = (raw: unknown) => {
-    const record = isRecord(raw) ? raw : {}
-    const directionValue = isRecord(record.compareToPreviousPrice) ? record.compareToPreviousPrice.name : null
-    return {
-      name: toStringValue(record.stockName, toStringValue(record.itemCode, 'UNKNOWN')),
-      code: toStringValue(record.itemCode),
-      price: toNumberValue(record.closePrice),
-      change: toNumberValue(record.compareToPreviousClosePrice),
-      changePct: toNumberValue(record.fluctuationsRatio),
-      direction: toStringValue(directionValue, 'UNCHANGED'),
-      marketStatus: toStringValue(record.marketStatus, 'UNKNOWN'),
-      tradedAt: toStringValue(record.localTradedAt) || null,
-    }
-  }
-
-  return c.json({
-    paid: true,
-    service: 'crossfin-korea-indices',
-    kospi: parseIndex(kospiRawValue),
-    kosdaq: parseIndex(kosdaqRawValue),
-    source: 'naver-finance',
-    _disclaimer: CROSSFIN_DISCLAIMER,
-    at: new Date().toISOString(),
-  })
-})
-
-app.get('/api/premium/market/korea/indices/history', async (c) => {
-  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
-  const days = Math.min(60, Math.max(1, Number(c.req.query('days') ?? '20')))
-  const index = (c.req.query('index') ?? 'KOSPI').toUpperCase()
-  if (index !== 'KOSPI' && index !== 'KOSDAQ') {
-    throw new HTTPException(400, { message: 'index must be KOSPI or KOSDAQ' })
-  }
-
-  const rawData = toRecordArray(await fetchNaverCached(`https://m.stock.naver.com/api/index/${index}/price?pageSize=${days}`) as unknown)
-
-  const history = rawData.map((item) => {
-    const directionValue = isRecord(item.compareToPreviousPrice) ? item.compareToPreviousPrice.name : null
-    return {
-      date: toStringValue(item.localTradedAt),
-      open: toNumberValue(item.openPrice),
-      high: toNumberValue(item.highPrice),
-      low: toNumberValue(item.lowPrice),
-      close: toNumberValue(item.closePrice),
-      change: toNumberValue(item.compareToPreviousClosePrice),
-      changePct: toNumberValue(item.fluctuationsRatio),
-      direction: toStringValue(directionValue, 'UNCHANGED'),
-    }
-  })
-
-  return c.json({
-    paid: true,
-    service: 'crossfin-korea-indices-history',
-    index,
-    days: history.length,
-    history,
-    source: 'naver-finance',
-    _disclaimer: CROSSFIN_DISCLAIMER,
-    at: new Date().toISOString(),
-  })
-})
-
-app.get('/api/premium/market/korea/stocks/momentum', async (c) => {
-  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
-  const market = (c.req.query('market') ?? 'KOSPI').toUpperCase()
-  if (market !== 'KOSPI' && market !== 'KOSDAQ') {
-    throw new HTTPException(400, { message: 'market must be KOSPI or KOSDAQ' })
-  }
-
-  const baseUrl = 'https://m.stock.naver.com/api/stocks'
-  const [capDataRaw, upDataRaw, downDataRaw] = await Promise.all([
-    fetchNaverCached(`${baseUrl}/marketValue/${market}?page=1&pageSize=10`),
-    fetchNaverCached(`${baseUrl}/up/${market}?page=1&pageSize=5`),
-    fetchNaverCached(`${baseUrl}/down/${market}?page=1&pageSize=5`),
-  ])
-
-  const capData = isRecord(capDataRaw) ? capDataRaw : {}
-  const upData = isRecord(upDataRaw) ? upDataRaw : {}
-  const downData = isRecord(downDataRaw) ? downDataRaw : {}
-
-  const parseStock = (s: Record<string, unknown>) => {
-    const directionValue = isRecord(s.compareToPreviousPrice) ? s.compareToPreviousPrice.name : null
-    return {
-      code: toStringValue(s.itemCode),
-      name: toStringValue(s.stockName),
-      price: toNumberValue(s.closePrice),
-      change: toNumberValue(s.compareToPreviousClosePrice),
-      changePct: toNumberValue(s.fluctuationsRatio),
-      direction: toStringValue(directionValue, 'UNCHANGED'),
-      volume: toNumberValue(s.accumulatedTradingVolume),
-      marketCap: toStringValue(s.marketValueHangeul) || null,
-    }
-  }
-
-  return c.json({
-    paid: true,
-    service: 'crossfin-korea-stocks-momentum',
-    market,
-    topMarketCap: toRecordArray(capData.stocks).map(parseStock),
-    topGainers: toRecordArray(upData.stocks).map(parseStock),
-    topLosers: toRecordArray(downData.stocks).map(parseStock),
-    source: 'naver-finance',
-    _disclaimer: CROSSFIN_DISCLAIMER,
-    at: new Date().toISOString(),
-  })
-})
-
-app.get('/api/premium/market/korea/investor-flow', async (c) => {
-  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
-  const stock = (c.req.query('stock') ?? '005930').trim()
-  if (!/^\d{6}$/.test(stock)) throw new HTTPException(400, { message: 'stock must be 6-digit code (e.g., 005930)' })
-
-  const rawData = toRecordArray(await fetchNaverCached(`https://m.stock.naver.com/api/stock/${stock}/trend`) as unknown)
-
-  const flow = rawData.map((d) => {
-    const directionValue = isRecord(d.compareToPreviousPrice) ? d.compareToPreviousPrice.name : null
-    return {
-      date: toStringValue(d.bizdate),
-      foreignNetBuy: d.foreignerPureBuyQuant ?? null,
-      foreignHoldRatio: d.foreignerHoldRatio ?? null,
-      institutionNetBuy: d.organPureBuyQuant ?? null,
-      individualNetBuy: d.individualPureBuyQuant ?? null,
-      closePrice: d.closePrice ?? null,
-      direction: toStringValue(directionValue, 'UNCHANGED'),
-      volume: d.accumulatedTradingVolume ?? null,
-    }
-  })
-
-  return c.json({
-    paid: true,
-    service: 'crossfin-korea-investor-flow',
-    stock,
-    days: flow.length,
-    flow,
-    source: 'naver-finance',
-    _disclaimer: CROSSFIN_DISCLAIMER,
-    at: new Date().toISOString(),
-  })
-})
-
-app.get('/api/premium/market/korea/index-flow', async (c) => {
-  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
-  const index = (c.req.query('index') ?? 'KOSPI').toUpperCase()
-  if (index !== 'KOSPI' && index !== 'KOSDAQ' && index !== 'KPI200') {
-    throw new HTTPException(400, { message: 'index must be KOSPI, KOSDAQ, or KPI200' })
-  }
-
-  const rawValue = await fetchNaverCached(`https://m.stock.naver.com/api/index/${index}/trend`)
-  if (!isRecord(rawValue)) {
-    throw new HTTPException(502, { message: 'Invalid index investor flow payload' })
-  }
-  const raw = rawValue
-
-  return c.json({
-    paid: true,
-    service: 'crossfin-korea-index-flow',
-    index,
-    date: toStringValue(raw.bizdate),
-    foreignNetBuyBillionKrw: raw.foreignValue ?? null,
-    institutionNetBuyBillionKrw: raw.institutionalValue ?? null,
-    individualNetBuyBillionKrw: raw.personalValue ?? null,
-    source: 'naver-finance',
-    _disclaimer: CROSSFIN_DISCLAIMER,
-    at: new Date().toISOString(),
-  })
-})
-
 app.get('/api/premium/crypto/korea/5exchange', async (c) => {
   const coin = (c.req.query('coin') ?? 'BTC').toUpperCase()
 
@@ -7220,286 +6979,6 @@ app.get('/api/premium/crypto/korea/exchange-status', async (c) => {
   })
 })
 
-app.get('/api/premium/market/korea/stock-detail', async (c) => {
-  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
-  const stock = (c.req.query('stock') ?? '005930').trim()
-  if (!/^\d{6}$/.test(stock)) throw new HTTPException(400, { message: 'stock must be 6-digit code' })
-
-  const raw: unknown = await fetchNaverCached(`https://m.stock.naver.com/api/stock/${stock}/integration`)
-  const rd = isRecord(raw) ? raw : {}
-
-  const infos: Record<string, string> = {}
-  for (const item of (Array.isArray(rd.totalInfos) ? rd.totalInfos : [])) {
-    const it = isRecord(item) ? item : {}
-    if (typeof it.key === 'string') infos[it.key] = String(it.value ?? '')
-  }
-
-  const consensus = isRecord(rd.consensusInfo) ? rd.consensusInfo : null
-  const industryPeers = (Array.isArray(rd.industryCompareInfo) ? rd.industryCompareInfo : []).map((s: unknown) => {
-    const sr = isRecord(s) ? s : {}
-    return {
-      code: sr.itemCode,
-      name: sr.stockName,
-      price: sr.closePrice,
-      changePct: sr.fluctuationsRatio,
-      direction: (isRecord(sr.compareToPreviousPrice) ? sr.compareToPreviousPrice.name : null) ?? 'UNCHANGED',
-    }
-  })
-
-  return c.json({
-    paid: true,
-    service: 'crossfin-korea-stock-detail',
-    stock,
-    name: rd.stockName,
-    metrics: infos,
-    consensus: consensus ? {
-      targetPrice: consensus.priceTargetMean,
-      recommendation: consensus.recommMean,
-      date: consensus.createDate,
-    } : null,
-    industryPeers,
-    source: 'naver-finance',
-    _disclaimer: CROSSFIN_DISCLAIMER,
-    at: new Date().toISOString(),
-  })
-})
-
-app.get('/api/premium/market/korea/stock-news', async (c) => {
-  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
-  const stock = (c.req.query('stock') ?? '005930').trim()
-  const page = Math.max(1, Number(c.req.query('page') ?? '1') || 1)
-  const pageSize = Math.min(20, Math.max(1, Number(c.req.query('pageSize') ?? '10') || 10))
-  if (!/^\d{6}$/.test(stock)) throw new HTTPException(400, { message: 'stock must be 6-digit code' })
-
-  const rawArr: unknown = await fetchNaverCached(`https://m.stock.naver.com/api/news/stock/${stock}?page=${page}&pageSize=${pageSize}`)
-  const first = Array.isArray(rawArr) && rawArr.length > 0 ? rawArr[0] : null
-  const raw = isRecord(first) ? first : { total: 0, items: [] }
-
-  return c.json({
-    paid: true,
-    service: 'crossfin-korea-stock-news',
-    stock,
-    total: raw.total ?? 0,
-    items: (Array.isArray(raw.items) ? raw.items : []).map((i: unknown) => {
-      const it = isRecord(i) ? i : {}
-      return { id: it.id, title: it.title, body: it.body, publisher: it.officeName, datetime: it.datetime }
-    }),
-    source: 'naver-finance',
-    _disclaimer: CROSSFIN_DISCLAIMER,
-    at: new Date().toISOString(),
-  })
-})
-
-app.get('/api/premium/market/korea/themes', async (c) => {
-  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
-  const page = Math.max(1, Number(c.req.query('page') ?? '1') || 1)
-  const pageSize = Math.min(50, Math.max(1, Number(c.req.query('pageSize') ?? '20') || 20))
-
-  const rawThemes: unknown = await fetchNaverCached(`https://m.stock.naver.com/api/stocks/theme?page=${page}&pageSize=${pageSize}`, 300_000)
-  const rtd = isRecord(rawThemes) ? rawThemes : {}
-
-  return c.json({
-    paid: true,
-    service: 'crossfin-korea-themes',
-    themes: (Array.isArray(rtd.groups) ? rtd.groups : []).map((g: unknown) => {
-      const gr = isRecord(g) ? g : {}
-      return {
-        no: gr.no,
-        name: gr.name,
-        totalCount: gr.totalCount,
-        changeRate: gr.changeRate,
-        riseCount: gr.riseCount,
-        fallCount: gr.fallCount,
-      }
-    }),
-    source: 'naver-finance',
-    _disclaimer: CROSSFIN_DISCLAIMER,
-    at: new Date().toISOString(),
-  })
-})
-
-app.get('/api/premium/market/korea/disclosure', async (c) => {
-  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
-  const stock = (c.req.query('stock') ?? '005930').trim()
-  const page = Math.max(1, Number(c.req.query('page') ?? '1') || 1)
-  const pageSize = Math.min(20, Math.max(1, Number(c.req.query('pageSize') ?? '10') || 10))
-  if (!/^\d{6}$/.test(stock)) throw new HTTPException(400, { message: 'stock must be 6-digit code' })
-
-  const raw = toRecordArray(await fetchNaverCached(`https://m.stock.naver.com/api/stock/${stock}/disclosure?page=${page}&pageSize=${pageSize}`) as unknown)
-
-  return c.json({
-    paid: true,
-    service: 'crossfin-korea-disclosure',
-    stock,
-    items: raw.map((d) => ({
-      title: toStringValue(d.title),
-      datetime: toStringValue(d.datetime),
-    })),
-    source: 'naver-finance',
-    _disclaimer: CROSSFIN_DISCLAIMER,
-    at: new Date().toISOString(),
-  })
-})
-
-app.get('/api/premium/market/korea/stock-brief', async (c) => {
-  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
-  const stock = (c.req.query('stock') ?? '').trim()
-  if (!stock) throw new HTTPException(400, { message: 'stock is required' })
-  if (!/^\d{6}$/.test(stock)) throw new HTTPException(400, { message: 'stock must be 6-digit code (e.g., 005930)' })
-
-  const at = new Date().toISOString()
-
-  const detailTask = (async () => {
-    const raw: unknown = await fetchNaverCached(`https://m.stock.naver.com/api/stock/${stock}/integration`)
-    if (!isRecord(raw)) throw new Error('Stock detail invalid response')
-
-    const infos: Record<string, string> = {}
-    const totalInfos = Array.isArray(raw.totalInfos) ? raw.totalInfos : []
-    for (const item of totalInfos) {
-      if (!isRecord(item)) continue
-      const key = typeof item.key === 'string' ? item.key : String(item.key ?? '')
-      const value = typeof item.value === 'string' ? item.value : String(item.value ?? '')
-      if (!key) continue
-      infos[key] = value
-    }
-
-    const consensus = isRecord(raw.consensusInfo) ? raw.consensusInfo : null
-
-    const industryRaw = Array.isArray(raw.industryCompareInfo) ? raw.industryCompareInfo : []
-    const industryPeers = industryRaw
-      .map((s): { code: string; name: string; price: unknown; changePct: unknown; direction: string } | null => {
-        if (!isRecord(s)) return null
-        const direction = isRecord(s.compareToPreviousPrice) && typeof s.compareToPreviousPrice.name === 'string'
-          ? s.compareToPreviousPrice.name
-          : 'UNCHANGED'
-
-        return {
-          code: typeof s.itemCode === 'string' ? s.itemCode : String(s.itemCode ?? ''),
-          name: typeof s.stockName === 'string' ? s.stockName : String(s.stockName ?? ''),
-          price: s.closePrice,
-          changePct: s.fluctuationsRatio,
-          direction,
-        }
-      })
-      .filter((v): v is { code: string; name: string; price: unknown; changePct: unknown; direction: string } => v !== null)
-
-    return {
-      stock,
-      name: typeof raw.stockName === 'string' ? raw.stockName : String(raw.stockName ?? ''),
-      metrics: infos,
-      consensus: consensus ? {
-        targetPrice: typeof consensus.priceTargetMean === 'string' ? consensus.priceTargetMean : String(consensus.priceTargetMean ?? ''),
-        recommendation: typeof consensus.recommMean === 'string' ? consensus.recommMean : String(consensus.recommMean ?? ''),
-        date: typeof consensus.createDate === 'string' ? consensus.createDate : String(consensus.createDate ?? ''),
-      } : null,
-      industryPeers,
-      source: 'naver-finance',
-    }
-  })()
-
-  const newsTask = (async () => {
-    const page = 1
-    const pageSize = 5
-    const rawArr: unknown = await fetchNaverCached(`https://m.stock.naver.com/api/news/stock/${stock}?page=${page}&pageSize=${pageSize}`)
-    const raw0 = Array.isArray(rawArr) && rawArr.length > 0 ? rawArr[0] : null
-    const raw = isRecord(raw0) ? raw0 : { items: [] as unknown[] }
-    const itemsRaw = Array.isArray(raw.items) ? raw.items : []
-
-    return itemsRaw.map((i) => {
-      if (!isRecord(i)) return { id: null, title: '', body: '', publisher: null, datetime: '' }
-      return {
-        id: typeof i.id === 'number' ? i.id : typeof i.id === 'string' ? Number(i.id) : null,
-        title: typeof i.title === 'string' ? i.title : String(i.title ?? ''),
-        body: typeof i.body === 'string' ? i.body : String(i.body ?? ''),
-        publisher: typeof i.officeName === 'string' ? i.officeName : null,
-        datetime: typeof i.datetime === 'string' ? i.datetime : String(i.datetime ?? ''),
-      }
-    }).slice(0, 5)
-  })()
-
-  const investorFlowTask = (async () => {
-    const rawData: unknown = await fetchNaverCached(`https://m.stock.naver.com/api/stock/${stock}/trend`)
-    const rows = Array.isArray(rawData) ? rawData : []
-
-    const flow = rows.map((d) => {
-      if (!isRecord(d)) {
-        return {
-          date: '',
-          foreignNetBuy: null,
-          foreignHoldRatio: null,
-          institutionNetBuy: null,
-          individualNetBuy: null,
-          closePrice: null,
-          direction: 'UNCHANGED',
-          volume: null,
-        }
-      }
-
-      const direction = isRecord(d.compareToPreviousPrice) && typeof d.compareToPreviousPrice.name === 'string'
-        ? d.compareToPreviousPrice.name
-        : 'UNCHANGED'
-
-      return {
-        date: typeof d.bizdate === 'string' ? d.bizdate : String(d.bizdate ?? ''),
-        foreignNetBuy: d.foreignerPureBuyQuant ?? null,
-        foreignHoldRatio: d.foreignerHoldRatio ?? null,
-        institutionNetBuy: d.organPureBuyQuant ?? null,
-        individualNetBuy: d.individualPureBuyQuant ?? null,
-        closePrice: d.closePrice ?? null,
-        direction,
-        volume: d.accumulatedTradingVolume ?? null,
-      }
-    })
-
-    return {
-      stock,
-      days: flow.length,
-      flow,
-      source: 'naver-finance',
-    }
-  })()
-
-  const disclosureTask = (async () => {
-    const page = 1
-    const pageSize = 5
-    const raw: unknown = await fetchNaverCached(`https://m.stock.naver.com/api/stock/${stock}/disclosure?page=${page}&pageSize=${pageSize}`)
-    const itemsRaw = Array.isArray(raw) ? raw : []
-
-    return itemsRaw.map((d) => {
-      if (!isRecord(d)) return { title: '', datetime: '' }
-      return {
-        title: typeof d.title === 'string' ? d.title : String(d.title ?? ''),
-        datetime: typeof d.datetime === 'string' ? d.datetime : String(d.datetime ?? ''),
-      }
-    }).slice(0, 5)
-  })()
-
-  const [detailSet, newsSet, investorFlowSet, disclosureSet] = await Promise.allSettled([
-    detailTask,
-    newsTask,
-    investorFlowTask,
-    disclosureTask,
-  ] as const)
-
-  const detail = detailSet.status === 'fulfilled' ? detailSet.value : null
-  const news = newsSet.status === 'fulfilled' ? newsSet.value : []
-  const investorFlow = investorFlowSet.status === 'fulfilled' ? investorFlowSet.value : null
-  const disclosures = disclosureSet.status === 'fulfilled' ? disclosureSet.value : []
-
-  return c.json({
-    paid: true,
-    service: 'crossfin-stock-brief',
-    stock,
-    name: detail?.name ?? null,
-    detail,
-    news,
-    investorFlow,
-    disclosures,
-    _disclaimer: CROSSFIN_DISCLAIMER,
-    at,
-  })
-})
-
 app.get('/api/premium/crypto/korea/fx-rate', async (c) => {
   const res = await fetchWithTimeout('https://crix-api-cdn.upbit.com/v1/forex/recent?codes=FRX.KRWUSD')
   if (!res.ok) throw new HTTPException(502, { message: 'FX rate data unavailable' })
@@ -7525,54 +7004,6 @@ app.get('/api/premium/crypto/korea/fx-rate', async (c) => {
     high52w: toNumberValue(quote.high52wPrice),
     low52w: toNumberValue(quote.low52wPrice),
     source: 'upbit-crix',
-    _disclaimer: CROSSFIN_DISCLAIMER,
-    at: new Date().toISOString(),
-  })
-})
-
-app.get('/api/premium/market/korea/etf', async (c) => {
-  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
-  const etfCacheKey = 'naver-etf-list'
-  const now = Date.now()
-  const etfCached = naverCache.get(etfCacheKey)
-  let rawParsed: unknown
-  if (etfCached && now < etfCached.expiresAt) {
-    rawParsed = etfCached.data
-  } else {
-    const res = await fetchWithTimeout('https://finance.naver.com/api/sise/etfItemList.nhn', { headers: { 'User-Agent': CROSSFIN_UA } }, 5000)
-    if (!res.ok) throw new HTTPException(502, { message: 'ETF data unavailable' })
-    const buf = await res.arrayBuffer()
-    const text = new TextDecoder('euc-kr').decode(buf)
-    try {
-      rawParsed = JSON.parse(text) as unknown
-    } catch {
-      throw new HTTPException(502, { message: 'ETF payload parse failed' })
-    }
-    naverCache.set(etfCacheKey, { data: rawParsed, expiresAt: now + 300_000 })
-  }
-
-  if (!isRecord(rawParsed) || !isRecord(rawParsed.result)) {
-    throw new HTTPException(502, { message: 'ETF payload invalid' })
-  }
-
-  const etfItemList = toRecordArray(rawParsed.result.etfItemList)
-
-  return c.json({
-    paid: true,
-    service: 'crossfin-korea-etf',
-    totalCount: etfItemList.length,
-    items: etfItemList.slice(0, 50).map((e) => ({
-      name: toStringValue(e.itemname),
-      code: toStringValue(e.itemcode),
-      price: toNumberValue(e.nowVal),
-      changeVal: toNumberValue(e.changeVal),
-      changeRate: toNumberValue(e.changeRate),
-      nav: toNumberValue(e.nav),
-      volume: toNumberValue(e.quant),
-      threeMonthReturn: toNumberValue(e.threeMonthEarnRate),
-      marketCap: toNumberValue(e.marketSum),
-    })),
-    source: 'naver-finance',
     _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
@@ -7607,43 +7038,6 @@ app.get('/api/premium/crypto/korea/upbit-candles', async (c) => {
       tradeAmount: toNumberValue(r.candle_acc_trade_price),
     })),
     source: 'upbit',
-    _disclaimer: CROSSFIN_DISCLAIMER,
-    at: new Date().toISOString(),
-  })
-})
-
-app.get('/api/premium/market/global/indices-chart', async (c) => {
-  if (c.req.path.length >= 0) return c.json({ error: 'Korean stock data temporarily unavailable', message: 'This endpoint is being migrated to an official data source (KRX). Check back soon.', migration: 'KRX (data.krx.co.kr)' }, 503)
-  const index = (c.req.query('index') ?? '.DJI').trim()
-  const period = (c.req.query('period') ?? 'month').trim()
-
-  if (!['month'].includes(period)) throw new HTTPException(400, { message: 'period must be: month' })
-
-  const rawValue = await fetchNaverCached(`https://api.stock.naver.com/chart/foreign/index/${encodeURIComponent(index)}/${period}`, 300_000)
-
-  if (Array.isArray(rawValue) && rawValue.length === 0) {
-    throw new HTTPException(404, { message: `No data for index ${index}. Available: .DJI, .IXIC, .HSI, .N225` })
-  }
-  if (!Array.isArray(rawValue)) {
-    throw new HTTPException(502, { message: 'Global index chart payload invalid' })
-  }
-  const data = toRecordArray(rawValue)
-
-  return c.json({
-    paid: true,
-    service: 'crossfin-global-indices-chart',
-    index,
-    period,
-    count: data.length,
-    candles: data.map((r) => ({
-      date: toStringValue(r.localDate),
-      open: toNumberValue(r.openPrice),
-      high: toNumberValue(r.highPrice),
-      low: toNumberValue(r.lowPrice),
-      close: toNumberValue(r.closePrice),
-      volume: toNumberValue(r.accumulatedTradingVolume),
-    })),
-    source: 'naver-finance',
     _disclaimer: CROSSFIN_DISCLAIMER,
     at: new Date().toISOString(),
   })
@@ -8130,45 +7524,6 @@ app.get('/api/premium/morning/brief', async (c) => {
     }
   })()
 
-  const indicesTask = (async () => {
-    const [kospiRaw, kosdaqRaw] = await Promise.all([
-      Promise.resolve(null),
-      Promise.resolve(null),
-    ])
-
-    const parseIndex = (raw: unknown) => {
-      if (!isRecord(raw)) {
-        return { price: 0, changePct: 0, volume: 0, status: 'UNKNOWN' }
-      }
-
-      const price = parseFloat(String(raw.closePrice ?? '0').replace(/,/g, ''))
-      const changePct = parseFloat(String(raw.fluctuationsRatio ?? '0').replace(/,/g, ''))
-      const volume = parseFloat(String(raw.accumulatedTradingVolume ?? raw.accumulatedTradingPrice ?? '0').replace(/,/g, ''))
-      const status = typeof raw.marketStatus === 'string' ? raw.marketStatus : 'UNKNOWN'
-
-      return {
-        price: Number.isFinite(price) ? price : 0,
-        changePct: Number.isFinite(changePct) ? changePct : 0,
-        volume: Number.isFinite(volume) ? volume : 0,
-        status,
-      }
-    }
-
-    return {
-      kospi: parseIndex(kospiRaw),
-      kosdaq: parseIndex(kosdaqRaw),
-    }
-  })()
-
-  const momentumTask = (async () => {
-    await Promise.all([
-      Promise.resolve(null),
-      Promise.resolve(null),
-      Promise.resolve(null),
-    ])
-    return null
-  })()
-
   const headlinesTask = (async () => {
     const feedUrl = 'https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko'
     const res = await fetchWithTimeout(feedUrl, { headers: { 'User-Agent': 'crossfin-news/1.0' } })
@@ -8194,12 +7549,10 @@ app.get('/api/premium/morning/brief', async (c) => {
     return items
   })()
 
-  const [fxSet, priceSet, kimchiSet, indicesSet, momentumSet, headlinesSet] = await Promise.allSettled([
+  const [fxSet, priceSet, kimchiSet, headlinesSet] = await Promise.allSettled([
     fxMetaPromise,
     priceMetaPromise,
     kimchiTask,
-    indicesTask,
-    momentumTask,
     headlinesTask,
   ] as const)
 
@@ -8211,10 +7564,6 @@ app.get('/api/premium/morning/brief', async (c) => {
     ? kimchiSet.value
     : { avgPremiumPct: 0, topPair: '', pairsTracked: 0, premiums: [] as KimchiPremiumRow[] }
 
-  const indices = indicesSet.status === 'fulfilled' ? null : null
-
-  const momentum = momentumSet.status === 'fulfilled' ? null : null
-
   const headlines = headlinesSet.status === 'fulfilled' ? headlinesSet.value : []
 
   return c.json({
@@ -8225,9 +7574,6 @@ app.get('/api/premium/morning/brief', async (c) => {
       usdKrw: round2(usdKrw),
       source: fxMeta ? fxMeta.source : 'fallback',
     },
-    indices,
-    momentum,
-    notice: 'Korean stock indices and momentum data temporarily unavailable — migrating to KRX official data source',
     headlines,
     _dataMeta: buildDataMeta(priceMeta ?? undefined, fxMeta ?? undefined),
     _disclaimer: CROSSFIN_DISCLAIMER,

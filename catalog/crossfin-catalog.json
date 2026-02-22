@@ -1,5 +1,5 @@
 {
-  "apiVersion": "1.12.1",
+  "apiVersion": "1.13.0",
   "mcpTools": [
     "search_services",
     "list_services",
@@ -300,84 +300,6 @@
       "playgroundLabel": "Cross-Exchange Decision"
     },
     {
-      "id": "crossfin_korea_indices",
-      "name": "CrossFin Korea Indices",
-      "description": "Real-time KOSPI/KOSDAQ index snapshots from Korean market data.",
-      "category": "korea-stocks",
-      "path": "/api/premium/market/korea/indices",
-      "price": "$0.03",
-      "tags": [
-        "korea",
-        "stocks",
-        "indices",
-        "kospi",
-        "kosdaq"
-      ],
-      "playgroundLabel": "Korea Indices"
-    },
-    {
-      "id": "crossfin_korea_indices_history",
-      "name": "CrossFin Korea Indices History",
-      "description": "Historical daily OHLC index history for KOSPI/KOSDAQ.",
-      "category": "korea-stocks",
-      "path": "/api/premium/market/korea/indices/history",
-      "sampleQuery": "index=KOSPI&days=20",
-      "price": "$0.05",
-      "tags": [
-        "korea",
-        "stocks",
-        "indices",
-        "history"
-      ],
-      "playgroundLabel": "Korea Indices History"
-    },
-    {
-      "id": "crossfin_korea_stocks_momentum",
-      "name": "CrossFin Korea Stocks Momentum",
-      "description": "Top Korean market-cap names plus daily gainers/losers momentum view.",
-      "category": "korea-stocks",
-      "path": "/api/premium/market/korea/stocks/momentum",
-      "sampleQuery": "market=KOSPI",
-      "price": "$0.05",
-      "tags": [
-        "korea",
-        "stocks",
-        "momentum",
-        "leaders"
-      ],
-      "playgroundLabel": "Korea Stocks Momentum"
-    },
-    {
-      "id": "crossfin_korea_investor_flow",
-      "name": "CrossFin Korea Investor Flow",
-      "description": "Foreign/institutional/individual net buying flow for a Korean stock.",
-      "category": "korea-stocks",
-      "path": "/api/premium/market/korea/investor-flow",
-      "sampleQuery": "stock=005930",
-      "price": "$0.05",
-      "tags": [
-        "korea",
-        "stocks",
-        "investor-flow"
-      ],
-      "playgroundLabel": "Korea Investor Flow"
-    },
-    {
-      "id": "crossfin_korea_index_flow",
-      "name": "CrossFin Korea Index Flow",
-      "description": "Index-level investor flow (KOSPI/KOSDAQ/KPI200).",
-      "category": "korea-stocks",
-      "path": "/api/premium/market/korea/index-flow",
-      "sampleQuery": "index=KOSPI",
-      "price": "$0.03",
-      "tags": [
-        "korea",
-        "stocks",
-        "index-flow"
-      ],
-      "playgroundLabel": "Korea Index Flow"
-    },
-    {
       "id": "crossfin_crypto_korea_5exchange",
       "name": "CrossFin Korea 5-Exchange Price Compare",
       "description": "Compare coin prices across Upbit, Bithumb, Coinone, and GoPax.",
@@ -409,68 +331,6 @@
       "playgroundLabel": "Korea Exchange Status"
     },
     {
-      "id": "crossfin_korea_stock_detail",
-      "name": "CrossFin Korea Stock Detail",
-      "description": "Detailed valuation/fundamentals and peer context for a Korean stock.",
-      "category": "korea-stocks",
-      "path": "/api/premium/market/korea/stock-detail",
-      "sampleQuery": "stock=005930",
-      "price": "$0.05",
-      "tags": [
-        "korea",
-        "stocks",
-        "fundamentals",
-        "valuation"
-      ],
-      "playgroundLabel": "Korea Stock Detail"
-    },
-    {
-      "id": "crossfin_korea_stock_news",
-      "name": "CrossFin Korea Stock News",
-      "description": "Stock-specific Korean news feed with article metadata.",
-      "category": "korea-stocks",
-      "path": "/api/premium/market/korea/stock-news",
-      "sampleQuery": "stock=005930",
-      "price": "$0.03",
-      "tags": [
-        "korea",
-        "stocks",
-        "news"
-      ],
-      "playgroundLabel": "Korea Stock News"
-    },
-    {
-      "id": "crossfin_korea_themes",
-      "name": "CrossFin Korea Market Themes",
-      "description": "Korean stock themes and sector grouping performance.",
-      "category": "korea-stocks",
-      "path": "/api/premium/market/korea/themes",
-      "price": "$0.05",
-      "tags": [
-        "korea",
-        "stocks",
-        "themes",
-        "sector"
-      ],
-      "playgroundLabel": "Korea Themes"
-    },
-    {
-      "id": "crossfin_korea_disclosure",
-      "name": "CrossFin Korea Disclosure Feed",
-      "description": "Recent regulatory disclosures for Korean listed companies.",
-      "category": "korea-stocks",
-      "path": "/api/premium/market/korea/disclosure",
-      "sampleQuery": "stock=005930",
-      "price": "$0.03",
-      "tags": [
-        "korea",
-        "stocks",
-        "disclosure",
-        "regulatory"
-      ],
-      "playgroundLabel": "Korea Disclosure"
-    },
-    {
       "id": "crossfin_crypto_korea_fx_rate",
       "name": "CrossFin Korea FX Rate (CRIX)",
       "description": "KRW/USD forex quote from Upbit CRIX feed.",
@@ -484,20 +344,6 @@
         "usd"
       ],
       "playgroundLabel": "Korea FX Rate (CRIX)"
-    },
-    {
-      "id": "crossfin_korea_etf",
-      "name": "CrossFin Korea ETF Universe",
-      "description": "Top Korean ETFs with NAV/returns and market cap.",
-      "category": "korea-stocks",
-      "path": "/api/premium/market/korea/etf",
-      "price": "$0.03",
-      "tags": [
-        "korea",
-        "stocks",
-        "etf"
-      ],
-      "playgroundLabel": "Korea ETF"
     },
     {
       "id": "crossfin_upbit_candles",
@@ -517,22 +363,6 @@
       "playgroundLabel": "Upbit Candles"
     },
     {
-      "id": "crossfin_global_indices_chart",
-      "name": "CrossFin Global Indices Chart",
-      "description": "Monthly OHLCV chart data for major global indices.",
-      "category": "global-markets",
-      "path": "/api/premium/market/global/indices-chart",
-      "sampleQuery": "index=.DJI&period=month",
-      "price": "$0.02",
-      "tags": [
-        "global",
-        "indices",
-        "ohlcv",
-        "markets"
-      ],
-      "playgroundLabel": "Global Indices Chart"
-    },
-    {
       "id": "crossfin_korea_headlines",
       "name": "CrossFin Korea Headlines (RSS)",
       "description": "Top headlines feed for Korean market context (Google News RSS).",
@@ -549,7 +379,7 @@
     {
       "id": "crossfin_morning_brief",
       "name": "CrossFin Morning Brief",
-      "description": "One-call daily market summary: route spread index, FX rate, KOSPI/KOSDAQ, stock momentum, headlines.",
+      "description": "One-call daily market summary: route spread index, FX rate, headlines.",
       "category": "korea-bundle",
       "path": "/api/premium/morning/brief",
       "price": "$0.20",
@@ -595,25 +425,6 @@
         "agent-ready"
       ],
       "playgroundLabel": "Route Spread Stats"
-    },
-    {
-      "id": "crossfin_stock_brief",
-      "name": "CrossFin Stock Brief",
-      "description": "One-call Korean stock analysis: fundamentals, news, investor flow, disclosures.",
-      "category": "korea-bundle",
-      "path": "/api/premium/market/korea/stock-brief",
-      "sampleQuery": "stock=005930",
-      "price": "$0.10",
-      "tags": [
-        "korea",
-        "stocks",
-        "bundle",
-        "fundamentals",
-        "news",
-        "investor-flow",
-        "agent-ready"
-      ],
-      "playgroundLabel": "Stock Brief"
     },
     {
       "id": "crossfin_route_find",
