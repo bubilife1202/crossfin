@@ -7,7 +7,6 @@ import { HTTPFacilitatorClient } from '@x402/core/server'
 import { bazaarResourceServerExtension, declareDiscoveryExtension } from '@x402/extensions/bazaar'
 import {
   CROSSFIN_API_VERSION,
-  CROSSFIN_MCP_TOOLS,
   CROSSFIN_PAID_ENDPOINTS,
   CROSSFIN_PAID_PRICING,
   withSampleQuery,
@@ -86,6 +85,9 @@ import adminRoutes from './routes/admin'
 import mcpRoutes from './routes/mcp'
 import a2aRoutes from './routes/a2a'
 import statusRoutes from './routes/status'
+import discoveryRoutes from './routes/discovery'
+import legalRoutes from './routes/legal'
+import { createDocsRoutes } from './routes/docs'
 import { createAnalyticsRoutes } from './routes/analytics'
 import {
   createRoutingRoutes,
@@ -1003,11 +1005,7 @@ app.onError((err, c) => {
   return c.json({ error: 'Internal server error', _disclaimer: CROSSFIN_DISCLAIMER, _legal: CROSSFIN_LEGAL }, 500)
 })
 
-app.get('/', (c) => c.json({ name: 'crossfin-api', version: CROSSFIN_API_VERSION, status: 'ok' }))
-app.get('/api/health', (c) => c.json({ name: 'crossfin-api', version: CROSSFIN_API_VERSION, status: 'ok' }))
-
-app.get('/api/docs/guide', (c) => {
-  return c.json({
+const getGuidePayload = () => ({
     name: 'CrossFin Agent Guide',
     version: CROSSFIN_API_VERSION,
     overview: {
@@ -1273,413 +1271,11 @@ app.get('/api/docs/guide', (c) => {
       github: 'https://github.com/bubilife1202/crossfin',
       openapi: 'https://crossfin.dev/api/openapi.json',
     },
-  })
-})
-
-app.get('/.well-known/crossfin.json', (c) => {
-  const origin = new URL(c.req.url).origin
-  return c.json({
-    name: 'CrossFin',
-    version: CROSSFIN_API_VERSION,
-    description: 'Agent-first directory and gateway for x402 services and Korean market data.',
-    urls: {
-      website: 'https://crossfin.dev',
-      origin,
-      openapi: `${origin}/api/openapi.json`,
-      guide: `${origin}/api/docs/guide`,
-      registry: `${origin}/api/registry`,
-      registrySearch: `${origin}/api/registry/search?q=`,
-    },
-    payment: {
-      protocol: 'x402',
-      network: 'eip155:8453',
-      currency: 'USDC',
-      note: 'Paid endpoints respond with HTTP 402 and a PAYMENT-REQUIRED header (base64 JSON).',
-    },
-    mcp: {
-      name: 'crossfin',
-      package: 'crossfin-mcp',
-      run: 'npx -y crossfin-mcp',
-      repo: 'https://github.com/bubilife1202/crossfin/tree/main/apps/mcp-server',
-      env: { CROSSFIN_API_URL: origin },
-      tools: CROSSFIN_MCP_TOOLS,
-    },
-    _disclaimer: CROSSFIN_DISCLAIMER,
-    updatedAt: new Date().toISOString(),
-  })
-})
-
-app.get('/.well-known/x402.json', (c) => {
-  const origin = new URL(c.req.url).origin
-  const payTo = c.env.PAYMENT_RECEIVER_ADDRESS
-  const network = c.env.X402_NETWORK || 'eip155:8453'
-  const usdcAsset = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
-
-  return c.json({
-    x402Version: 2,
-    provider: {
-      name: 'CrossFin',
-      description: 'Cross-border crypto routing engine for AI agents. Routes capital across 13 Korean/Japan/India/Indonesia/Thailand/global exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin). Real-time spread and route signals with 11 bridge coins.',
-      url: 'https://crossfin.dev',
-      docs: 'https://docs.crossfin.dev',
-      github: 'https://github.com/bubilife1202/crossfin',
-      categories: ['crypto-routing', 'korean-market-data', 'arbitrage', 'exchange-data', 'defi'],
-      tags: ['route-spread', 'cross-exchange', 'korean-crypto', 'bithumb', 'upbit', 'binance', 'okx', 'bybit', 'mcp', 'ai-agent'],
-    },
-    payment: {
-      network,
-      asset: usdcAsset,
-      currency: 'USDC',
-      payTo,
-      facilitator: c.env.FACILITATOR_URL || 'https://facilitator.payai.network',
-      scheme: 'exact',
-      maxTimeoutSeconds: 300,
-    },
-    endpoints: [
-      { resource: `${origin}/api/premium/arbitrage/kimchi`, method: 'GET', price: '$0.05', description: 'Real-time Route Spread Index — Korean vs global exchange price spread for 11 crypto pairs' },
-      { resource: `${origin}/api/premium/arbitrage/opportunities`, method: 'GET', price: '$0.10', description: 'AI-ready market condition indicators: POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD with signal strength scores' },
-      { resource: `${origin}/api/premium/route/find`, method: 'GET', price: '$0.10', description: 'Optimal crypto transfer route across 13 exchanges using 11 bridge coins' },
-      { resource: `${origin}/api/premium/bithumb/orderbook`, method: 'GET', price: '$0.02', description: 'Live Bithumb orderbook depth (30 levels)' },
-      { resource: `${origin}/api/premium/market/upbit/ticker`, method: 'GET', price: '$0.02', description: 'Upbit real-time ticker' },
-      { resource: `${origin}/api/premium/market/upbit/orderbook`, method: 'GET', price: '$0.02', description: 'Upbit orderbook depth' },
-      { resource: `${origin}/api/premium/market/coinone/ticker`, method: 'GET', price: '$0.02', description: 'Coinone real-time ticker' },
-      { resource: `${origin}/api/premium/market/fx/usdkrw`, method: 'GET', price: '$0.01', description: 'USD/KRW exchange rate' },
-      { resource: `${origin}/api/premium/market/korea`, method: 'GET', price: '$0.03', description: 'Korean market sentiment overview' },
-      { resource: `${origin}/api/premium/crypto/korea/5exchange`, method: 'GET', price: '$0.08', description: '4-exchange Korean crypto price comparison' },
-      { resource: `${origin}/api/premium/morning/brief`, method: 'GET', price: '$0.20', description: 'Morning Brief bundle: route spread + FX + headlines' },
-      { resource: `${origin}/api/premium/crypto/snapshot`, method: 'GET', price: '$0.15', description: 'Crypto Snapshot: 4-exchange prices + route spread + volume + FX' },
-    ],
-    free: [
-      { resource: `${origin}/api/arbitrage/demo`, method: 'GET', description: 'Free route spread preview (top 3 pairs)' },
-      { resource: `${origin}/api/route/exchanges`, method: 'GET', description: 'Supported exchanges and coins' },
-      { resource: `${origin}/api/route/fees`, method: 'GET', description: 'Fee comparison table' },
-      { resource: `${origin}/api/route/pairs`, method: 'GET', description: 'Trading pairs with live prices' },
-      { resource: `${origin}/api/route/status`, method: 'GET', description: 'Exchange health check' },
-      { resource: `${origin}/api/registry`, method: 'GET', description: 'Full service registry (184 services)' },
-      { resource: `${origin}/api/docs/guide`, method: 'GET', description: 'Structured agent onboarding guide' },
-      { resource: `${origin}/api/openapi.json`, method: 'GET', description: 'OpenAPI 3.1 spec' },
-    ],
-    mcp: {
-      package: 'crossfin-mcp',
-      install: 'npx -y crossfin-mcp',
-      tools: 16,
-      repo: 'https://github.com/bubilife1202/crossfin/tree/main/apps/mcp-server',
-    },
-    updatedAt: new Date().toISOString(),
-  })
-})
-
-// === Google A2A Agent Card ===
-
-app.get('/.well-known/agent.json', (c) => {
-  const origin = new URL(c.req.url).origin
-  return c.json({
-    name: 'CrossFin',
-    url: origin,
-    version: CROSSFIN_API_VERSION,
-    description: 'Cross-border crypto routing engine for AI agents. Routes capital across 13 Korean and global exchanges with 11 bridge coins. Pay-per-request via x402 USDC micropayments.',
-    provider: {
-      organization: 'CrossFin',
-      url: 'https://crossfin.dev',
-    },
-    capabilities: {
-      streaming: false,
-      pushNotifications: false,
-      stateTransitionHistory: false,
-    },
-    skills: [
-      {
-        id: 'crypto-routing',
-        name: 'Cross-Exchange Crypto Routing',
-        description: 'Find the cheapest path to move crypto between Korean exchanges (Bithumb, Upbit, Coinone, GoPax), regional exchanges (bitFlyer, WazirX, bitbank, Indodax, Bitkub), and global exchanges (Binance, OKX, Bybit, KuCoin) using 11 bridge coins.',
-        tags: ['crypto', 'routing', 'arbitrage', 'korea'],
-        examples: ['Find cheapest route from Bithumb KRW to Binance USDC for 5,000,000 KRW'],
-      },
-      {
-        id: 'route-spread',
-        name: 'Route Spread / Kimchi Premium Index',
-        description: 'Real-time price spread between Korean and global crypto exchanges for 11 pairs with POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD indicators.',
-        tags: ['arbitrage', 'spread', 'kimchi-premium', 'signals'],
-        examples: ['What is the current kimchi premium?', 'Show route spread for BTC'],
-      },
-      {
-        id: 'korean-market-data',
-        name: 'Korean Market Data',
-        description: 'Korean stock market (KOSPI/KOSDAQ), 1070+ ETFs, investor flow, crypto exchange data, USD/KRW rate, and news headlines.',
-        tags: ['korea', 'stocks', 'crypto', 'market-data', 'fx'],
-        examples: ['Get KOSPI index', 'Show Korean crypto headlines', 'USD/KRW rate'],
-      },
-      {
-        id: 'agent-finance',
-        name: 'Agent Financial Management',
-        description: 'Local ledger for AI agents: create wallets, transfer funds, set daily budgets, track transactions.',
-        tags: ['wallet', 'budget', 'ledger', 'agent-finance'],
-        examples: ['Create a wallet for Agent A with 500,000 KRW', 'Set daily budget to 200,000 KRW'],
-      },
-    ],
-    securitySchemes: {
-      x402: {
-        type: 'http',
-        scheme: 'x402',
-        description: 'x402 USDC micropayment on Base mainnet. Free endpoints work without payment.',
-      },
-      apiKey: {
-        type: 'apiKey',
-        in: 'header',
-        name: 'X-Agent-Key',
-        description: 'Agent API key for authenticated endpoints (registration, deposits, guardian).',
-      },
-    },
-    defaultInputModes: ['application/json'],
-    defaultOutputModes: ['application/json'],
-    interfaces: {
-      openapi: `${origin}/api/openapi.json`,
-      mcp: {
-        package: 'crossfin-mcp',
-        install: 'npx -y crossfin-mcp',
-      },
-      guide: `${origin}/api/docs/guide`,
-    },
-  })
-})
-
-// === Glama.ai Ownership Verification ===
-
-app.get('/.well-known/glama.json', (c) => {
-  return c.json({
-    name: 'CrossFin',
-    maintainer: {
-      email: 'bubilife1202@gmail.com',
-    },
-    repository: 'https://github.com/bubilife1202/crossfin',
-  })
-})
-
-// === OpenAI Plugin Manifest ===
-
-app.get('/.well-known/ai-plugin.json', (c) => {
-  const origin = new URL(c.req.url).origin
-  return c.json({
-    schema_version: 'v1',
-    name_for_human: 'CrossFin',
-    name_for_model: 'crossfin',
-    description_for_human: 'Korean and global crypto exchange routing, arbitrage signals, and market data for AI agents.',
-    description_for_model: 'CrossFin provides: (1) optimal crypto routing across 13 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin) with 11 bridge coins, (2) real-time route spread (kimchi premium) index with POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD indicators, (3) Korean market data including KOSPI/KOSDAQ, ETFs, investor flow, and crypto prices, (4) USD/KRW exchange rates. Free endpoints available. Paid endpoints use x402 USDC micropayments on Base.',
-    auth: { type: 'none' },
-    api: {
-      type: 'openapi',
-      url: `${origin}/api/openapi.json`,
-    },
-    logo_url: 'https://crossfin.dev/logos/crossfin.png',
-    contact_email: 'hello@crossfin.dev',
-    legal_info_url: 'https://crossfin.dev',
-  })
-})
-
-// === LLMs.txt ===
-
-app.get('/llms.txt', (c) => {
-  const origin = new URL(c.req.url).origin
-  const text = `# CrossFin
-
-> Cross-border crypto routing engine for AI agents. Routes capital across 13 Korean and global exchanges with x402 USDC micropayments.
-
-## Docs
-
-- [Agent Guide](${origin}/api/docs/guide): Complete onboarding guide for AI agents
-- [API Reference](https://docs.crossfin.dev/api): Full endpoint documentation
-- [OpenAPI Spec](${origin}/api/openapi.json): Machine-readable API specification
-- [MCP Server](https://www.npmjs.com/package/crossfin-mcp): 16 tools for any MCP client
-
-## Free Endpoints
-
-- [Route Spread Demo](${origin}/api/arbitrage/demo): Top 3 Korean-vs-global price spreads
-- [Exchange List](${origin}/api/route/exchanges): 13 supported exchanges and coins
-- [Fee Table](${origin}/api/route/fees): Trading and withdrawal fees
-- [Exchange Prices](${origin}/api/route/pairs): Live bridge coin prices
-- [Exchange Status](${origin}/api/route/status): Network health
-- [Optimal Route](${origin}/api/routing/optimal): Free routing graph data
-- [Service Registry](${origin}/api/registry): 184+ discoverable services
-- [ACP Quote](${origin}/api/acp/quote): Free routing quote (POST)
-
-## Paid Endpoints (x402 USDC on Base)
-
-- Optimal Route Finding: $0.10
-- Route Spread Index (11 pairs): $0.05
-- Arbitrage Opportunities: $0.10
-- Bithumb/Upbit/Coinone Orderbooks: $0.02
-- USD/KRW Rate: $0.01
-- KOSPI/KOSDAQ Indices: $0.03
-- Morning Brief Bundle: $0.20
-- Crypto Snapshot Bundle: $0.15
-
-## Discovery
-
-- [\`.well-known/crossfin.json\`](${origin}/.well-known/crossfin.json): CrossFin discovery
-- [\`.well-known/x402.json\`](${origin}/.well-known/x402.json): Payment discovery
-- [\`.well-known/agent.json\`](${origin}/.well-known/agent.json): A2A Agent Card
-- [\`.well-known/ai-plugin.json\`](${origin}/.well-known/ai-plugin.json): OpenAI plugin manifest
-- [\`.well-known/glama.json\`](${origin}/.well-known/glama.json): Glama.ai ownership verification
-
-## Quick Start
-
-1. Check health: GET ${origin}/api/health
-2. See exchanges: GET ${origin}/api/route/exchanges
-3. Get spread: GET ${origin}/api/arbitrage/demo
-4. Find route: GET ${origin}/api/routing/optimal?from=bithumb:KRW&to=binance:USDC&amount=5000000
-5. Install MCP: npx -y crossfin-mcp
-`
-  return c.text(text)
-})
-
-// === Legal Endpoints ===
-
-app.get('/api/legal/terms', (c) => {
-  return c.json({
-    title: 'CrossFin Terms of Service / 이용약관',
-    effectiveDate: '2026-02-22',
-    version: '1.0',
-    language: 'en/ko',
-    sections: [
-      {
-        heading: '1. Service Description / 서비스 설명',
-        content: 'CrossFin is an API data service that provides real-time market data, routing analysis, and arbitrage signals for informational purposes. CrossFin is NOT a broker, exchange, financial advisor, or registered investment advisor. CrossFin does not execute trades, hold user funds, or provide custody services. | CrossFin은 실시간 시장 데이터, 라우팅 분석, 아비트리지 신호를 정보 제공 목적으로 제공하는 API 데이터 서비스입니다. CrossFin은 브로커, 거래소, 금융 자문사, 또는 등록된 투자자문업자가 아닙니다. CrossFin은 거래를 실행하거나, 사용자 자금을 보관하거나, 수탁 서비스를 제공하지 않습니다.',
-      },
-      {
-        heading: '2. Eligibility / 이용 자격',
-        content: 'You must be at least 18 years of age to use this service. Use of this service is prohibited in jurisdictions subject to sanctions by the United States, European Union, United Nations, or Republic of Korea, including but not limited to North Korea, Iran, Russia, Syria, and Cuba. By using this service, you represent and warrant that you meet these eligibility requirements. | 본 서비스를 이용하려면 만 18세 이상이어야 합니다. 미국, 유럽연합, 유엔, 대한민국의 제재 대상 국가(북한, 이란, 러시아, 시리아, 쿠바 등 포함)에서의 서비스 이용은 금지됩니다. 서비스를 이용함으로써 귀하는 이러한 자격 요건을 충족함을 진술하고 보증합니다.',
-      },
-      {
-        heading: '3. Account and Access / 계정 및 접근',
-        content: 'CrossFin does not maintain personal user accounts. Access to paid endpoints is granted via x402 protocol using EVM wallet addresses on Base mainnet. Your wallet address serves as your identity. You are solely responsible for the security of your private keys. CrossFin has no ability to recover lost keys or reverse transactions. | CrossFin은 개인 사용자 계정을 유지하지 않습니다. 유료 엔드포인트 접근은 Base 메인넷의 EVM 지갑 주소를 사용하는 x402 프로토콜을 통해 부여됩니다. 귀하의 지갑 주소가 귀하의 신원으로 사용됩니다. 귀하는 개인 키의 보안에 대해 전적으로 책임을 집니다. CrossFin은 분실된 키를 복구하거나 거래를 되돌릴 능력이 없습니다.',
-      },
-      {
-        heading: '4. Acceptable Use / 허용 사용',
-        content: 'You may use CrossFin API data for personal analysis, research, and building applications. You may not redistribute, resell, or sublicense CrossFin data to third parties without explicit written permission. You may not use the service to manipulate markets, engage in wash trading, or violate any applicable laws. Automated access must respect rate limits. | CrossFin API 데이터를 개인 분석, 연구, 애플리케이션 구축에 사용할 수 있습니다. 명시적인 서면 허가 없이 CrossFin 데이터를 제3자에게 재배포, 재판매, 또는 재라이선스할 수 없습니다. 시장 조작, 가장 거래, 또는 관련 법률 위반에 서비스를 사용할 수 없습니다. 자동화된 접근은 속도 제한을 준수해야 합니다.',
-      },
-      {
-        heading: '5. Payment / 결제',
-        content: 'Paid endpoints require USDC payment on Base mainnet via the x402 protocol. Payments are processed per API call and are non-refundable once the data response is delivered. Subscription services, if offered, are billed via Toss Payments and are subject to separate subscription terms. All prices are denominated in USD. | 유료 엔드포인트는 x402 프로토콜을 통해 Base 메인넷에서 USDC 결제가 필요합니다. 결제는 API 호출당 처리되며, 데이터 응답이 전달된 후에는 환불되지 않습니다. 구독 서비스는 토스페이먼츠를 통해 청구되며 별도의 구독 약관이 적용됩니다. 모든 가격은 USD로 표시됩니다.',
-      },
-      {
-        heading: '6. Intellectual Property / 지식재산권',
-        content: 'CrossFin owns all rights to the API infrastructure, routing algorithms, analysis methodologies, and service architecture. Third-party market data (exchange prices, FX rates, stock data) remains the property of the respective data providers. You may not reverse engineer, decompile, or attempt to extract CrossFin\'s proprietary algorithms. | CrossFin은 API 인프라, 라우팅 알고리즘, 분석 방법론, 서비스 아키텍처에 대한 모든 권리를 소유합니다. 제3자 시장 데이터(거래소 가격, 환율, 주식 데이터)는 각 데이터 제공업체의 재산으로 남습니다. CrossFin의 독점 알고리즘을 역공학, 디컴파일, 또는 추출하려는 시도를 할 수 없습니다.',
-      },
-      {
-        heading: '7. Limitation of Liability / 책임 제한',
-        content: 'TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, CROSSFIN\'S TOTAL LIABILITY FOR ANY CLAIM ARISING FROM OR RELATED TO THESE TERMS OR YOUR USE OF THE SERVICE SHALL NOT EXCEED THE AMOUNT PAID BY YOU FOR THE SPECIFIC API CALL THAT GAVE RISE TO THE CLAIM. CROSSFIN SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES. | 관련 법률이 허용하는 최대 범위 내에서, 본 약관 또는 서비스 이용과 관련하여 발생하는 모든 청구에 대한 CrossFin의 총 책임은 해당 청구를 발생시킨 특정 API 호출에 대해 귀하가 지불한 금액을 초과하지 않습니다. CrossFin은 간접적, 부수적, 특별, 결과적, 또는 징벌적 손해에 대해 책임을 지지 않습니다.',
-      },
-      {
-        heading: '8. No Warranties / 보증 없음',
-        content: 'THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND. CROSSFIN DOES NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR THAT DATA WILL BE ACCURATE, COMPLETE, OR TIMELY. CROSSFIN EXPRESSLY DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. | 서비스는 어떠한 종류의 보증도 없이 "있는 그대로" 및 "이용 가능한 상태로" 제공됩니다. CrossFin은 서비스가 중단 없이, 오류 없이 제공되거나 데이터가 정확하고 완전하며 시의적절할 것임을 보증하지 않습니다. CrossFin은 상품성, 특정 목적 적합성, 비침해에 대한 보증을 포함하여 명시적이든 묵시적이든 모든 보증을 명시적으로 부인합니다.',
-      },
-      {
-        heading: '9. Indemnification / 면책',
-        content: 'You agree to indemnify, defend, and hold harmless CrossFin and its operators from and against any claims, liabilities, damages, losses, and expenses arising from your use of the service, your violation of these terms, or your violation of any applicable law or third-party rights. | 귀하는 서비스 이용, 본 약관 위반, 또는 관련 법률이나 제3자 권리 위반으로 인해 발생하는 모든 청구, 책임, 손해, 손실, 비용으로부터 CrossFin 및 그 운영자를 면책, 방어, 보호하는 데 동의합니다.',
-      },
-      {
-        heading: '10. Governing Law and Jurisdiction / 준거법 및 관할',
-        content: 'These Terms shall be governed by and construed in accordance with the laws of the Republic of Korea. Any dispute arising from or related to these Terms shall be subject to the exclusive jurisdiction of the Seoul Central District Court. | 본 약관은 대한민국 법률에 따라 규율되고 해석됩니다. 본 약관과 관련하여 발생하는 모든 분쟁은 서울중앙지방법원을 전속적 합의관할법원으로 합니다.',
-      },
-      {
-        heading: '11. Modifications / 약관 변경',
-        content: 'CrossFin reserves the right to modify these Terms at any time. Material changes will be communicated with at least 30 days notice via the API response headers or the CrossFin website. Continued use of the service after the effective date of changes constitutes acceptance of the modified Terms. | CrossFin은 언제든지 본 약관을 수정할 권리를 보유합니다. 중요한 변경 사항은 API 응답 헤더 또는 CrossFin 웹사이트를 통해 최소 30일 전에 공지됩니다. 변경 발효일 이후 서비스를 계속 이용하면 수정된 약관에 동의한 것으로 간주됩니다.',
-      },
-    ],
-  })
-})
-
-app.get('/api/legal/disclaimer', (c) => {
-  return c.json({
-    title: 'CrossFin Full Disclaimer / 면책 고지',
-    effectiveDate: '2026-02-22',
-    version: '1.0',
-    language: 'en/ko',
-    summary: CROSSFIN_DISCLAIMER,
-    sections: [
-      {
-        heading: '1. Informational Purpose Only / 정보 제공 목적',
-        content: 'This service is provided for informational purposes only and does not constitute investment advice, financial advice, trading advice, or any form of professional recommendation. CrossFin is not a registered investment advisor. | 본 서비스는 정보 제공 목적으로만 제공되며, 투자 자문, 금융 자문, 거래 자문 또는 어떠한 종류의 전문적 조언에도 해당하지 않습니다. CrossFin은 등록된 투자자문업자가 아닙니다.',
-      },
-      {
-        heading: '2. No Warranties on Data / 데이터 보증 없음',
-        content: 'All data, analyses, and information provided through this service are offered on an "AS IS" and "AS AVAILABLE" basis, without warranties of any kind, whether express or implied, including but not limited to warranties of accuracy, completeness, timeliness, merchantability, fitness for a particular purpose, or non-infringement. | 본 서비스를 통해 제공되는 모든 데이터, 분석, 정보는 "있는 그대로(AS IS)" 제공되며, 그 정확성, 완전성, 시의성 또는 신뢰성에 대하여 명시적이든 묵시적이든 어떠한 보증도 하지 않습니다.',
-      },
-      {
-        heading: '3. Third-Party Data Sources / 제3자 데이터 소스',
-        content: 'Data is sourced from third-party exchange APIs (Bithumb, Upbit, Coinone, GoPax, Binance, OKX, Bybit, bitFlyer, WazirX), external FX rate services, and external financial data providers. CrossFin assumes no responsibility for the accuracy of such third-party data. Delays, errors, and omissions may occur during data transmission. | 데이터는 제3자 거래소 API(빗썸, 업비트, 코인원, 고팍스, 바이낸스, OKX, 바이비트, bitFlyer, WazirX), 외부 환율 서비스, 외부 금융 데이터 제공업체에서 수집됩니다. CrossFin은 이러한 외부 소스 데이터의 정확성에 대하여 책임을 지지 않습니다. 데이터 전송 과정에서 지연, 오류, 누락이 발생할 수 있습니다.',
-      },
-      {
-        heading: '4. Not a Trading Recommendation / 거래 추천 아님',
-        content: 'Information including but not limited to kimchi premium, arbitrage opportunities, routing recommendations, and market analyses is provided as reference only and does not constitute a recommendation to buy, sell, or hold any virtual asset or financial instrument. | 김치프리미엄, 아비트리지 기회, 라우팅 추천, 시장 분석 등의 정보는 참고용이며, 특정 가상자산이나 금융 상품의 매수, 매도, 보유를 권유하거나 추천하는 것이 아닙니다.',
-      },
-      {
-        heading: '5. Estimates May Differ / 추정치 차이 가능',
-        content: 'Estimates of slippage, fees, transfer times, and other metrics are based on historical data and current market conditions and may differ materially from actual trading outcomes. Deviations may be particularly significant in low-liquidity markets. Global exchange slippage is estimated at a fixed 0.10% and may not reflect actual orderbook depth. | 슬리피지, 수수료, 전송 시간 등의 추정치는 과거 데이터와 현재 시장 상황에 기반한 추정값이며, 실제 거래 결과와 상이할 수 있습니다. 특히 유동성이 낮은 시장에서는 추정치와 실제 결과 간의 차이가 클 수 있습니다.',
-      },
-      {
-        heading: '6. User Sole Responsibility / 이용자 단독 책임',
-        content: 'All investment decisions and trades made based on this service are at the user\'s sole discretion and risk. CrossFin shall not be liable for any direct, indirect, incidental, consequential, or special damages arising from such decisions. | 본 서비스에 기반한 모든 투자 결정 및 거래는 이용자의 독립적인 판단과 책임 하에 이루어지며, CrossFin은 이러한 결정으로 인한 직접적, 간접적, 부수적, 결과적 또는 특별한 손해에 대하여 어떠한 책임도 부담하지 않습니다.',
-      },
-      {
-        heading: '7. No Uptime Guarantee / 가용성 보장 없음',
-        content: 'This service does not guarantee uninterrupted operation. Service interruptions or data delays may occur due to maintenance, upgrades, or third-party service outages. CrossFin is not liable for any losses resulting from service unavailability. | 본 서비스는 24시간 무중단 운영을 보장하지 않으며, 유지보수, 업그레이드, 외부 서비스 장애 등으로 인한 서비스 중단이나 데이터 지연이 발생할 수 있습니다. CrossFin은 서비스 불가용으로 인한 손실에 대해 책임을 지지 않습니다.',
-      },
-      {
-        heading: '8. Maximum Liability Cap / 최대 책임 한도',
-        content: 'IN NO EVENT SHALL CROSSFIN\'S TOTAL LIABILITY EXCEED THE AMOUNT PAID BY THE USER FOR THE SPECIFIC API CALL THAT GAVE RISE TO THE CLAIM. This service is governed by the laws of the Republic of Korea. Any disputes shall be subject to the exclusive jurisdiction of the Seoul Central District Court. | 어떠한 경우에도 CrossFin의 총 책임은 해당 청구를 발생시킨 특정 API 호출에 대해 사용자가 지불한 금액을 초과하지 않습니다. 본 서비스는 대한민국 법률을 준거법으로 하며, 모든 분쟁은 서울중앙지방법원을 전속적 합의관할법원으로 합니다.',
-      },
-    ],
-  })
-})
-
-app.get('/api/legal/privacy', (c) => {
-  return c.json({
-    title: 'CrossFin Privacy Policy / 개인정보처리방침',
-    effectiveDate: '2026-02-22',
-    version: '1.0',
-    language: 'en/ko',
-    sections: [
-      {
-        heading: '1. Data Collected / 수집하는 데이터',
-        content: 'CrossFin collects: (1) IP addresses in hashed form for abuse prevention, (2) API usage patterns including endpoint, timestamp, and response status, (3) x402 wallet addresses (public blockchain data), (4) Telegram chat IDs for users of the Telegram bot integration. | CrossFin이 수집하는 데이터: (1) 어뷰징 방지를 위한 해시 처리된 IP 주소, (2) 엔드포인트, 타임스탬프, 응답 상태를 포함한 API 사용 패턴, (3) x402 지갑 주소(공개 블록체인 데이터), (4) 텔레그램 봇 통합 사용자의 텔레그램 채팅 ID.',
-      },
-      {
-        heading: '2. Data NOT Collected / 수집하지 않는 데이터',
-        content: 'CrossFin does NOT collect: names, email addresses, passwords, bank account information, KYC (Know Your Customer) data, government-issued ID numbers, biometric data, or any personally identifiable information beyond what is listed above. | CrossFin이 수집하지 않는 데이터: 이름, 이메일 주소, 비밀번호, 은행 계좌 정보, KYC(고객 확인) 데이터, 정부 발급 신분증 번호, 생체 인식 데이터, 또는 위에 나열된 것 이외의 개인 식별 정보.',
-      },
-      {
-        heading: '3. Purpose of Data Collection / 데이터 수집 목적',
-        content: 'Collected data is used for: (1) service operation and delivery of API responses, (2) abuse prevention and rate limiting, (3) anonymous usage analytics to improve the service, (4) debugging and error resolution. Data is not used for advertising, profiling, or sale to third parties. | 수집된 데이터는 다음 목적으로 사용됩니다: (1) 서비스 운영 및 API 응답 제공, (2) 어뷰징 방지 및 속도 제한, (3) 서비스 개선을 위한 익명 사용 분석, (4) 디버깅 및 오류 해결. 데이터는 광고, 프로파일링, 또는 제3자 판매에 사용되지 않습니다.',
-      },
-      {
-        heading: '4. Data Storage and Retention / 데이터 저장 및 보존',
-        content: 'Data is stored in Cloudflare D1 (SQLite), which is encrypted at rest. API usage logs are retained for 90 days, after which they are automatically deleted. Hashed IP addresses are retained for 30 days. Wallet addresses associated with transactions are retained for 1 year for audit purposes. | 데이터는 저장 시 암호화되는 Cloudflare D1(SQLite)에 저장됩니다. API 사용 로그는 90일간 보존된 후 자동으로 삭제됩니다. 해시 처리된 IP 주소는 30일간 보존됩니다. 거래와 관련된 지갑 주소는 감사 목적으로 1년간 보존됩니다.',
-      },
-      {
-        heading: '5. Third-Party Sharing / 제3자 공유',
-        content: 'CrossFin does not sell or share your data with third parties for commercial purposes. Data is shared only with: (1) Cloudflare, as the infrastructure provider (subject to Cloudflare\'s privacy policy), (2) Coinbase, as the x402 payment facilitator for transaction verification. Both are bound by their respective privacy policies and applicable law. | CrossFin은 상업적 목적으로 귀하의 데이터를 제3자에게 판매하거나 공유하지 않습니다. 데이터는 다음과만 공유됩니다: (1) 인프라 제공업체인 Cloudflare(Cloudflare 개인정보처리방침 적용), (2) 거래 검증을 위한 x402 결제 촉진자인 Coinbase. 두 업체 모두 각자의 개인정보처리방침과 관련 법률에 구속됩니다.',
-      },
-      {
-        heading: '6. User Rights / 이용자 권리',
-        content: 'You have the right to request deletion of your data. To submit a data deletion request, contact hello@crossfin.dev with your wallet address or Telegram chat ID. CrossFin will process deletion requests within 30 days. Note that blockchain transaction data (wallet addresses on Base mainnet) is public and cannot be deleted by CrossFin. | 귀하는 데이터 삭제를 요청할 권리가 있습니다. 데이터 삭제 요청을 제출하려면 지갑 주소 또는 텔레그램 채팅 ID와 함께 hello@crossfin.dev로 연락하십시오. CrossFin은 30일 이내에 삭제 요청을 처리합니다. 블록체인 거래 데이터(Base 메인넷의 지갑 주소)는 공개 데이터이며 CrossFin이 삭제할 수 없습니다.',
-      },
-      {
-        heading: '7. Cookies / 쿠키',
-        content: 'CrossFin is an API-only service and does not use cookies, browser storage, or tracking pixels. The CrossFin website (crossfin.dev) may use minimal session storage for UI state only, with no cross-site tracking. | CrossFin은 API 전용 서비스로 쿠키, 브라우저 저장소, 또는 추적 픽셀을 사용하지 않습니다. CrossFin 웹사이트(crossfin.dev)는 UI 상태를 위한 최소한의 세션 저장소만 사용할 수 있으며, 크로스 사이트 추적은 없습니다.',
-      },
-      {
-        heading: '8. Governing Law / 준거법',
-        content: 'This Privacy Policy is governed by the Personal Information Protection Act (PIPA, 개인정보보호법) of the Republic of Korea and other applicable Korean privacy laws. For users in the European Economic Area, CrossFin processes data on the basis of legitimate interests (service operation and security). For any privacy inquiries, contact hello@crossfin.dev. | 본 개인정보처리방침은 대한민국 개인정보보호법(PIPA) 및 기타 관련 한국 개인정보 보호 법률에 의해 규율됩니다. 유럽 경제 지역 사용자의 경우, CrossFin은 정당한 이익(서비스 운영 및 보안)을 근거로 데이터를 처리합니다. 개인정보 관련 문의는 hello@crossfin.dev로 연락하십시오.',
-      },
-    ],
-  })
 })
 
 // === OpenAPI Spec ===
 
-app.get('/api/openapi.json', (c) => {
-  return c.json({
+const getOpenApiPayload = () => ({
     openapi: '3.1.0',
     info: {
       title: 'CrossFin — x402 Agent Services Gateway (Korea)',
@@ -2632,7 +2228,6 @@ app.get('/api/openapi.json', (c) => {
       facilitator: 'https://facilitator.payai.network',
       pricing: CROSSFIN_PAID_PRICING,
     },
-  })
 })
 
 // === x402 Payment Middleware (DISABLED v1.11.0) ===
@@ -9771,10 +9366,18 @@ const routingRoutes = createRoutingRoutes({
   assertRoutingCurrencySupported,
 })
 
+const docsRoutes = createDocsRoutes({
+  getGuidePayload,
+  getOpenApiPayload,
+})
+
 app.route('/api/admin', adminRoutes)
 app.route('/api/mcp', mcpRoutes)
 app.route('/api/analytics', analyticsRoutes)
 app.route('/api', routingRoutes)
+app.route('/', discoveryRoutes)
+app.route('/', legalRoutes)
+app.route('/', docsRoutes)
 // --- A2A skill handler injection (avoids self-fetch on CF Workers) ---
 app.use('/api/a2a/*', async (c, next) => {
   const db = c.env.DB
