@@ -26,7 +26,7 @@ npm: [crossfin-mcp](https://www.npmjs.com/package/crossfin-mcp)
 }
 ```
 
-All tools are free. No API key or wallet required.
+All tools are currently free during open beta. No API key or wallet required. x402 payment enforcement is temporarily disabled and will be re-enabled later.
 
 ---
 

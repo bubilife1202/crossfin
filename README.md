@@ -46,7 +46,7 @@ Restart your MCP client. Done. 16 tools available immediately.
 - `find_optimal_route` — cheapest/fastest/balanced path across Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin using 11 bridge coins (BTC, ETH, XRP, SOL, DOGE, ADA, DOT, LINK, AVAX, TRX, KAIA)
 - `get_kimchi_premium` — real-time Korean vs. global route spread
 - `compare_exchange_prices` — live Bithumb KRW vs Binance USD price comparison
-- `call_paid_service` — call any paid API with automatic x402 USDC payment
+- `call_paid_service` — call any paid API with automatic x402 USDC payment (currently free during open beta)
 - Asian Premium endpoints — Japan, Indonesia, Thailand crypto premiums vs global markets
 
 ---
@@ -163,12 +163,32 @@ All endpoints are currently free during open beta. x402 payment infrastructure i
 </details>
 
 <details>
-<summary><strong>Utility Paid APIs</strong></summary>
+<summary><strong>Utility APIs (Temporarily Free in Open Beta)</strong></summary>
 
 | Endpoint | Price | Description |
 |----------|-------|-------------|
 | `/api/premium/report` | Free | Premium report (agents/wallets/transactions summary) |
 | `/api/premium/enterprise` | Free | Enterprise receipt/proof endpoint |
+| `/api/legal/disclaimer` | Free | Full legal disclaimer (EN/KO) |
+| `/api/analytics/overview` | Free | Gateway analytics overview |
+| `/api/analytics/funnel/overview` | Free | Funnel analytics overview |
+| `/api/analytics/funnel/events` | Free | Funnel analytics event ingestion |
+| `/api/analytics/services/{serviceId}` | Free | Per-service analytics |
+| `/api/onchain/usdc-transfers` | Free | On-chain USDC transfer monitor (Base) |
+| `/api/proxy/{serviceId}` | Free | Proxy endpoint for registered services |
+| `/api/telegram/webhook` | Free | Telegram bot webhook endpoint |
+
+</details>
+
+<details>
+<summary><strong>Protocol APIs (A2A + ACP)</strong></summary>
+
+| Endpoint | Price | Description |
+|----------|-------|-------------|
+| `POST /api/a2a/tasks` | Free | A2A task execution (crypto-routing, route-spread, market data) |
+| `GET /api/acp/status` | Free | ACP protocol status and capabilities |
+| `POST /api/acp/quote` | Free | ACP-compatible routing quote (preview) |
+| `POST /api/acp/execute` | Free | ACP execution endpoint |
 
 </details>
 
@@ -194,9 +214,13 @@ All endpoints are currently free during open beta. x402 payment infrastructure i
 | `GET /api/registry` | List all registered services |
 | `GET /api/registry/search?q=...` | Full-text search |
 | `GET /api/registry/categories` | Categories with counts |
+| `GET /api/registry/stats` | Registry stats (total/crossfin/external) |
 | `GET /api/docs/guide` | Structured agent guide |
 | `GET /.well-known/crossfin.json` | Agent auto-discovery |
 | `GET /.well-known/x402.json` | x402 discovery metadata |
+| `GET /.well-known/agent.json` | A2A Agent Card |
+| `GET /.well-known/ai-plugin.json` | OpenAI plugin manifest |
+| `GET /llms.txt` | LLM-readable site map |
 | `GET /api/openapi.json` | OpenAPI 3.1 spec |
 
 </details>

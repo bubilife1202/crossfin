@@ -660,7 +660,7 @@ function App() {
         <section id="get-started" className="section">
           <div className="sectionHeader">
             <h2>Get Started</h2>
-            <p className="sectionSub">Four steps to start using CrossFin APIs with x402 payments.</p>
+            <p className="sectionSub">Four steps to start using CrossFin APIs. Premium endpoints are temporarily free during open beta.</p>
           </div>
 
           <div className="getStartedGrid">
@@ -690,7 +690,7 @@ console.log('Private Key:', wallet.privateKey)`}</code></pre>
             <div className="stepCard">
               <div className="stepNumber">STEP 02</div>
               <h3 className="stepTitle">Fund with USDC</h3>
-              <p className="stepDesc">Send USDC (Base network) to your wallet address.</p>
+              <p className="stepDesc">Optional during open beta. Fund USDC (Base) now if you want to be ready when payments are re-enabled.</p>
               <div className="stepDetail">
                 <div className="stepDetailRow">
                   <span className="stepDetailLabel">Minimum</span>
@@ -706,7 +706,7 @@ console.log('Private Key:', wallet.privateKey)`}</code></pre>
             <div className="stepCard stepCardWide">
               <div className="stepNumber">STEP 03</div>
               <h3 className="stepTitle">Call an API</h3>
-              <p className="stepDesc">Make your first paid API call using x402.</p>
+              <p className="stepDesc">Make your first premium API call (currently free during open beta).</p>
               <div className="codeTabs">
                 <button
                   type="button"
@@ -826,7 +826,7 @@ console.log(await res.json());`}</code></pre>
         <section id="playground" className="section">
           <div className="sectionHeader">
             <h2>API Playground</h2>
-            <p className="sectionSub">Test free and paid endpoints live — paid routes return 402 until x402 payment is attached</p>
+            <p className="sectionSub">Test free and premium endpoints live — all endpoints are currently free during open beta (x402 payment flow ready for re-enable)</p>
           </div>
 
           <div className="pgPanel">

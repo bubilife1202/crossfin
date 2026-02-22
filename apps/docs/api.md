@@ -2,6 +2,8 @@
 
 Base URL: `https://crossfin.dev` — 13 exchanges: Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin
 
+> Open beta notice: Endpoints that are normally paid are temporarily free. x402 payment enforcement is currently disabled and will be re-enabled later.
+
 ## 1. Routing
 
 <ApiTable :endpoints="[
@@ -70,9 +72,10 @@ Real-time crypto premium analysis across 4 Asian countries. Compares local excha
 
 ---
 
-## 6. ACP (Agent Commerce Protocol)
+## 6. Protocol (ACP + A2A)
 
 <ApiTable :endpoints="[
+  { method: 'POST', path: '/api/a2a/tasks', description: 'A2A task execution endpoint (crypto-routing, route-spread, market data)', price: 'Free (Open Beta)' },
   { method: 'GET', path: '/api/acp/status', description: 'ACP protocol status', price: 'Free' },
   { method: 'POST', path: '/api/acp/quote', description: 'Routing quote (free preview)', price: 'Free' },
   { method: 'POST', path: '/api/acp/execute', description: 'Execute simulation', price: 'Free' },
@@ -86,6 +89,7 @@ Real-time crypto premium analysis across 4 Asian countries. Compares local excha
   { method: 'GET', path: '/api/registry', description: 'All services', price: 'Free' },
   { method: 'GET', path: '/api/registry/search?q=', description: 'Full-text search', price: 'Free' },
   { method: 'GET', path: '/api/registry/categories', description: 'Categories with counts', price: 'Free' },
+  { method: 'GET', path: '/api/registry/stats', description: 'Registry stats (total, crossfin, external)', price: 'Free' },
   { method: 'GET', path: '/api/openapi.json', description: 'OpenAPI 3.1 spec', price: 'Free' },
   { method: 'GET', path: '/api/docs/guide', description: 'Structured agent guide', price: 'Free' },
 ]" />
@@ -99,6 +103,7 @@ Well-known endpoints for agent frameworks and LLM toolchains to auto-discover Cr
 <ApiTable :endpoints="[
   { method: 'GET', path: '/.well-known/ai-plugin.json', description: 'OpenAI plugin manifest', price: 'Free' },
   { method: 'GET', path: '/.well-known/agent.json', description: 'A2A Agent Card (Google Agent-to-Agent protocol)', price: 'Free' },
+  { method: 'GET', path: '/.well-known/glama.json', description: 'Glama ownership verification metadata', price: 'Free' },
   { method: 'GET', path: '/.well-known/x402.json', description: 'x402 payment discovery (network, token, payTo address)', price: 'Free' },
   { method: 'GET', path: '/.well-known/crossfin.json', description: 'CrossFin metadata (MCP, API, registry links)', price: 'Free' },
   { method: 'GET', path: '/llms.txt', description: 'LLM-friendly service description in plain text', price: 'Free' },
@@ -106,9 +111,20 @@ Well-known endpoints for agent frameworks and LLM toolchains to auto-discover Cr
 
 ---
 
-## 9. Utility Paid APIs
+## 9. Utility, Analytics, and Operations
 
 <ApiTable :endpoints="[
-  { method: 'GET', path: '/api/premium/report', description: 'Premium report (agents/wallets/transactions summary)', price: 'Free' },
-  { method: 'GET', path: '/api/premium/enterprise', description: 'Enterprise receipt/proof endpoint', price: 'Free' },
+  { method: 'GET', path: '/api/premium/report', description: 'Premium report (agents/wallets/transactions summary)', price: 'Free (Open Beta)' },
+  { method: 'GET', path: '/api/premium/enterprise', description: 'Enterprise receipt/proof endpoint', price: 'Free (Open Beta)' },
+  { method: 'GET', path: '/api/legal/disclaimer', description: 'Legal disclaimer (EN/KO)', price: 'Free' },
+  { method: 'GET', path: '/api/legal/terms', description: 'Terms of service', price: 'Free' },
+  { method: 'GET', path: '/api/legal/privacy', description: 'Privacy policy', price: 'Free' },
+  { method: 'GET', path: '/api/analytics/overview', description: 'Gateway analytics overview', price: 'Free' },
+  { method: 'GET', path: '/api/analytics/funnel/overview', description: 'Funnel analytics overview', price: 'Free' },
+  { method: 'POST', path: '/api/analytics/funnel/events', description: 'Ingest funnel analytics events', price: 'Free' },
+  { method: 'GET', path: '/api/analytics/services/{serviceId}', description: 'Per-service analytics', price: 'Free' },
+  { method: 'GET', path: '/api/onchain/usdc-transfers', description: 'USDC transfer monitor (Base)', price: 'Free' },
+  { method: 'GET', path: '/api/proxy/{serviceId}', description: 'Service proxy (GET)', price: 'Free' },
+  { method: 'POST', path: '/api/proxy/{serviceId}', description: 'Service proxy (POST)', price: 'Free' },
+  { method: 'POST', path: '/api/telegram/webhook', description: 'Telegram bot webhook endpoint', price: 'Free' },
 ]" />

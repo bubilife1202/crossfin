@@ -48,6 +48,11 @@ The bot understands context and maintains conversation history (last 10 messages
 - Read-only — finds routes and shows data but never executes trades
 - Data from 13 exchanges: Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin
 
+## Integration Endpoint
+
+- Telegram webhook endpoint: `POST /api/telegram/webhook`
+- Open beta: all connected premium endpoints are temporarily free. x402 payment enforcement is currently disabled and will be re-enabled later.
+
 ## Limitations
 
 - Route finding is read-only. No actual trades are executed.

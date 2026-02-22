@@ -2,6 +2,8 @@
 
 Start in under 2 minutes with free endpoints across 13 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin).
 
+> Open beta notice: Endpoints that are normally paid are temporarily free. No x402 payment is currently required.
+
 ## Step 1: Check health
 
 ```bash
@@ -56,4 +58,4 @@ Returns live optimal route + alternatives with real exchange fee table from D1.
 GET /api/premium/route/find?from=bithumb:KRW&to=binance:USDC&amount=5000000&strategy=cheapest
 ```
 
-Full route analysis. Returns complete step-by-step route with all alternatives and fee breakdown.
+Full route analysis. Returns complete step-by-step route with all alternatives and fee breakdown. Normally paid ($0.10), currently free during open beta.

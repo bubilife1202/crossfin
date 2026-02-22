@@ -31,6 +31,8 @@ features:
   { method: 'GET', path: '/api/premium/route/find', description: 'Full optimal route analysis', price: 'Free' },
 ]" />
 
+> Open beta notice: All endpoints are currently free during open beta. x402 payment enforcement is temporarily disabled and will be re-enabled later.
+
 ## Base URLs
 
 | Resource | URL |
