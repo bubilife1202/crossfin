@@ -19,7 +19,7 @@ import type {
 // Fetch with timeout utility
 // ============================================================
 
-export const CROSSFIN_UA = 'CrossFin-API/1.11.0'
+export const CROSSFIN_UA = 'CrossFin-API/1.12.0'
 
 export async function fetchWithTimeout(
   url: string,
@@ -887,14 +887,14 @@ export async function fetchGlobalPricesWithMeta(db?: D1Database): Promise<Global
 // FX Rates
 // ============================================================
 
-export async function fetchUsdFxRates(): Promise<Record<'KRW' | 'JPY' | 'INR', number>> {
+export async function fetchUsdFxRates(): Promise<Record<'KRW' | 'JPY' | 'INR' | 'IDR' | 'THB', number>> {
   const FX_RATE_SUCCESS_TTL_MS = 5 * 60_000
   const FX_RATE_FAILURE_TTL_MS = 60_000
 
-  type CachedRates = { value: Record<'KRW' | 'JPY' | 'INR', number>; expiresAt: number }
+  type CachedRates = { value: Record<'KRW' | 'JPY' | 'INR' | 'IDR' | 'THB', number>; expiresAt: number }
   const globalAny = globalThis as unknown as {
     __crossfinUsdFxRatesCache?: CachedRates
-    __crossfinUsdFxRatesInFlight?: Promise<Record<'KRW' | 'JPY' | 'INR', number>> | null
+    __crossfinUsdFxRatesInFlight?: Promise<Record<'KRW' | 'JPY' | 'INR' | 'IDR' | 'THB', number>> | null
   }
 
   const now = Date.now()
@@ -902,7 +902,7 @@ export async function fetchUsdFxRates(): Promise<Record<'KRW' | 'JPY' | 'INR', n
   if (cached && now < cached.expiresAt) return cached.value
   if (globalAny.__crossfinUsdFxRatesInFlight) return globalAny.__crossfinUsdFxRatesInFlight
 
-  const fallback = cached?.value ?? { KRW: 1450, JPY: 150, INR: 85 }
+  const fallback = cached?.value ?? { KRW: 1450, JPY: 150, INR: 85, IDR: 16200, THB: 36 }
   const promise = (async () => {
     try {
       const res = await fetchWithTimeout('https://open.er-api.com/v6/latest/USD')
@@ -912,11 +912,15 @@ export async function fetchUsdFxRates(): Promise<Record<'KRW' | 'JPY' | 'INR', n
       const krw = Number(data.rates?.KRW)
       const jpy = Number(data.rates?.JPY)
       const inr = Number(data.rates?.INR)
+      const idr = Number(data.rates?.IDR)
+      const thb = Number(data.rates?.THB)
       if (!Number.isFinite(krw) || krw < 500 || krw > 5000) throw new Error('Invalid KRW FX rate')
       if (!Number.isFinite(jpy) || jpy < 50 || jpy > 300) throw new Error('Invalid JPY FX rate')
       if (!Number.isFinite(inr) || inr < 20 || inr > 200) throw new Error('Invalid INR FX rate')
+      if (!Number.isFinite(idr) || idr < 10000 || idr > 25000) throw new Error('Invalid IDR FX rate')
+      if (!Number.isFinite(thb) || thb < 20 || thb > 50) throw new Error('Invalid THB FX rate')
 
-      const rates = { KRW: krw, JPY: jpy, INR: inr }
+      const rates = { KRW: krw, JPY: jpy, INR: inr, IDR: idr, THB: thb }
       globalAny.__crossfinUsdFxRatesCache = { value: rates, expiresAt: now + FX_RATE_SUCCESS_TTL_MS }
       return rates
     } catch {
@@ -937,7 +941,7 @@ export async function fetchKrwRate(): Promise<number> {
 }
 
 export type FxRatesMeta = {
-  rates: Record<'KRW' | 'JPY' | 'INR', number>
+  rates: Record<'KRW' | 'JPY' | 'INR' | 'IDR' | 'THB', number>
   isFallback: boolean
   source: string
   warnings: string[]
@@ -945,12 +949,12 @@ export type FxRatesMeta = {
 
 export async function fetchFxRatesWithMeta(): Promise<FxRatesMeta> {
   const globalAny = globalThis as unknown as {
-    __crossfinUsdFxRatesCache?: { value: Record<'KRW' | 'JPY' | 'INR', number>; expiresAt: number }
+    __crossfinUsdFxRatesCache?: { value: Record<'KRW' | 'JPY' | 'INR' | 'IDR' | 'THB', number>; expiresAt: number }
   }
   const rates = await fetchUsdFxRates()
   const cached = globalAny.__crossfinUsdFxRatesCache
   // Detect if using hardcoded fallback by checking if values exactly match defaults
-  const isHardcodedFallback = rates.KRW === 1450 && rates.JPY === 150 && rates.INR === 85
+  const isHardcodedFallback = rates.KRW === 1450 && rates.JPY === 150 && rates.INR === 85 && rates.IDR === 16200 && rates.THB === 36
   const isFallback = isHardcodedFallback || !cached || Date.now() >= cached.expiresAt
   const warnings: string[] = []
   if (isHardcodedFallback) {
@@ -1040,9 +1044,214 @@ export async function fetchWazirxTickers(): Promise<Record<string, Record<string
   return promise
 }
 
+export async function fetchBitbankTickers(): Promise<Record<string, Record<string, unknown>>> {
+  const BITBANK_TICKERS_SUCCESS_TTL_MS = 10_000
+  const BITBANK_TICKERS_FAILURE_TTL_MS = 3_000
+
+  type CachedBitbankTickers = { value: Record<string, Record<string, unknown>>; expiresAt: number }
+  const globalAny = globalThis as unknown as {
+    __crossfinBitbankTickersCache?: CachedBitbankTickers
+    __crossfinBitbankTickersInFlight?: Promise<Record<string, Record<string, unknown>>> | null
+  }
+
+  const now = Date.now()
+  const cached = globalAny.__crossfinBitbankTickersCache
+  if (cached && now < cached.expiresAt && Object.keys(cached.value).length > 0) return cached.value
+  if (globalAny.__crossfinBitbankTickersInFlight) return globalAny.__crossfinBitbankTickersInFlight
+
+  const fallback = cached?.value ?? {}
+  const promise = (async () => {
+    try {
+      const res = await fetchWithTimeout('https://public.bitbank.cc/tickers_jpy')
+      if (!res.ok) throw new Error(`bitbank ticker feed unavailable (${res.status})`)
+      const data: unknown = await res.json()
+      if (!isRecord(data) || !Array.isArray(data.data)) throw new Error('bitbank ticker feed invalid response')
+
+      const parsed: Record<string, Record<string, unknown>> = {}
+      for (const row of data.data) {
+        if (!isRecord(row)) continue
+        const pair = String(row.pair ?? '').trim().toLowerCase()
+        if (!pair.endsWith('_jpy')) continue
+        const coin = pair.split('_')[0]?.trim().toUpperCase()
+        if (!coin) continue
+        parsed[coin] = row
+      }
+      if (Object.keys(parsed).length === 0) throw new Error('bitbank ticker feed empty')
+
+      globalAny.__crossfinBitbankTickersCache = { value: parsed, expiresAt: now + BITBANK_TICKERS_SUCCESS_TTL_MS }
+      return parsed
+    } catch {
+      globalAny.__crossfinBitbankTickersCache = { value: fallback, expiresAt: now + BITBANK_TICKERS_FAILURE_TTL_MS }
+      if (Object.keys(fallback).length > 0) return fallback
+      throw new Error('bitbank ticker feed unavailable')
+    } finally {
+      globalAny.__crossfinBitbankTickersInFlight = null
+    }
+  })()
+
+  globalAny.__crossfinBitbankTickersInFlight = promise
+  return promise
+}
+
+export async function fetchIndodaxTickers(): Promise<Record<string, Record<string, unknown>>> {
+  const INDODAX_TICKERS_SUCCESS_TTL_MS = 10_000
+  const INDODAX_TICKERS_FAILURE_TTL_MS = 3_000
+
+  type CachedIndodaxTickers = { value: Record<string, Record<string, unknown>>; expiresAt: number }
+  const globalAny = globalThis as unknown as {
+    __crossfinIndodaxTickersCache?: CachedIndodaxTickers
+    __crossfinIndodaxTickersInFlight?: Promise<Record<string, Record<string, unknown>>> | null
+  }
+
+  const now = Date.now()
+  const cached = globalAny.__crossfinIndodaxTickersCache
+  if (cached && now < cached.expiresAt && Object.keys(cached.value).length > 0) return cached.value
+  if (globalAny.__crossfinIndodaxTickersInFlight) return globalAny.__crossfinIndodaxTickersInFlight
+
+  const fallback = cached?.value ?? {}
+  const promise = (async () => {
+    try {
+      const res = await fetchWithTimeout('https://indodax.com/api/summaries')
+      if (!res.ok) throw new Error(`Indodax ticker feed unavailable (${res.status})`)
+      const data: unknown = await res.json()
+      if (!isRecord(data) || !isRecord(data.tickers)) throw new Error('Indodax ticker feed invalid response')
+
+      const parsed: Record<string, Record<string, unknown>> = {}
+      for (const [pair, row] of Object.entries(data.tickers)) {
+        if (!isRecord(row)) continue
+        const normalized = pair.trim().toLowerCase()
+        if (!normalized.endsWith('_idr')) continue
+        const coin = normalized.split('_')[0]?.trim().toUpperCase()
+        if (!coin) continue
+        parsed[coin] = row
+      }
+      if (Object.keys(parsed).length === 0) throw new Error('Indodax ticker feed empty')
+
+      globalAny.__crossfinIndodaxTickersCache = { value: parsed, expiresAt: now + INDODAX_TICKERS_SUCCESS_TTL_MS }
+      return parsed
+    } catch {
+      globalAny.__crossfinIndodaxTickersCache = { value: fallback, expiresAt: now + INDODAX_TICKERS_FAILURE_TTL_MS }
+      if (Object.keys(fallback).length > 0) return fallback
+      throw new Error('Indodax ticker feed unavailable')
+    } finally {
+      globalAny.__crossfinIndodaxTickersInFlight = null
+    }
+  })()
+
+  globalAny.__crossfinIndodaxTickersInFlight = promise
+  return promise
+}
+
+export async function fetchBitkubTickers(): Promise<Record<string, Record<string, unknown>>> {
+  const BITKUB_TICKERS_SUCCESS_TTL_MS = 10_000
+  const BITKUB_TICKERS_FAILURE_TTL_MS = 3_000
+
+  type CachedBitkubTickers = { value: Record<string, Record<string, unknown>>; expiresAt: number }
+  const globalAny = globalThis as unknown as {
+    __crossfinBitkubTickersCache?: CachedBitkubTickers
+    __crossfinBitkubTickersInFlight?: Promise<Record<string, Record<string, unknown>>> | null
+  }
+
+  const now = Date.now()
+  const cached = globalAny.__crossfinBitkubTickersCache
+  if (cached && now < cached.expiresAt && Object.keys(cached.value).length > 0) return cached.value
+  if (globalAny.__crossfinBitkubTickersInFlight) return globalAny.__crossfinBitkubTickersInFlight
+
+  const fallback = cached?.value ?? {}
+  const promise = (async () => {
+    try {
+      const res = await fetchWithTimeout('https://api.bitkub.com/api/market/ticker')
+      if (!res.ok) throw new Error(`Bitkub ticker feed unavailable (${res.status})`)
+      const data: unknown = await res.json()
+      if (!isRecord(data)) throw new Error('Bitkub ticker feed invalid response')
+
+      const parsed: Record<string, Record<string, unknown>> = {}
+      for (const [pair, row] of Object.entries(data)) {
+        if (!isRecord(row)) continue
+        const normalized = pair.trim().toUpperCase()
+        if (!normalized.startsWith('THB_')) continue
+        const coin = normalized.split('_')[1]?.trim().toUpperCase()
+        if (!coin) continue
+        parsed[coin] = row
+      }
+      if (Object.keys(parsed).length === 0) throw new Error('Bitkub ticker feed empty')
+
+      globalAny.__crossfinBitkubTickersCache = { value: parsed, expiresAt: now + BITKUB_TICKERS_SUCCESS_TTL_MS }
+      return parsed
+    } catch {
+      globalAny.__crossfinBitkubTickersCache = { value: fallback, expiresAt: now + BITKUB_TICKERS_FAILURE_TTL_MS }
+      if (Object.keys(fallback).length > 0) return fallback
+      throw new Error('Bitkub ticker feed unavailable')
+    } finally {
+      globalAny.__crossfinBitkubTickersInFlight = null
+    }
+  })()
+
+  globalAny.__crossfinBitkubTickersInFlight = promise
+  return promise
+}
+
 // ============================================================
 // calcPremiums helper
 // ============================================================
+
+export function calcAsianPremium(
+  localTickers: Record<string, Record<string, unknown>>,
+  globalPrices: Record<string, number>,
+  fxRate: number,
+  localPriceField: string,
+  localVolumeField: string,
+  currencyCode: string,
+  exchangeName: string,
+): Array<{
+  coin: string
+  localPrice: number
+  localUsd: number
+  globalUsd: number
+  premiumPct: number
+  volume24hLocal: number
+  volume24hUsd: number
+}> {
+  void currencyCode
+  void exchangeName
+  const premiums: Array<{
+    coin: string
+    localPrice: number
+    localUsd: number
+    globalUsd: number
+    premiumPct: number
+    volume24hLocal: number
+    volume24hUsd: number
+  }> = []
+
+  for (const [coin, globalSymbol] of Object.entries(TRACKED_PAIRS)) {
+    const ticker = localTickers[coin]
+    const globalPrice = globalPrices[globalSymbol]
+    if (!ticker || typeof globalPrice !== 'number' || !Number.isFinite(globalPrice) || globalPrice <= 0) continue
+
+    const localPrice = Number(ticker[localPriceField])
+    const volume24hLocal = Number(ticker[localVolumeField])
+    const localUsdRaw = localPrice / fxRate
+    const premiumPctRaw = ((localUsdRaw - globalPrice) / globalPrice) * 100
+
+    if (!Number.isFinite(localPrice) || localPrice <= 0) continue
+    if (!Number.isFinite(volume24hLocal) || volume24hLocal < 0) continue
+    if (!Number.isFinite(localUsdRaw)) continue
+    if (!Number.isFinite(premiumPctRaw)) continue
+
+    premiums.push({
+      coin,
+      localPrice,
+      localUsd: Math.round(localUsdRaw * 100) / 100,
+      globalUsd: globalPrice,
+      premiumPct: Math.round(premiumPctRaw * 100) / 100,
+      volume24hLocal,
+      volume24hUsd: Math.round((volume24hLocal / fxRate) * 100) / 100,
+    })
+  }
+
+  return premiums.sort((a, b) => Math.abs(b.premiumPct) - Math.abs(a.premiumPct))
+}
 
 export function calcPremiums(
   bithumbData: Record<string, Record<string, string>>,

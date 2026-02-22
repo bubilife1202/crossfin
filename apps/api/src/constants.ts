@@ -37,6 +37,7 @@ export const BINANCE_FEES_PCT = 0.10 // Binance spot fee
 export const EXCHANGE_FEES: Record<string, number> = {
   bithumb: 0.25, upbit: 0.05, coinone: 0.20,
   gopax: 0.20, bitflyer: 0.15, wazirx: 0.20,
+  bitbank: 0.12, indodax: 0.30, bitkub: 0.25,
   binance: 0.10, okx: 0.08, bybit: 0.10,
 }
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.12.0] - 2026-02-22
+
+### Added
+- **Asian Premium Index** — 4 new endpoints for cross-country crypto premium analysis
+  - `GET /api/premium/asia/japan` — Japan premium (bitbank.cc JPY vs Binance USD)
+  - `GET /api/premium/asia/indonesia` — Indonesia premium (Indodax IDR vs Binance USD)
+  - `GET /api/premium/asia/thailand` — Thailand premium (Bitkub THB vs Binance USD)
+  - `GET /api/premium/asia/overview` — 4-country overview (Korea + Japan + Indonesia + Thailand)
+- **3 new exchange fetchers**: `fetchBitbankTickers()` (bitbank.cc), `fetchIndodaxTickers()` (Indodax), `fetchBitkubTickers()` (Bitkub)
+- **FX rate expansion**: `fetchUsdFxRates()` now returns JPY, IDR, THB in addition to KRW and INR
+- **Generic premium calculator**: `calcAsianPremium()` reusable helper for any local-vs-global premium calculation
+- Exchange fee data for bitbank (0.12% maker/taker), Indodax (0.25%/0.35%), Bitkub (0.25% maker/taker)
+
+### Changed
+- `fetchUsdFxRates()` return type expanded from `{KRW, JPY, INR}` to `{KRW, JPY, INR, IDR, THB}` with per-currency validation ranges
+
+
 ## [1.11.0] - 2026-02-22
 
 ### Changed

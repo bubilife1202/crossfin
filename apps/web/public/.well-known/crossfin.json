@@ -1,6 +1,6 @@
 {
   "name": "CrossFin",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "description": "Agent-first directory and gateway for x402 services and Korean market data.",
   "urls": {
     "website": "https://crossfin.dev",
@@ -45,5 +45,5 @@
       "compare_exchange_prices"
     ]
   },
-  "updatedAt": "2026-02-22T15:00:00.000Z"
+  "updatedAt": "2026-02-22T07:52:28Z"
 }

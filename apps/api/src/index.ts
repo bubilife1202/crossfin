@@ -66,6 +66,10 @@ import {
   fetchUpbitOrderbook,
   fetchCoinoneTicker,
   fetchWazirxTickers,
+  fetchBitbankTickers,
+  fetchIndodaxTickers,
+  fetchBitkubTickers,
+  calcAsianPremium,
   calcPremiums,
   fetchWithTimeout,
   CROSSFIN_UA,
@@ -6159,6 +6163,135 @@ app.get('/api/premium/arbitrage/kimchi', async (c) => {
     premiums,
     _dataMeta: buildDataMeta(priceMeta, fxMeta),
     _disclaimer: CROSSFIN_DISCLAIMER,
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/asia/japan', async (c) => {
+  const [bitbankData, globalPrices, fxRates] = await Promise.all([
+    fetchBitbankTickers(),
+    fetchGlobalPrices(c.env.DB),
+    fetchUsdFxRates(),
+  ])
+
+  const premiums = calcAsianPremium(bitbankData, globalPrices, fxRates.JPY, 'last', 'vol', 'JPY', 'bitbank')
+  const avg = premiums.length > 0
+    ? Math.round(premiums.reduce((s, p) => s + p.premiumPct, 0) / premiums.length * 100) / 100
+    : 0
+
+  return c.json({
+    service: 'crossfin-japan-premium',
+    exchange: 'bitbank',
+    currency: 'JPY',
+    usdJpyRate: fxRates.JPY,
+    pairsTracked: premiums.length,
+    avgPremiumPct: avg,
+    topPremium: premiums[0] ?? null,
+    premiums,
+    _disclaimer: CROSSFIN_DISCLAIMER,
+    _legal: CROSSFIN_LEGAL,
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/asia/indonesia', async (c) => {
+  const [indodaxData, globalPrices, fxRates] = await Promise.all([
+    fetchIndodaxTickers(),
+    fetchGlobalPrices(c.env.DB),
+    fetchUsdFxRates(),
+  ])
+
+  const premiums = calcAsianPremium(indodaxData, globalPrices, fxRates.IDR, 'last', 'vol_idr', 'IDR', 'indodax')
+  const avg = premiums.length > 0
+    ? Math.round(premiums.reduce((s, p) => s + p.premiumPct, 0) / premiums.length * 100) / 100
+    : 0
+
+  return c.json({
+    service: 'crossfin-indonesia-premium',
+    exchange: 'indodax',
+    currency: 'IDR',
+    usdIdrRate: fxRates.IDR,
+    pairsTracked: premiums.length,
+    avgPremiumPct: avg,
+    topPremium: premiums[0] ?? null,
+    premiums,
+    _disclaimer: CROSSFIN_DISCLAIMER,
+    _legal: CROSSFIN_LEGAL,
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/asia/thailand', async (c) => {
+  const [bitkubData, globalPrices, fxRates] = await Promise.all([
+    fetchBitkubTickers(),
+    fetchGlobalPrices(c.env.DB),
+    fetchUsdFxRates(),
+  ])
+
+  const premiums = calcAsianPremium(bitkubData, globalPrices, fxRates.THB, 'last', 'quoteVolume', 'THB', 'bitkub')
+  const avg = premiums.length > 0
+    ? Math.round(premiums.reduce((s, p) => s + p.premiumPct, 0) / premiums.length * 100) / 100
+    : 0
+
+  return c.json({
+    service: 'crossfin-thailand-premium',
+    exchange: 'bitkub',
+    currency: 'THB',
+    usdThbRate: fxRates.THB,
+    pairsTracked: premiums.length,
+    avgPremiumPct: avg,
+    topPremium: premiums[0] ?? null,
+    premiums,
+    _disclaimer: CROSSFIN_DISCLAIMER,
+    _legal: CROSSFIN_LEGAL,
+    at: new Date().toISOString(),
+  })
+})
+
+app.get('/api/premium/asia/overview', async (c) => {
+  const [bithumbData, bitbankData, indodaxData, bitkubData, globalPrices, fxRates] = await Promise.all([
+    fetchBithumbAll(),
+    fetchBitbankTickers(),
+    fetchIndodaxTickers(),
+    fetchBitkubTickers(),
+    fetchGlobalPrices(c.env.DB),
+    fetchUsdFxRates(),
+  ])
+
+  const koreaPremiums = calcPremiums(bithumbData, globalPrices, fxRates.KRW)
+  const japanPremiums = calcAsianPremium(bitbankData, globalPrices, fxRates.JPY, 'last', 'vol', 'JPY', 'bitbank')
+  const indoPremiums = calcAsianPremium(indodaxData, globalPrices, fxRates.IDR, 'last', 'vol_idr', 'IDR', 'indodax')
+  const thaiPremiums = calcAsianPremium(bitkubData, globalPrices, fxRates.THB, 'last', 'quoteVolume', 'THB', 'bitkub')
+
+  const calcAvg = (p: Array<{ premiumPct: number }>) => p.length > 0
+    ? Math.round(p.reduce((s, x) => s + x.premiumPct, 0) / p.length * 100) / 100
+    : 0
+
+  const korea = { name: 'korea', avg: calcAvg(koreaPremiums), top: koreaPremiums[0], pairs: koreaPremiums.length, exchange: 'bithumb', currency: 'KRW', fxRate: fxRates.KRW }
+  const japan = { name: 'japan', avg: calcAvg(japanPremiums), top: japanPremiums[0], pairs: japanPremiums.length, exchange: 'bitbank', currency: 'JPY', fxRate: fxRates.JPY }
+  const indonesia = { name: 'indonesia', avg: calcAvg(indoPremiums), top: indoPremiums[0], pairs: indoPremiums.length, exchange: 'indodax', currency: 'IDR', fxRate: fxRates.IDR }
+  const thailand = { name: 'thailand', avg: calcAvg(thaiPremiums), top: thaiPremiums[0], pairs: thaiPremiums.length, exchange: 'bitkub', currency: 'THB', fxRate: fxRates.THB }
+  const countries = [korea, japan, indonesia, thailand]
+
+  const allAvgs = countries.map((country) => country.avg)
+  const highest = countries.reduce((a, b) => (a.avg > b.avg ? a : b))
+  const lowest = countries.reduce((a, b) => (a.avg < b.avg ? a : b))
+
+  return c.json({
+    service: 'crossfin-asian-premium-index',
+    summary: {
+      highestPremiumCountry: highest.name,
+      highestPremiumPct: highest.avg,
+      lowestPremiumCountry: lowest.name,
+      lowestPremiumPct: lowest.avg,
+      asianAvgPremiumPct: Math.round(allAvgs.reduce((s, v) => s + v, 0) / allAvgs.length * 100) / 100,
+    },
+    korea: { exchange: 'bithumb', currency: 'KRW', avgPremiumPct: korea.avg, topCoin: korea.top?.coin ?? null, topPremiumPct: korea.top?.premiumPct ?? null, pairsTracked: korea.pairs, fxRate: korea.fxRate },
+    japan: { exchange: 'bitbank', currency: 'JPY', avgPremiumPct: japan.avg, topCoin: japan.top?.coin ?? null, topPremiumPct: japan.top?.premiumPct ?? null, pairsTracked: japan.pairs, fxRate: japan.fxRate },
+    indonesia: { exchange: 'indodax', currency: 'IDR', avgPremiumPct: indonesia.avg, topCoin: indonesia.top?.coin ?? null, topPremiumPct: indonesia.top?.premiumPct ?? null, pairsTracked: indonesia.pairs, fxRate: indonesia.fxRate },
+    thailand: { exchange: 'bitkub', currency: 'THB', avgPremiumPct: thailand.avg, topCoin: thailand.top?.coin ?? null, topPremiumPct: thailand.top?.premiumPct ?? null, pairsTracked: thailand.pairs, fxRate: thailand.fxRate },
+    _disclaimer: CROSSFIN_DISCLAIMER,
+    _legal: CROSSFIN_LEGAL,
     at: new Date().toISOString(),
   })
 })
