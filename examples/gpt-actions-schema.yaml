@@ -1,7 +1,7 @@
 openapi: "3.1.0"
 info:
   title: CrossFin - Korean Crypto Market Tools
-  version: "1.12.0"
+  version: "1.12.1"
   description: >
     Free endpoints for Korean crypto market data, exchange comparison,
     and service discovery. For use as OpenAI GPT Actions.
@@ -40,7 +40,7 @@ paths:
       description: >
         Free preview of the route spread index. Shows top 3 crypto pairs
         by premium percentage between Korean (Bithumb) and global (Binance)
-        exchanges. Includes indicator (FAVORABLE/NEUTRAL/UNFAVORABLE) and market condition.
+        exchanges. Includes indicator (POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD) and market condition.
       responses:
         "200":
           description: Route spread preview

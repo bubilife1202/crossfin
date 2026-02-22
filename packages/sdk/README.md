@@ -17,7 +17,7 @@ const client = new CrossFinClient()
 
 // Free endpoints — no API key needed
 const health = await client.health()
-console.log(health) // { name: 'crossfin-api', version: '1.10.0', status: 'ok' }
+console.log(health) // { name: 'crossfin-api', version: '1.12.1', status: 'ok' }
 
 // Route Spread preview (free)
 const demo = await client.arbitrage.demo()
@@ -44,65 +44,51 @@ const client = new CrossFinClient({ apiKey: 'your-agent-key' })
 const services = await client.registry.list()
 ```
 
-## Premium Endpoints (x402)
+## All Endpoints (Currently Free)
 
-Premium endpoints require payment via the [x402 protocol](https://x402.org) (USDC on Base mainnet). If you call a premium endpoint without payment, a `CrossFinError` with status 402 will be thrown with a clear message.
-
-```typescript
-import { CrossFinClient, CrossFinError } from '@crossfin/sdk'
-
-const client = new CrossFinClient()
-
-try {
-  // Full Route Spread Index — $0.05 USDC
-  const kimchi = await client.premium.kimchi()
-  console.log(kimchi.premiums)
-} catch (err) {
-  if (err instanceof CrossFinError && err.status === 402) {
-    console.log('Payment required:', err.message)
-  }
-}
-```
+All endpoints are currently free during the open beta period. No x402 payment or wallet required. The x402 payment infrastructure is ready and will be re-enabled in a future version.
 
 ### Available Premium Methods
 
-| Method | Price | Description |
-|--------|-------|-------------|
-| `premium.kimchi()` | $0.05 | Full Route Spread Index |
-| `premium.kimchiHistory({ coin, hours })` | $0.05 | Route Spread History (hourly) |
-| `premium.opportunities()` | $0.10 | Arbitrage Decision Service |
-| `premium.bithumbOrderbook(pair)` | $0.02 | Live Bithumb Orderbook |
-| `premium.bithumbVolumeAnalysis()` | $0.03 | Bithumb 24h Volume Analysis |
-| `premium.koreaMarketSentiment()` | $0.03 | Korean Market Sentiment |
-| `premium.usdKrw()` | $0.01 | USD/KRW Exchange Rate |
-| `premium.upbitTicker(market)` | $0.02 | Upbit Ticker |
-| `premium.upbitOrderbook(market)` | $0.02 | Upbit Orderbook |
-| `premium.upbitSignals()` | $0.05 | Upbit Trading Signals |
-| `premium.coinoneTicker(currency)` | $0.02 | Coinone Ticker |
-| `premium.crossExchange(coins)` | $0.08 | Cross-Exchange Decision Service |
-| `premium.koreaIndices()` | $0.03 | KOSPI/KOSDAQ Indices |
-| `premium.koreaIndicesHistory({ index, days })` | $0.05 | Korea Indices History |
-| `premium.koreaStocksMomentum(market)` | $0.05 | Korea Stocks Momentum |
-| `premium.koreaInvestorFlow(stock)` | $0.05 | Korea Investor Flow |
-| `premium.koreaIndexFlow(index)` | $0.03 | Korea Index Flow |
-| `premium.koreaStockDetail(stock)` | $0.05 | Korea Stock Detail |
-| `premium.koreaStockNews(stock)` | $0.03 | Korea Stock News |
-| `premium.koreaThemes()` | $0.05 | Korea Market Themes |
-| `premium.koreaDisclosure(stock)` | $0.03 | Korea Disclosure Feed |
-| `premium.koreaEtf()` | $0.03 | Korea ETF Universe |
-| `premium.stockBrief(stock)` | $0.10 | Stock Brief Bundle |
-| `premium.korea5Exchange(coin)` | $0.08 | Korea 5-Exchange Compare |
-| `premium.koreaExchangeStatus()` | $0.03 | Korea Exchange Status |
-| `premium.koreaFxRate()` | $0.01 | Korea FX Rate (CRIX) |
-| `premium.upbitCandles({ coin, type, count })` | $0.02 | Upbit Candles |
-| `premium.globalIndicesChart({ index, period })` | $0.02 | Global Indices Chart |
-| `premium.koreaHeadlines(limit)` | $0.03 | Korean Headlines |
-| `premium.morningBrief()` | $0.20 | Morning Brief Bundle |
-| `premium.cryptoSnapshot()` | $0.15 | Crypto Snapshot Bundle |
-| `premium.kimchiStats()` | $0.15 | Route Spread Stats Bundle |
-| `premium.routeFind(params)` | $0.10 | Optimal Route Finder |
-| `premium.report()` | $0.001 | Premium Report (x402 check) |
-| `premium.enterprise()` | $20.00 | Enterprise Receipt |
+| Method | Description |
+|--------|-------------|
+| `premium.kimchi()` | Full Route Spread Index |
+| `premium.kimchiHistory({ coin, hours })` | Route Spread History (hourly) |
+| `premium.opportunities()` | Arbitrage Decision Service |
+| `premium.bithumbOrderbook(pair)` | Live Bithumb Orderbook |
+| `premium.bithumbVolumeAnalysis()` | Bithumb 24h Volume Analysis |
+| `premium.koreaMarketSentiment()` | Korean Market Sentiment |
+| `premium.usdKrw()` | USD/KRW Exchange Rate |
+| `premium.upbitTicker(market)` | Upbit Ticker |
+| `premium.upbitOrderbook(market)` | Upbit Orderbook |
+| `premium.upbitSignals()` | Upbit Trading Signals |
+| `premium.coinoneTicker(currency)` | Coinone Ticker |
+| `premium.crossExchange(coins)` | Cross-Exchange Decision Service |
+| `premium.koreaIndices()` | KOSPI/KOSDAQ Indices |
+| `premium.koreaIndicesHistory({ index, days })` | Korea Indices History |
+| `premium.koreaStocksMomentum(market)` | Korea Stocks Momentum |
+| `premium.koreaInvestorFlow(stock)` | Korea Investor Flow |
+| `premium.koreaIndexFlow(index)` | Korea Index Flow |
+| `premium.koreaStockDetail(stock)` | Korea Stock Detail |
+| `premium.koreaStockNews(stock)` | Korea Stock News |
+| `premium.koreaThemes()` | Korea Market Themes |
+| `premium.koreaDisclosure(stock)` | Korea Disclosure Feed |
+| `premium.koreaEtf()` | Korea ETF Universe |
+| `premium.stockBrief(stock)` | Stock Brief Bundle |
+| `premium.korea5Exchange(coin)` | Korea 5-Exchange Compare |
+| `premium.koreaExchangeStatus()` | Korea Exchange Status |
+| `premium.koreaFxRate()` | Korea FX Rate (CRIX) |
+| `premium.upbitCandles({ coin, type, count })` | Upbit Candles |
+| `premium.globalIndicesChart({ index, period })` | Global Indices Chart |
+| `premium.koreaHeadlines(limit)` | Korean Headlines |
+| `premium.morningBrief()` | Morning Brief Bundle |
+| `premium.cryptoSnapshot()` | Crypto Snapshot Bundle |
+| `premium.kimchiStats()` | Route Spread Stats Bundle |
+| `premium.routeFind(params)` | Optimal Route Finder |
+| `premium.report()` | Premium Report (x402 check) |
+| `premium.enterprise()` | Enterprise Receipt |
+
+> ⚠️ **Naver-dependent endpoints** (koreaIndices, koreaIndicesHistory, koreaStocksMomentum, koreaInvestorFlow, koreaIndexFlow, koreaStockDetail, koreaStockNews, koreaThemes, koreaDisclosure, koreaEtf, stockBrief, globalIndicesChart) currently return HTTP 503. Migration to official data sources in progress.
 
 ## Free Endpoints
 

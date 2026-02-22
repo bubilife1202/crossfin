@@ -50,10 +50,10 @@ curl "https://crossfin.dev/api/routing/optimal?from=bithumb:KRW&to=binance:USDC&
 
 Returns live optimal route + alternatives with real exchange fee table from D1.
 
-## Step 6: Paid optimal route (x402)
+## Step 6: Full optimal route
 
 ```
 GET /api/premium/route/find?from=bithumb:KRW&to=binance:USDC&amount=5000000&strategy=cheapest
 ```
 
-Full route analysis ($0.10). Use an x402-capable client with Base USDC settlement.
+Full route analysis. Returns complete step-by-step route with all alternatives and fee breakdown.

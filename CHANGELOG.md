@@ -1,5 +1,16 @@
 # Changelog
 
+
+## [1.12.1] - 2026-02-22
+
+### Fixed
+- **Documentation sync** — align all docs, SDK types, and metadata with production v1.12.0 state
+  - SDK types: `FAVORABLE` → `POSITIVE_SPREAD`, `UNFAVORABLE` → `NEGATIVE_SPREAD`, `favorableCandidates` → `positiveSpreadCount`
+  - All endpoint pricing updated to Free (open beta) across README, docs site, SDK README, MCP README
+  - 12 Naver-dependent endpoints marked as ⚠️ Temporarily disabled (503) in all documentation
+  - `catalog/crossfin-catalog.json` and `gpt-actions-schema.yaml` terminology aligned
+
+
 ## [1.12.0] - 2026-02-22
 
 ### Added

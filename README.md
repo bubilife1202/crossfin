@@ -28,7 +28,7 @@ Add this to your MCP client config:
 
 Restart your MCP client. Done. 16 tools available immediately.
 
-> **No EVM key?** Free tools (price lookup, fee comparison, route spread) work without one. Paid tools ($0.01–$0.10 per call) require a Base wallet with USDC.
+> **All endpoints are currently free** during open beta. No EVM wallet or API key required. x402 payment infrastructure ready for future activation.
 
 ---
 
@@ -57,7 +57,7 @@ Restart your MCP client. Done. 16 tools available immediately.
 
 **Prices differ across exchanges.** The same BTC can be 2-3% more expensive on Korean exchanges (route spread). CrossFin's routing engine finds the cheapest bridge coin and path, factoring in trading fees, withdrawal fees, slippage, and transfer time.
 
-**x402 native.** No API keys, no subscriptions, no invoices. Agents pay per call with USDC on Base. $0.01 for an FX rate, $0.10 for a full routing analysis.
+**x402 ready.** No API keys, no subscriptions, no invoices. All endpoints are currently free during open beta. x402 payment infrastructure (USDC on Base) ready for future activation.
 
 ---
 
@@ -80,7 +80,7 @@ Considers: trading fees (0.10–0.25%), withdrawal fees (fixed per coin), orderb
 Supports bidirectional routing: Korea → Global and Global → Korea.
 
 **Free preview:** `POST /api/acp/quote` (ACP compatible)
-**Full route:** `GET /api/premium/route/find` ($0.10 via x402)
+**Full route:** `GET /api/premium/route/find` (free during open beta)
 
 ---
 
@@ -88,7 +88,7 @@ Supports bidirectional routing: Korea → Global and Global → Korea.
 
 | Tool | What it does |
 |------|-------------|
-| `find_optimal_route` | Optimal crypto transfer path across 9 exchanges (paid, $0.10) |
+| `find_optimal_route` | Optimal crypto transfer path across 9 exchanges (free) |
 | `list_exchange_fees` | Trading + withdrawal fee comparison |
 | `compare_exchange_prices` | Live Bithumb KRW vs Binance USD comparison |
 | `get_kimchi_premium` | Korean vs. global route spread (free preview) |
@@ -122,63 +122,63 @@ Data sources: bitbank.cc (Japan), Indodax (Indonesia), Bitkub (Thailand), Bithum
 
 ---
 
-## 35 Paid APIs
+## API Endpoints (Currently All Free)
 
-All paid via x402 (USDC on Base). No API key needed.
+All endpoints are currently free during open beta. x402 payment infrastructure is ready for future activation.
 
 <details>
-<summary><strong>Korean Market APIs ($0.01–$0.10)</strong></summary>
+<summary><strong>Korean Market APIs</strong></summary>
 
 | Endpoint | Price | Description |
 |----------|-------|-------------|
-| `/api/premium/arbitrage/kimchi` | $0.05 | Full Route Spread (11 pairs incl. KAIA) |
-| `/api/premium/arbitrage/opportunities` | $0.10 | Arbitrage indicators (POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD) |
-| `/api/premium/bithumb/orderbook?pair=BTC` | $0.02 | Bithumb orderbook (30 levels) |
-| `/api/premium/market/upbit/ticker` | $0.02 | Upbit ticker |
-| `/api/premium/market/upbit/orderbook` | $0.02 | Upbit orderbook |
-| `/api/premium/market/coinone/ticker` | $0.02 | Coinone ticker |
-| `/api/premium/market/fx/usdkrw` | $0.01 | USD/KRW exchange rate |
-| `/api/premium/market/korea` | $0.03 | Korean market sentiment |
-| `/api/premium/market/cross-exchange` | $0.08 | Cross-exchange arbitrage decision |
-| `/api/premium/news/korea/headlines` | $0.03 | Korean headlines |
-| `/api/premium/arbitrage/kimchi/history` | $0.05 | Route spread history (7 days) |
-| `/api/premium/bithumb/volume-analysis` | $0.03 | Bithumb volume analysis |
-| `/api/premium/market/upbit/signals` | $0.05 | Upbit trading signals |
-| `/api/premium/crypto/korea/5exchange` | $0.08 | Cross-exchange price comparison |
-| `/api/premium/crypto/korea/exchange-status` | $0.03 | Deposit/withdrawal status |
-| `/api/premium/crypto/korea/fx-rate` | $0.01 | Real-time KRW/USD (Upbit CRIX) |
-| `/api/premium/crypto/korea/upbit-candles` | $0.02 | Upbit OHLCV candles |
+| `/api/premium/arbitrage/kimchi` | Free | Full Route Spread (11 pairs incl. KAIA) |
+| `/api/premium/arbitrage/opportunities` | Free | Arbitrage indicators (POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD) |
+| `/api/premium/bithumb/orderbook?pair=BTC` | Free | Bithumb orderbook (30 levels) |
+| `/api/premium/market/upbit/ticker` | Free | Upbit ticker |
+| `/api/premium/market/upbit/orderbook` | Free | Upbit orderbook |
+| `/api/premium/market/coinone/ticker` | Free | Coinone ticker |
+| `/api/premium/market/fx/usdkrw` | Free | USD/KRW exchange rate |
+| `/api/premium/market/korea` | Free | Korean market sentiment |
+| `/api/premium/market/cross-exchange` | Free | Cross-exchange arbitrage decision |
+| `/api/premium/news/korea/headlines` | Free | Korean headlines |
+| `/api/premium/arbitrage/kimchi/history` | Free | Route spread history (7 days) |
+| `/api/premium/bithumb/volume-analysis` | Free | Bithumb volume analysis |
+| `/api/premium/market/upbit/signals` | Free | Upbit trading signals |
+| `/api/premium/crypto/korea/5exchange` | Free | Cross-exchange price comparison |
+| `/api/premium/crypto/korea/exchange-status` | Free | Deposit/withdrawal status |
+| `/api/premium/crypto/korea/fx-rate` | Free | Real-time KRW/USD (Upbit CRIX) |
+| `/api/premium/crypto/korea/upbit-candles` | Free | Upbit OHLCV candles |
 
 </details>
 
 <details>
-<summary><strong>Korean Stock APIs ($0.03–$0.05)</strong></summary>
+<summary><strong>Korean Stock APIs</strong></summary>
 
 | Endpoint | Price | Description |
 |----------|-------|-------------|
-| `/api/premium/market/korea/indices` | $0.03 | KOSPI & KOSDAQ real-time |
-| `/api/premium/market/korea/indices/history` | $0.05 | KOSPI/KOSDAQ daily OHLC (60 days) |
-| `/api/premium/market/korea/stocks/momentum` | $0.05 | Top gainers/losers/market cap |
-| `/api/premium/market/korea/investor-flow` | $0.05 | Stock investor flow (foreign/institutional) |
-| `/api/premium/market/korea/index-flow` | $0.03 | Index-level investor flow |
-| `/api/premium/market/korea/stock-detail` | $0.05 | Stock analysis (PER, PBR, consensus) |
-| `/api/premium/market/korea/stock-news` | $0.03 | Stock-specific news |
-| `/api/premium/market/korea/themes` | $0.05 | Market themes/sectors |
-| `/api/premium/market/korea/disclosure` | $0.03 | Corporate disclosures |
-| `/api/premium/market/korea/etf` | $0.03 | 1,070+ Korean ETFs |
-| `/api/premium/market/global/indices-chart` | $0.02 | Global index charts (Dow, NASDAQ, etc.) |
+| `/api/premium/market/korea/indices` | Free | ⚠️ Temporarily disabled (503) — KOSPI & KOSDAQ real-time |
+| `/api/premium/market/korea/indices/history` | Free | ⚠️ Temporarily disabled (503) — KOSPI/KOSDAQ daily OHLC (60 days) |
+| `/api/premium/market/korea/stocks/momentum` | Free | ⚠️ Temporarily disabled (503) — Top gainers/losers/market cap |
+| `/api/premium/market/korea/investor-flow` | Free | ⚠️ Temporarily disabled (503) — Stock investor flow (foreign/institutional) |
+| `/api/premium/market/korea/index-flow` | Free | ⚠️ Temporarily disabled (503) — Index-level investor flow |
+| `/api/premium/market/korea/stock-detail` | Free | ⚠️ Temporarily disabled (503) — Stock analysis (PER, PBR, consensus) |
+| `/api/premium/market/korea/stock-news` | Free | ⚠️ Temporarily disabled (503) — Stock-specific news |
+| `/api/premium/market/korea/themes` | Free | ⚠️ Temporarily disabled (503) — Market themes/sectors |
+| `/api/premium/market/korea/disclosure` | Free | ⚠️ Temporarily disabled (503) — Corporate disclosures |
+| `/api/premium/market/korea/etf` | Free | ⚠️ Temporarily disabled (503) — 1,070+ Korean ETFs |
+| `/api/premium/market/global/indices-chart` | Free | ⚠️ Temporarily disabled (503) — Global index charts (Dow, NASDAQ, etc.) |
 
 </details>
 
 <details>
-<summary><strong>Bundle APIs ($0.10–$0.20)</strong></summary>
+<summary><strong>Bundle APIs</strong></summary>
 
 | Endpoint | Price | Description |
 |----------|-------|-------------|
-| `/api/premium/morning/brief` | $0.20 | Morning Brief (route spread + FX + stocks + headlines) |
-| `/api/premium/crypto/snapshot` | $0.15 | Crypto Snapshot (4-exchange + route spread + volume + FX) |
-| `/api/premium/kimchi/stats` | $0.15 | Route Spread Stats (spreads + trend + arbitrage signal) |
-| `/api/premium/market/korea/stock-brief` | $0.10 | Stock Brief (fundamentals + news + flow) |
+| `/api/premium/morning/brief` | Free | Morning Brief (route spread + FX + stocks + headlines) |
+| `/api/premium/crypto/snapshot` | Free | Crypto Snapshot (4-exchange + route spread + volume + FX) |
+| `/api/premium/kimchi/stats` | Free | Route Spread Stats (spreads + trend + arbitrage signal) |
+| `/api/premium/market/korea/stock-brief` | Free | ⚠️ Temporarily disabled (503) — Stock Brief (fundamentals + news + flow) |
 
 </details>
 
@@ -187,8 +187,8 @@ All paid via x402 (USDC on Base). No API key needed.
 
 | Endpoint | Price | Description |
 |----------|-------|-------------|
-| `/api/premium/report` | $0.001 | Premium report (agents/wallets/transactions summary) |
-| `/api/premium/enterprise` | $20.00 | Enterprise receipt/proof endpoint |
+| `/api/premium/report` | Free | Premium report (agents/wallets/transactions summary) |
+| `/api/premium/enterprise` | Free | Enterprise receipt/proof endpoint |
 
 </details>
 
@@ -201,7 +201,7 @@ All paid via x402 (USDC on Base). No API key needed.
 | `GET /api/route/fees` | Free | Fee comparison table |
 | `GET /api/route/pairs` | Free | Trading pairs with live prices |
 | `GET /api/route/status` | Free | Exchange health check |
-| `GET /api/premium/route/find` | $0.10 | Full optimal route analysis |
+| `GET /api/premium/route/find` | Free | Full optimal route analysis |
 | `POST /api/acp/quote` | Free | ACP-compatible routing quote (preview) |
 
 </details>
@@ -224,6 +224,8 @@ All paid via x402 (USDC on Base). No API key needed.
 ---
 
 ## Payment (x402)
+
+> **Note:** All endpoints are currently free during open beta. The x402 payment code below is for reference when payments are re-enabled.
 
 No API keys. No subscriptions. Pay per call with USDC on Base.
 

@@ -3,7 +3,7 @@ layout: home
 hero:
   name: CrossFin
   text: Documentation
-  tagline: Route capital across Korean and global exchanges, call paid APIs over x402, and integrate with agents through ACP and MCP.
+  tagline: Real-time Korean and Asian crypto market data
   actions:
     - theme: brand
       text: Quickstart
@@ -28,7 +28,7 @@ features:
   { method: 'GET', path: '/api/route/status', description: 'Exchange network health (live status across 9 exchanges)', price: 'Free' },
   { method: 'GET', path: '/api/route/fees', description: 'Trading + withdrawal fee table', price: 'Free' },
   { method: 'GET', path: '/api/arbitrage/demo', description: 'Top 3 route spread decisions', price: 'Free' },
-  { method: 'GET', path: '/api/premium/route/find', description: 'Full optimal route analysis', price: '$0.10' },
+  { method: 'GET', path: '/api/premium/route/find', description: 'Full optimal route analysis', price: 'Free' },
 ]" />
 
 ## Base URLs

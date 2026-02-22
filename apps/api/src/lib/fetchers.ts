@@ -19,7 +19,7 @@ import type {
 // Fetch with timeout utility
 // ============================================================
 
-export const CROSSFIN_UA = 'CrossFin-API/1.12.0'
+export const CROSSFIN_UA = 'CrossFin-API/1.12.1'
 
 export async function fetchWithTimeout(
   url: string,

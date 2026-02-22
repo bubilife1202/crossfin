@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// CrossFin SDK — Response types derived from OpenAPI spec v1.12.0
+// CrossFin SDK — Response types derived from OpenAPI spec v1.12.1
 // ---------------------------------------------------------------------------
 
 /** GET /api/health */
@@ -46,7 +46,7 @@ export interface ArbitrageDemoResponse {
   krwUsdRate: number
   preview: ArbitrageDemoPreview[]
   avgPremiumPct: number
-  favorableCandidates: number
+  positiveSpreadCount: number
   marketCondition: string
   at: string
 }
@@ -111,7 +111,7 @@ export interface ArbitrageOpportunity {
   slippageEstimatePct: number
   transferTimeMin: number
   premiumTrend: 'rising' | 'falling' | 'stable'
-  indicator: 'FAVORABLE' | 'NEUTRAL' | 'UNFAVORABLE'
+  indicator: 'POSITIVE_SPREAD' | 'NEUTRAL' | 'NEGATIVE_SPREAD'
   signalStrength: number
   reason: string
 }
@@ -123,8 +123,8 @@ export interface OpportunitiesResponse {
   krwUsdRate: number
   totalOpportunities: number
   profitableCount: number
-  favorableCandidates: number
-  marketCondition: 'favorable' | 'neutral' | 'unfavorable'
+  positiveSpreadCount: number
+  marketCondition: 'positive' | 'neutral' | 'negative'
   estimatedFeesNote: string
   bestOpportunity: Record<string, unknown>
   opportunities: ArbitrageOpportunity[]
@@ -501,7 +501,7 @@ export interface KimchiStatsResponse {
   bestOpportunity: {
     coin: string
     premiumPct: number
-    indicator: 'FAVORABLE' | 'NEUTRAL' | 'UNFAVORABLE'
+    indicator: 'POSITIVE_SPREAD' | 'NEUTRAL' | 'NEGATIVE_SPREAD'
     signalStrength: number
     reason: string
   }
