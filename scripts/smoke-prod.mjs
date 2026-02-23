@@ -276,7 +276,7 @@ async function runOnce(baseUrl, liveUrl, timeoutMs, runId) {
   const routeExchanges = await ok200Json(`${baseUrl}/api/route/exchanges`, timeoutMs)
   assert(isRecord(routeExchanges) && Array.isArray(routeExchanges.exchanges), 'route/exchanges must include exchanges array')
   const routeExchangeIds = (routeExchanges.exchanges ?? []).map((e) => (isRecord(e) ? String(e.id ?? '') : '')).filter(Boolean)
-  const expectedExchanges = ['bithumb', 'upbit', 'coinone', 'gopax', 'bitflyer', 'wazirx', 'binance', 'okx', 'bybit']
+  const expectedExchanges = ['bithumb', 'upbit', 'coinone', 'gopax', 'bitflyer', 'wazirx', 'bitbank', 'indodax', 'bitkub', 'binance', 'okx', 'bybit', 'kucoin']
   assert(routeExchangeIds.length === expectedExchanges.length, `route/exchanges must return ${expectedExchanges.length} exchanges`)
   for (const ex of expectedExchanges) {
     assert(routeExchangeIds.includes(ex), `route/exchanges must include ${ex}`)
@@ -325,10 +325,10 @@ async function runOnce(baseUrl, liveUrl, timeoutMs, runId) {
 
   await postFunnelEvent(baseUrl, timeoutMs, runId)
 
-  await expect402Paywall(`${baseUrl}/api/premium/report`, timeoutMs)
-  await expect402Paywall(`${baseUrl}/api/premium/arbitrage/kimchi`, timeoutMs)
-  await expect402Paywall(`${baseUrl}/api/premium/route/find?from=bithumb:KRW&to=binance:USDC&amount=1000000&strategy=cheapest`, timeoutMs)
-  await expect402Paywall(`${baseUrl}/api/premium/crypto/korea/5exchange?coin=BTC`, timeoutMs)
+  await ok200Json(`${baseUrl}/api/premium/report`, timeoutMs)
+  await ok200Json(`${baseUrl}/api/premium/arbitrage/kimchi`, timeoutMs)
+  await ok200Json(`${baseUrl}/api/premium/route/find?from=bithumb:KRW&to=binance:USDC&amount=1000000&strategy=cheapest`, timeoutMs)
+  await ok200Json(`${baseUrl}/api/premium/crypto/korea/5exchange?coin=BTC`, timeoutMs)
 
   await checkLiveSite(`${liveUrl}/`, timeoutMs)
 
