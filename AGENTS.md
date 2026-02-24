@@ -2,7 +2,7 @@
 
 ## What is CrossFin?
 
-Cross-border crypto routing engine for AI agents. Routes capital across 13 Korean and global exchanges with x402 USDC micropayments on Base.
+Cross-border crypto routing engine for AI agents. Routes capital across 14 Korean and global exchanges with x402 USDC micropayments on Base.
 
 ## Architecture
 
@@ -50,8 +50,8 @@ Production: `https://crossfin.dev`
 
 Korea: Bithumb, Upbit, Coinone, GoPax
 Regional: bitFlyer (JPY), WazirX (INR), bitbank (JPY), Indodax (IDR), Bitkub (THB)
-Global: Binance, OKX, Bybit, KuCoin
-Bridge coins: BTC, ETH, XRP, SOL, DOGE, ADA, DOT, LINK, AVAX, TRX, KAIA
+Global: Binance, OKX, Bybit, KuCoin, Coinbase
+Bridge coins: BTC, ETH, XRP, SOL, DOGE, ADA, DOT, LINK, AVAX, TRX, KAIA, SUI, APT
 
 ## Development
 

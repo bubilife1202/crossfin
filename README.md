@@ -2,7 +2,7 @@
 
 **The only way AI agents access Asian crypto markets.**
 
-CrossFin is a financial router for AI agents. It finds the cheapest path to move money across 13 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin), pays for APIs with crypto (x402 protocol), and gives agents real-time access to market data that's normally locked behind Korean-language interfaces and IP restrictions.
+CrossFin is a financial router for AI agents. It finds the cheapest path to move money across 14 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin, Coinbase), pays for APIs with crypto (x402 protocol), and gives agents real-time access to market data that's normally locked behind Korean-language interfaces and IP restrictions.
 
 **Live:** [crossfin.dev](https://crossfin.dev) | **Demo:** [live.crossfin.dev](https://live.crossfin.dev)
 
@@ -36,14 +36,14 @@ Restart your MCP client. Done. 16 tools available immediately.
 
 **Ask your agent:**
 
-- "빗썸에서 바이낸스로 500만원 USDC 만들려면 가장 싼 방법이 뭐야?" → Routing engine evaluates 11 bridge coins across 13 exchanges, returns optimal path with fees
-- "지금 한국-글로벌 스프레드 얼마야?" → Real-time price spread between Korean and global exchanges for 11 crypto pairs
+- "빗썸에서 바이낸스로 500만원 USDC 만들려면 가장 싼 방법이 뭐야?" → Routing engine evaluates 13 bridge coins across 14 exchanges, returns optimal path with fees
+- "지금 한국-글로벌 스프레드 얼마야?" → Real-time price spread between Korean and global exchanges for 13 crypto pairs
 - "일본이랑 태국 프리미엄 비교해줘" → Asian Premium Index across Korea, Japan, Indonesia, Thailand
 - "오늘 한국 시장 브리핑해줘" → Morning Brief bundle: route spread + FX + headlines
 
 **For developers/agents:**
 
-- `find_optimal_route` — cheapest/fastest/balanced path across Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin using 11 bridge coins (BTC, ETH, XRP, SOL, DOGE, ADA, DOT, LINK, AVAX, TRX, KAIA)
+- `find_optimal_route` — cheapest/fastest/balanced path across Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin, Coinbase using 13 bridge coins (BTC, ETH, XRP, SOL, DOGE, ADA, DOT, LINK, AVAX, TRX, KAIA, SUI, APT)
 - `get_kimchi_premium` — real-time Korean vs. global route spread
 - `compare_exchange_prices` — live Bithumb KRW vs Binance USD price comparison
 - `call_paid_service` — call any paid API with automatic x402 USDC payment (currently free during open beta)
@@ -88,7 +88,7 @@ Supports bidirectional routing: Korea → Global and Global → Korea.
 
 | Tool | What it does |
 |------|-------------|
-| `find_optimal_route` | Optimal crypto transfer path across 13 exchanges (free) |
+| `find_optimal_route` | Optimal crypto transfer path across 14 exchanges (free) |
 | `list_exchange_fees` | Trading + withdrawal fee comparison |
 | `compare_exchange_prices` | Live Bithumb KRW vs Binance USD comparison |
 | `get_kimchi_premium` | Korean vs. global route spread (free preview) |
@@ -131,7 +131,7 @@ All endpoints are currently free during open beta. x402 payment infrastructure i
 
 | Endpoint | Price | Description |
 |----------|-------|-------------|
-| `/api/premium/arbitrage/kimchi` | Free | Full Route Spread (11 pairs incl. KAIA) |
+| `/api/premium/arbitrage/kimchi` | Free | Full Route Spread (13 pairs incl. KAIA, SUI, APT) |
 | `/api/premium/arbitrage/opportunities` | Free | Arbitrage indicators (POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD) |
 | `/api/premium/bithumb/orderbook?pair=BTC` | Free | Bithumb orderbook (30 levels) |
 | `/api/premium/market/upbit/ticker` | Free | Upbit ticker |

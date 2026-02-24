@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.15.0] - 2026-02-24
+
+### Added
+- **Coinbase** — 14th exchange added to routing engine (global, USDC/USDT/USD)
+  - `fetchCoinbasePrices()` fetcher using Coinbase Advanced Trade public API (no auth required)
+  - Trading fees: 0.50% (conservative base tier estimate)
+  - Supports 11 of 13 bridge coins (TRX and KAIA not available on Coinbase)
+- **SUI bridge coin** — 12th bridge coin added
+  - Supported on 12 of 14 exchanges (not GoPax, not bitFlyer)
+  - Sub-second finality (Mysticeti v2), ~1 min practical transfer time
+  - Withdrawal fees: 0.02–1.0 SUI (varies by exchange)
+- **APT (Aptos) bridge coin** — 13th bridge coin added
+  - Supported on 11 of 14 exchanges (not GoPax, not bitFlyer, not bitbank)
+  - Sub-second finality (Zaptos), ~1 min practical transfer time
+  - Withdrawal fees: 0.005–0.02 APT (varies by exchange)
+
+### Changed
+- All docs, README, MCP manifests, agent prompts, discovery metadata updated from 13 → 14 exchanges, 11 → 13 bridge coins
+- Routing engine now evaluates 13 bridge coins × 14 exchanges for optimal paths
+
 
 ## [1.14.0] - 2026-02-22
 

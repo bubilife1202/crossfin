@@ -154,7 +154,7 @@ export async function getRouteStatusPayload(db: D1Database): Promise<Record<stri
     })
     .catch(() => false)
 
-  const [bithumbOnline, upbitOnline, coinoneOnline, gopaxOnline, bitflyerOnline, wazirxOnline, bitbankOnline, indodaxOnline, bitkubOnline, kucoinOnline, globalFeedOnline] = await Promise.all([
+  const [bithumbOnline, upbitOnline, coinoneOnline, gopaxOnline, bitflyerOnline, wazirxOnline, bitbankOnline, indodaxOnline, bitkubOnline, kucoinOnline, coinbaseOnline, globalFeedOnline] = await Promise.all([
     checkRouteHttpOk('https://api.bithumb.com/public/ticker/BTC_KRW', ROUTE_HEALTH_TIMEOUT_MS),
     checkRouteHttpOk('https://api.upbit.com/v1/ticker?markets=KRW-BTC', ROUTE_HEALTH_TIMEOUT_MS),
     checkRouteHttpOk('https://api.coinone.co.kr/public/v2/ticker_new/KRW/BTC', ROUTE_HEALTH_TIMEOUT_MS),
@@ -165,6 +165,7 @@ export async function getRouteStatusPayload(db: D1Database): Promise<Record<stri
     checkRouteHttpOk('https://indodax.com/api/ticker/btcidr', ROUTE_HEALTH_TIMEOUT_MS),
     checkRouteHttpOk('https://api.bitkub.com/api/market/ticker?sym=THB_BTC', ROUTE_HEALTH_TIMEOUT_MS),
     checkRouteHttpOk('https://api.kucoin.com/api/v1/prices?currencies=BTC', ROUTE_HEALTH_TIMEOUT_MS),
+    checkRouteHttpOk('https://api.coinbase.com/api/v3/brokerage/market/products?product_ids=BTC-USD&product_type=SPOT', ROUTE_HEALTH_TIMEOUT_MS),
     globalFeedOnlinePromise,
   ])
 
@@ -182,6 +183,7 @@ export async function getRouteStatusPayload(db: D1Database): Promise<Record<stri
     okx: globalFeedOnline ? 'online' : 'offline',
     bybit: globalFeedOnline ? 'online' : 'offline',
     kucoin: (kucoinOnline || globalFeedOnline) ? 'online' : 'offline',
+    coinbase: (coinbaseOnline || globalFeedOnline) ? 'online' : 'offline',
   }
 
   const statuses = ROUTING_EXCHANGES.map((exchange) => ({

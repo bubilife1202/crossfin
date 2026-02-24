@@ -13,7 +13,7 @@ hero:
       link: /api
 features:
   - title: Routing Engine
-    details: Cheapest regional-fiat→stablecoin route across 13 exchanges with 11 bridge coins
+    details: Cheapest regional-fiat→stablecoin route across 14 exchanges with 13 bridge coins
   - title: Asian Premium Index
     details: Real-time crypto premium across Korea, Japan, Indonesia, Thailand vs global markets
   - title: MCP Integration
@@ -25,7 +25,7 @@ features:
 ## Core Endpoints
 
 <ApiTable :endpoints="[
-  { method: 'GET', path: '/api/route/status', description: 'Exchange network health (live status across 13 exchanges)', price: 'Free' },
+  { method: 'GET', path: '/api/route/status', description: 'Exchange network health (live status across 14 exchanges)', price: 'Free' },
   { method: 'GET', path: '/api/route/fees', description: 'Trading + withdrawal fee table', price: 'Free' },
   { method: 'GET', path: '/api/arbitrage/demo', description: 'Top 3 route spread decisions', price: 'Free' },
   { method: 'GET', path: '/api/premium/route/find', description: 'Full optimal route analysis', price: 'Free' },
@@ -49,4 +49,4 @@ features:
 | **Regional Fiat** | bitFlyer (JPY), WazirX (INR) |
 | **Asian Premium** | bitbank (JPY), Indodax (IDR), Bitkub (THB) |
 | **Global** | Binance, OKX, Bybit, KuCoin |
-| **Bridge coins** | BTC, ETH, XRP, SOL, DOGE, ADA, DOT, LINK, AVAX, TRX, KAIA |
+| **Bridge coins** | BTC, ETH, XRP, SOL, DOGE, ADA, DOT, LINK, AVAX, TRX, KAIA, SUI, APT |

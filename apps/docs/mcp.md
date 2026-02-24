@@ -1,6 +1,6 @@
 # MCP Integration
 
-16 tools for any MCP client. Routes across 13 exchanges with 11 bridge coins.
+16 tools for any MCP client. Routes across 14 exchanges with 13 bridge coins.
 
 ## Install
 
@@ -35,7 +35,7 @@ Remote MCP transport endpoint: `https://crossfin.dev/api/mcp` (Streamable HTTP).
 ## All 16 Tools
 
 <ToolGrid :tools="[
-  { name: 'find_optimal_route', description: 'Optimal path across 13 exchanges', price: 'x402 flow (requires EVM key)' },
+  { name: 'find_optimal_route', description: 'Optimal path across 14 exchanges', price: 'x402 flow (requires EVM key)' },
   { name: 'list_exchange_fees', description: 'Trading + withdrawal fees', price: 'Free' },
   { name: 'compare_exchange_prices', description: 'Bithumb KRW vs Binance USD', price: 'Free' },
   { name: 'get_kimchi_premium', description: 'Route spread data — Korean vs. global price spread (top 3 pairs)', price: 'Free' },

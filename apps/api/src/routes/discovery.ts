@@ -51,7 +51,7 @@ discovery.get('/.well-known/x402.json', (c) => {
     x402Version: 2,
     provider: {
       name: 'CrossFin',
-      description: 'Cross-border crypto routing engine for AI agents. Routes capital across 13 Korean/Japan/India/Indonesia/Thailand/global exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin). Real-time spread and route signals with 11 bridge coins.',
+      description: 'Cross-border crypto routing engine for AI agents. Routes capital across 14 Korean/Japan/India/Indonesia/Thailand/global exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin, Coinbase). Real-time spread and route signals with 13 bridge coins (incl. SUI, APT).',
       url: 'https://crossfin.dev',
       docs: 'https://docs.crossfin.dev',
       github: 'https://github.com/bubilife1202/crossfin',
@@ -70,7 +70,7 @@ discovery.get('/.well-known/x402.json', (c) => {
     endpoints: [
       { resource: `${origin}/api/premium/arbitrage/kimchi`, method: 'GET', price: '$0.05', description: 'Real-time Route Spread Index — Korean vs global exchange price spread for 11 crypto pairs' },
       { resource: `${origin}/api/premium/arbitrage/opportunities`, method: 'GET', price: '$0.10', description: 'AI-ready market condition indicators: POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD with signal strength scores' },
-      { resource: `${origin}/api/premium/route/find`, method: 'GET', price: '$0.10', description: 'Optimal crypto transfer route across 13 exchanges using 11 bridge coins' },
+      { resource: `${origin}/api/premium/route/find`, method: 'GET', price: '$0.10', description: 'Optimal crypto transfer route across 14 exchanges using 13 bridge coins' },
       { resource: `${origin}/api/premium/bithumb/orderbook`, method: 'GET', price: '$0.02', description: 'Live Bithumb orderbook depth (30 levels)' },
       { resource: `${origin}/api/premium/market/upbit/ticker`, method: 'GET', price: '$0.02', description: 'Upbit real-time ticker' },
       { resource: `${origin}/api/premium/market/upbit/orderbook`, method: 'GET', price: '$0.02', description: 'Upbit orderbook depth' },
@@ -107,7 +107,7 @@ discovery.get('/.well-known/agent.json', (c) => {
     name: 'CrossFin',
     url: origin,
     version: CROSSFIN_API_VERSION,
-    description: 'Cross-border crypto routing engine for AI agents. Routes capital across 13 Korean and global exchanges with 11 bridge coins. Pay-per-request via x402 USDC micropayments.',
+    description: 'Cross-border crypto routing engine for AI agents. Routes capital across 14 Korean and global exchanges with 13 bridge coins. Pay-per-request via x402 USDC micropayments.',
     provider: {
       organization: 'CrossFin',
       url: 'https://crossfin.dev',
@@ -121,14 +121,14 @@ discovery.get('/.well-known/agent.json', (c) => {
       {
         id: 'crypto-routing',
         name: 'Cross-Exchange Crypto Routing',
-        description: 'Find the cheapest path to move crypto between Korean exchanges (Bithumb, Upbit, Coinone, GoPax), regional exchanges (bitFlyer, WazirX, bitbank, Indodax, Bitkub), and global exchanges (Binance, OKX, Bybit, KuCoin) using 11 bridge coins.',
+        description: 'Find the cheapest path to move crypto between Korean exchanges (Bithumb, Upbit, Coinone, GoPax), regional exchanges (bitFlyer, WazirX, bitbank, Indodax, Bitkub), and global exchanges (Binance, OKX, Bybit, KuCoin, Coinbase) using 13 bridge coins (incl. SUI, APT).',
         tags: ['crypto', 'routing', 'arbitrage', 'korea'],
         examples: ['Find cheapest route from Bithumb KRW to Binance USDC for 5,000,000 KRW'],
       },
       {
         id: 'route-spread',
         name: 'Route Spread / Kimchi Premium Index',
-        description: 'Real-time price spread between Korean and global crypto exchanges for 11 pairs with POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD indicators.',
+        description: 'Real-time price spread between Korean and global crypto exchanges for 13 pairs with POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD indicators.',
         tags: ['arbitrage', 'spread', 'kimchi-premium', 'signals'],
         examples: ['What is the current kimchi premium?', 'Show route spread for BTC'],
       },
@@ -190,7 +190,7 @@ discovery.get('/.well-known/ai-plugin.json', (c) => {
     name_for_human: 'CrossFin',
     name_for_model: 'crossfin',
     description_for_human: 'Korean and global crypto exchange routing, arbitrage signals, and market data for AI agents.',
-    description_for_model: 'CrossFin provides: (1) optimal crypto routing across 13 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin) with 11 bridge coins, (2) real-time route spread (kimchi premium) index with POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD indicators, (3) Korean market data including KOSPI/KOSDAQ, ETFs, investor flow, and crypto prices, (4) USD/KRW exchange rates. Free endpoints available. Paid endpoints use x402 USDC micropayments on Base.',
+    description_for_model: 'CrossFin provides: (1) optimal crypto routing across 14 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin, Coinbase) with 13 bridge coins (incl. SUI, APT), (2) real-time route spread (kimchi premium) index with POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD indicators, (3) Korean market data including KOSPI/KOSDAQ, ETFs, investor flow, and crypto prices, (4) USD/KRW exchange rates. Free endpoints available. Paid endpoints use x402 USDC micropayments on Base.',
     auth: { type: 'none' },
     api: {
       type: 'openapi',
@@ -206,7 +206,7 @@ discovery.get('/llms.txt', (c) => {
   const origin = new URL(c.req.url).origin
   const text = `# CrossFin
 
-> Cross-border crypto routing engine for AI agents. Routes capital across 13 Korean and global exchanges with x402 USDC micropayments.
+> Cross-border crypto routing engine for AI agents. Routes capital across 14 Korean and global exchanges with x402 USDC micropayments.
 
 ## Docs
 
@@ -218,7 +218,7 @@ discovery.get('/llms.txt', (c) => {
 ## Free Endpoints
 
 - [Route Spread Demo](${origin}/api/arbitrage/demo): Top 3 Korean-vs-global price spreads
-- [Exchange List](${origin}/api/route/exchanges): 13 supported exchanges and coins
+- [Exchange List](${origin}/api/route/exchanges): 14 supported exchanges and coins
 - [Fee Table](${origin}/api/route/fees): Trading and withdrawal fees
 - [Exchange Prices](${origin}/api/route/pairs): Live bridge coin prices
 - [Exchange Status](${origin}/api/route/status): Network health
@@ -229,7 +229,7 @@ discovery.get('/llms.txt', (c) => {
 ## Paid Endpoints (x402 USDC on Base)
 
 - Optimal Route Finding: $0.10
-- Route Spread Index (11 pairs): $0.05
+- Route Spread Index (13 pairs): $0.05
 - Arbitrage Opportunities: $0.10
 - Bithumb/Upbit/Coinone Orderbooks: $0.02
 - USD/KRW Rate: $0.01

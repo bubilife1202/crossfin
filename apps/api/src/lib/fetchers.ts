@@ -19,7 +19,7 @@ import type {
 // Fetch with timeout utility
 // ============================================================
 
-export const CROSSFIN_UA = 'CrossFin-API/1.13.0'
+export const CROSSFIN_UA = 'CrossFin-API/1.15.0'
 
 export async function fetchWithTimeout(
   url: string,
@@ -686,6 +686,78 @@ export async function fetchKucoinPrices(): Promise<Record<string, number>> {
   })
 }
 
+export async function fetchCoinbasePrices(): Promise<Record<string, number>> {
+  const globalAny = globalThis as unknown as {
+    __crossfinCoinbasePricesCache?: CachedExchangePriceFeed
+    __crossfinCoinbasePricesInFlight?: Promise<Record<string, number>> | null
+  }
+
+  const now = Date.now()
+  const cached = globalAny.__crossfinCoinbasePricesCache
+  if (cached && now < cached.expiresAt && Object.keys(cached.value).length > 0) return cached.value
+  if (globalAny.__crossfinCoinbasePricesInFlight) return globalAny.__crossfinCoinbasePricesInFlight
+
+  const fallback = cached?.value ?? {}
+
+  const promise = (async () => {
+    try {
+      const res = await fetchWithTimeout(
+        'https://api.coinbase.com/api/v3/brokerage/market/products?product_type=SPOT&get_all_products=true',
+      )
+      if (!res.ok) throw new Error(`Coinbase price feed unavailable (${res.status})`)
+      const data: unknown = await res.json()
+      if (!isRecord(data) || !Array.isArray(data.products)) {
+        throw new Error('Coinbase price feed invalid response')
+      }
+
+      const prices: Record<string, number> = {}
+      for (const row of data.products) {
+        if (!isRecord(row)) continue
+        const quoteCurrency =
+          typeof row.quote_currency_id === 'string' ? row.quote_currency_id.trim().toUpperCase() : ''
+        if (quoteCurrency !== 'USD') continue
+        const status = typeof row.status === 'string' ? row.status.trim().toLowerCase() : ''
+        if (status !== 'online') continue
+        if (row.trading_disabled === true) continue
+        const baseCurrency =
+          typeof row.base_currency_id === 'string' ? row.base_currency_id.trim().toUpperCase() : ''
+        const symbol = TRACKED_PAIRS[baseCurrency]
+        if (!symbol) continue
+        const lastRaw = typeof row.price === 'string' ? row.price.trim() : ''
+        const price = Number(lastRaw)
+        if (!Number.isFinite(price) || price <= 0) continue
+        prices[symbol] = price
+      }
+
+      const btcSymbol = TRACKED_PAIRS.BTC
+      const btc = btcSymbol ? prices[btcSymbol] : undefined
+      if (typeof btc !== 'number' || !Number.isFinite(btc) || btc <= 1000) {
+        throw new Error('Coinbase price feed returned no valid BTCUSDT')
+      }
+
+      globalAny.__crossfinCoinbasePricesCache = {
+        value: prices,
+        expiresAt: now + GLOBAL_PRICES_SUCCESS_TTL_MS,
+        source: 'coinbase',
+      }
+      return prices
+    } catch {
+      globalAny.__crossfinCoinbasePricesCache = {
+        value: fallback,
+        expiresAt: now + GLOBAL_PRICES_FAILURE_TTL_MS,
+        source: cached?.source ?? 'coinbase:cached',
+      }
+      if (Object.keys(fallback).length > 0) return fallback
+      throw new Error('Coinbase price feed unavailable')
+    }
+  })()
+
+  globalAny.__crossfinCoinbasePricesInFlight = promise
+  return promise.finally(() => {
+    globalAny.__crossfinCoinbasePricesInFlight = null
+  })
+}
+
 export function getExchangePrice(exchange: string, symbol: string): number | undefined {
   const ex = exchange.trim().toLowerCase()
   const sym = symbol.trim().toUpperCase()
@@ -723,11 +795,12 @@ export async function fetchGlobalPrices(db?: D1Database): Promise<Record<string,
       return Object.keys(prices).length >= 1
     }
 
-    const [binanceSet, okxSet, bybitSet, kucoinSet] = await Promise.allSettled([
+    const [binanceSet, okxSet, bybitSet, kucoinSet, coinbaseSet] = await Promise.allSettled([
       fetchBinancePrices(),
       fetchOkxPrices(),
       fetchBybitPrices(),
       fetchKucoinPrices(),
+      fetchCoinbasePrices(),
     ])
 
     const exchangePrices: ExchangePrices = {
@@ -735,6 +808,7 @@ export async function fetchGlobalPrices(db?: D1Database): Promise<Record<string,
       okx: okxSet.status === 'fulfilled' ? okxSet.value : {},
       bybit: bybitSet.status === 'fulfilled' ? bybitSet.value : {},
       kucoin: kucoinSet.status === 'fulfilled' ? kucoinSet.value : {},
+      coinbase: coinbaseSet.status === 'fulfilled' ? coinbaseSet.value : {},
     }
 
     const mergedPrices: Record<string, number> = {
@@ -743,6 +817,7 @@ export async function fetchGlobalPrices(db?: D1Database): Promise<Record<string,
     const okxPrices: Record<string, number> = exchangePrices.okx ?? {}
     const bybitPrices: Record<string, number> = exchangePrices.bybit ?? {}
     const kucoinPrices: Record<string, number> = exchangePrices.kucoin ?? {}
+    const coinbasePrices: Record<string, number> = exchangePrices.coinbase ?? {}
     for (const [symbol, price] of Object.entries(okxPrices)) {
       if (!(symbol in mergedPrices)) mergedPrices[symbol] = price
     }
@@ -752,6 +827,9 @@ export async function fetchGlobalPrices(db?: D1Database): Promise<Record<string,
     for (const [symbol, price] of Object.entries(kucoinPrices)) {
       if (!(symbol in mergedPrices)) mergedPrices[symbol] = price
     }
+    for (const [symbol, price] of Object.entries(coinbasePrices)) {
+      if (!(symbol in mergedPrices)) mergedPrices[symbol] = price
+    }
 
     if (isValidPrices(mergedPrices)) {
       const sourceParts: string[] = []
@@ -759,6 +837,7 @@ export async function fetchGlobalPrices(db?: D1Database): Promise<Record<string,
       if (okxSet.status === 'fulfilled') sourceParts.push('okx')
       if (bybitSet.status === 'fulfilled') sourceParts.push('bybit')
       if (kucoinSet.status === 'fulfilled') sourceParts.push('kucoin')
+      if (coinbaseSet.status === 'fulfilled') sourceParts.push('coinbase')
       const source = sourceParts.length > 0 ? sourceParts.join('+') : 'global'
 
       globalAny.__crossfinExchangePricesCache = exchangePrices
@@ -816,6 +895,8 @@ export async function fetchGlobalPrices(db?: D1Database): Promise<Record<string,
         LINK: 'chainlink',
         AVAX: 'avalanche-2',
         TRX: 'tron',
+        SUI: 'sui',
+        APT: 'aptos',
       }
 
       const ids = Array.from(new Set(Object.values(COINGECKO_IDS))).join(',')

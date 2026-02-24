@@ -252,12 +252,40 @@ const CSS = `
 .rg-svg text{font-family:var(--sans)}
 
 .rg-dash{animation:rgDash 1.6s linear infinite}
-.rg-draw{stroke-dasharray:400;animation:rgDraw .8s cubic-bezier(.4,0,.2,1) forwards}
-.rg-draw2{stroke-dasharray:400;stroke-dashoffset:400;animation:rgDraw .8s cubic-bezier(.4,0,.2,1) .2s forwards}
-.rg-glow-in{animation:rgGlowIn .5s cubic-bezier(.4,0,.2,1) forwards}
-.rg-glow-in2{animation:rgGlowIn .5s cubic-bezier(.4,0,.2,1) .18s forwards;opacity:0}
-.rg-label-in{animation:rgGlowIn .45s cubic-bezier(.4,0,.2,1) .15s forwards;opacity:0}
-.rg-label-in2{animation:rgGlowIn .45s cubic-bezier(.4,0,.2,1) .3s forwards;opacity:0}
+.rg-draw{stroke-dasharray:400;stroke-dashoffset:400;animation:rgDraw 0.8s cubic-bezier(0.4, 0, 0.2, 1) 1.2s forwards}
+.rg-draw2{stroke-dasharray:400;stroke-dashoffset:400;animation:rgDraw 0.8s cubic-bezier(0.4, 0, 0.2, 1) 1.5s forwards}
+.rg-glow-in{animation:rgGlowIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) 1.2s forwards;opacity:0}
+.rg-glow-in2{animation:rgGlowIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) 1.5s forwards;opacity:0}
+.rg-label-in{animation:rgGlowIn 0.45s cubic-bezier(0.4, 0, 0.2, 1) 0.15s forwards;opacity:0}
+.rg-label-in2{animation:rgGlowIn 0.45s cubic-bezier(0.4, 0, 0.2, 1) 0.3s forwards;opacity:0}
+
+@keyframes rgScanPulse {
+  0% { opacity: 0; stroke-dashoffset: 400; }
+  30% { opacity: 1; stroke-dashoffset: 0; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.rg-scan {
+  stroke-dasharray: 400;
+  stroke-dashoffset: 400;
+  animation: rgScanPulse 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes rgDataRiver {
+  0% { stroke-dashoffset: 100; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { stroke-dashoffset: -100; opacity: 0; }
+}
+@keyframes rgGuardianPop {
+  0% { opacity: 0; transform: scale(0.8) translateY(2px); }
+  60% { opacity: 1; transform: scale(1.05) translateY(0); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+.rg-guardian-text {
+  animation: rgGuardianPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 1.6s forwards;
+  opacity: 0;
+}
 
 .rg-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px}
 .rg-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;transition:border-color .2s}
@@ -599,21 +627,21 @@ export default function RouteGraph() {
       const edgeA: GraphEdge = { from: fromEx, to: coin, cost: buyFee, isOptimal }
       const edgeB: GraphEdge = { from: coin, to: toEx, cost: transferAndSell, isOptimal }
 
-      ;[edgeA, edgeB].forEach((edge) => {
-        const key = `${edge.from}->${edge.to}`
-        const prev = byKey.get(key)
-        if (!prev) {
-          byKey.set(key, edge)
-          return
-        }
-        if (!prev.isOptimal && edge.isOptimal) {
-          byKey.set(key, edge)
-          return
-        }
-        if (prev.isOptimal === edge.isOptimal && edge.cost < prev.cost) {
-          byKey.set(key, edge)
-        }
-      })
+        ;[edgeA, edgeB].forEach((edge) => {
+          const key = `${edge.from}->${edge.to}`
+          const prev = byKey.get(key)
+          if (!prev) {
+            byKey.set(key, edge)
+            return
+          }
+          if (!prev.isOptimal && edge.isOptimal) {
+            byKey.set(key, edge)
+            return
+          }
+          if (prev.isOptimal === edge.isOptimal && edge.cost < prev.cost) {
+            byKey.set(key, edge)
+          }
+        })
     })
 
     return { nodes, edges: Array.from(byKey.values()), fromEx, toEx }
@@ -649,19 +677,32 @@ export default function RouteGraph() {
       const first = isFirstLeg(edge)
       const drawClass = first ? 'rg-draw' : 'rg-draw2'
       const glowClass = first ? 'rg-glow-in' : 'rg-glow-in2'
+      const delayOffset = first ? 1.6 : 1.9
 
       return (
         <g key={`oe-${idx}-${dataVersion}`}>
-          <path d={d} fill="none" stroke="#00ff88" strokeWidth={3} opacity={0.06} className={glowClass} />
-          <path d={d} fill="none" stroke="url(#rgGrad)" strokeWidth={1.7} strokeLinecap="round" className={drawClass} />
-          <path d={d} fill="none" stroke="rgba(0,255,136,0.35)" strokeWidth={1} strokeLinecap="round" strokeDasharray="4 10"
-            style={{ animationDelay: first ? '0.4s' : '0.65s', opacity: 0, animationFillMode: 'forwards', animationName: 'rgDash', animationDuration: '1.6s', animationIterationCount: 'infinite' }} />
+          {/* Base Glow */}
+          <path d={d} fill="none" stroke="#00ff88" strokeWidth={4} opacity={0.08} className={glowClass} />
+          {/* Main Solid Line */}
+          <path d={d} fill="none" stroke="url(#rgGrad)" strokeWidth={2} strokeLinecap="round" className={drawClass} />
+
+          {/* Data River (Particles) */}
+          <path
+            d={d} fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth={2} strokeLinecap="round"
+            strokeDasharray="1 12" filter="url(#rgPulseGlow)"
+            style={{
+              animation: `rgDataRiver 1.2s linear infinite ${delayOffset}s, rgGlowIn 0.3s forwards ${delayOffset}s`,
+              opacity: 0
+            }}
+          />
         </g>
       )
     }
+
+    // Non-optimal edges (Scan effect)
     return (
       <g key={`de-${idx}`}>
-        <path d={d} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth={0.7} strokeDasharray="3 5" />
+        <path d={d} fill="none" stroke="rgba(0, 212, 255, 0.4)" strokeWidth={1} className="rg-scan" />
       </g>
     )
   }
@@ -694,7 +735,14 @@ export default function RouteGraph() {
         <rect x={node.x - w / 2} y={node.y - h / 2} width={w} height={h} rx={rx}
           style={{ fill, stroke }} strokeWidth={isOnPath ? 1 : 0.5} filter={glow} />
         {node.type === 'coin' ? (
-          <text x={node.x} y={node.y + 4} textAnchor="middle" style={{ fill: txt, fontSize: 11, fontWeight: 700, fontFamily: 'var(--mono)' }}>{node.label}</text>
+          <>
+            <text x={node.x} y={node.y + 4} textAnchor="middle" style={{ fill: txt, fontSize: 11, fontWeight: 700, fontFamily: 'var(--mono)' }}>{node.label}</text>
+            {optimalCoin === node.id && (
+              <text x={node.x} y={node.y - 18} textAnchor="middle" className="rg-guardian-text" style={{ fill: '#00ff88', fontSize: 8, fontWeight: 750, letterSpacing: '0.06em', fontFamily: 'var(--sans)' }}>
+                ✓ GUARDIAN
+              </text>
+            )}
+          </>
         ) : (
           <>
             <text x={node.x} y={node.y - 1} textAnchor="middle" style={{ fill: txt, fontSize: 12, fontWeight: 700 }}>{node.label}</text>
@@ -840,6 +888,9 @@ export default function RouteGraph() {
             <filter id="rgGC" x="-50%" y="-50%" width="200%" height="200%">
               <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#00d4ff" floodOpacity="0.5" />
             </filter>
+            <filter id="rgPulseGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor="#ffffff" floodOpacity="0.8" />
+            </filter>
             <linearGradient id="rgGrad" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0%" stopColor="#00d4ff" />
               <stop offset="100%" stopColor="#00ff88" />
@@ -932,24 +983,24 @@ export default function RouteGraph() {
         <div className="rg-card" style={{ borderLeft: '3px solid var(--cyan)' }}>
           <div className="rg-lbl">Data Freshness</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-             {([
-               ['Routes evaluated', String(data?.meta?.routesEvaluated ?? 0)],
-               ['Price source', data?.meta?.priceAge?.globalPrices?.source ?? 'n/a'],
-               ['Price age', (() => {
-                 const ageMs = data?.meta?.priceAge?.globalPrices?.ageMs;
-                 if (ageMs == null) return 'n/a';
-                 if (ageMs < 1000) return 'just now';
-                 if (ageMs < 60_000) return `${Math.round(ageMs / 1000)}s ago`;
-                 return `${Math.round(ageMs / 60_000)}m ago`;
-               })()],
-               ['Data status', (() => {
-                 const status = data?.meta?.dataFreshness;
-                 if (status === 'live') return 'Live';
-                 if (status === 'cached') return 'Cached';
-                 if (status === 'stale') return 'Stale';
-                 return 'n/a';
-               })()],
-             ] as const).map(([label, value]) => (
+            {([
+              ['Routes evaluated', String(data?.meta?.routesEvaluated ?? 0)],
+              ['Price source', data?.meta?.priceAge?.globalPrices?.source ?? 'n/a'],
+              ['Price age', (() => {
+                const ageMs = data?.meta?.priceAge?.globalPrices?.ageMs;
+                if (ageMs == null) return 'n/a';
+                if (ageMs < 1000) return 'just now';
+                if (ageMs < 60_000) return `${Math.round(ageMs / 1000)}s ago`;
+                return `${Math.round(ageMs / 60_000)}m ago`;
+              })()],
+              ['Data status', (() => {
+                const status = data?.meta?.dataFreshness;
+                if (status === 'live') return 'Live';
+                if (status === 'cached') return 'Cached';
+                if (status === 'stale') return 'Stale';
+                return 'n/a';
+              })()],
+            ] as const).map(([label, value]) => (
               <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: 'var(--muted)', fontSize: '0.86rem' }}>{label}</span>
                 <span style={{ color: 'var(--ink)', fontSize: '0.86rem', fontFamily: 'var(--mono)', fontWeight: 600 }}>{value}</span>

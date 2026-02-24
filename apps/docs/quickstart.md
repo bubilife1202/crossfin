@@ -1,6 +1,6 @@
 # Quickstart
 
-Start in under 2 minutes with free endpoints across 13 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin).
+Start in under 2 minutes with free endpoints across 14 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin, Coinbase).
 
 > Open beta notice: Endpoints that are normally paid are temporarily free. No x402 payment is currently required.
 
@@ -24,7 +24,7 @@ curl https://crossfin.dev/api/route/status
 curl "https://crossfin.dev/api/route/fees?coin=XRP"
 ```
 
-Returns all 13 exchanges with supported coins, online status, and fee schedules.
+Returns all 14 exchanges with supported coins, online status, and fee schedules.
 
 ## Step 3: Free arbitrage preview
 

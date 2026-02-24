@@ -34,7 +34,7 @@ Tool: `compare_exchange_prices` (no params) | Free | All tracked coins with brid
 "Compare withdrawal fees for XRP across all exchanges"
 ```
 
-Tool: `list_exchange_fees` | Free | Trading + withdrawal fees for 13 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin).
+Tool: `list_exchange_fees` | Free | Trading + withdrawal fees for 14 exchanges (Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin, Coinbase).
 
 ### Browse the Service Catalog
 
@@ -295,7 +295,7 @@ Agent steps:
 
 | Service ID | Price | One-liner |
 |---|---|---|
-| `crossfin_kimchi_premium` | $0.05 | Route spread for 11 crypto pairs |
+| `crossfin_kimchi_premium` | $0.05 | Route spread for 13 crypto pairs |
 | `crossfin_kimchi_premium_history` | $0.05 | Hourly spread snapshots (up to 7 days) |
 | `crossfin_arbitrage_opportunities` | $0.10 | POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD indicators with signalStrength |
 | `crossfin_cross_exchange` | $0.08 | 4 Korean exchange price comparison |

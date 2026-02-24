@@ -10,11 +10,11 @@ CrossFin AI agent on Telegram. Korean/Asia crypto market data, routing, and rout
 
 | Command | Description |
 |---------|-------------|
-| `/route <from> <to> <amount>` | Find the cheapest transfer path across 13 exchanges |
+| `/route <from> <to> <amount>` | Find the cheapest transfer path across 14 exchanges |
 | `/price <coin>` | Live Bithumb KRW vs Binance USD prices |
 | `/spread [coin]` | Route spread demo (top 3 pairs, Korea vs global) |
 | `/fees [coin]` | Trading + withdrawal fee comparison |
-| `/status` | Exchange network health (13 exchanges) |
+| `/status` | Exchange network health (14 exchanges) |
 | `/help` | List all commands |
 
 ## Natural Language
@@ -46,7 +46,7 @@ The bot understands context and maintains conversation history (last 10 messages
 - Powered by GLM-5 with tool calling — reads your message and decides which CrossFin API to call
 - Multi-turn memory — remembers your last 10 messages per chat
 - Read-only — finds routes and shows data but never executes trades
-- Data from 13 exchanges: Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin
+- Data from 14 exchanges: Bithumb, Upbit, Coinone, GoPax, bitFlyer, WazirX, bitbank, Indodax, Bitkub, Binance, OKX, Bybit, KuCoin, Coinbase
 
 ## Integration Endpoint
 
