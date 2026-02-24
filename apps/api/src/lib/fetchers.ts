@@ -701,8 +701,9 @@ export async function fetchCoinbasePrices(): Promise<Record<string, number>> {
 
   const promise = (async () => {
     try {
+      const productIds = Object.keys(TRACKED_PAIRS).map((c) => `product_ids=${c}-USD`).join('&')
       const res = await fetchWithTimeout(
-        'https://api.coinbase.com/api/v3/brokerage/market/products?product_type=SPOT&get_all_products=true',
+        `https://api.coinbase.com/api/v3/brokerage/market/products?${productIds}&product_type=SPOT`,
       )
       if (!res.ok) throw new Error(`Coinbase price feed unavailable (${res.status})`)
       const data: unknown = await res.json()

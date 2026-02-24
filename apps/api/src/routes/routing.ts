@@ -11,7 +11,6 @@ import {
   EXCHANGE_DISPLAY_NAME,
   ROUTING_EXCHANGE_COUNTRY,
   BRIDGE_COINS,
-  GLOBAL_PRICES_SUCCESS_TTL_MS,
 } from '../constants'
 import type {
   RoutingExchange,
