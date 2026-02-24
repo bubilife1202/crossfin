@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, memo } from "react";
 import "./App.css";
 import RouteGraph from "./components/RouteGraph";
 
@@ -327,8 +327,7 @@ export default function App() {
   const [onChainTxs, setOnChainTxs] = useState<OnChainTx[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [connected, setConnected] = useState(true);
-  const [progress, setProgress] = useState(0);
-  const progressRef = useRef(0);
+  const progressBarRef = useRef<HTMLDivElement>(null);
   const [routeStatus, setRouteStatus] = useState<RouteStatusData | null>(null);
   const [routeFees, setRouteFees] = useState<RouteFeeData | null>(null);
   const [routePairs, setRoutePairs] = useState<RoutePairsData | null>(null);
@@ -423,25 +422,30 @@ export default function App() {
 
     if (nextConnected) {
       setLastUpdate(new Date());
-      progressRef.current = 0;
-      setProgress(0);
     }
   }, []);
 
   useEffect(() => {
     refresh();
-    const id = window.setInterval(refresh, REFRESH_INTERVAL);
+    const id = window.setInterval(() => {
+      if (document.visibilityState === 'visible') refresh();
+    }, REFRESH_INTERVAL);
     return () => window.clearInterval(id);
   }, [refresh]);
 
   useEffect(() => {
-    const step = 100 / (REFRESH_INTERVAL / 60);
-    const id = window.setInterval(() => {
-      progressRef.current = Math.min(progressRef.current + step, 100);
-      setProgress(progressRef.current);
-    }, 60);
-    return () => window.clearInterval(id);
-  }, []);
+    const bar = progressBarRef.current;
+    if (!bar) return;
+    let start = performance.now();
+    let raf: number;
+    const animate = (now: number) => {
+      const pct = Math.min(100, ((now - start) / REFRESH_INTERVAL) * 100);
+      bar.style.width = `${pct}%`;
+      raf = requestAnimationFrame(animate);
+    };
+    raf = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(raf);
+  }, [lastUpdate]);
 
   const avgPremium = arb?.average_premium ?? 0;
   const fxRate = arb?.krwUsdRate;
@@ -482,7 +486,7 @@ export default function App() {
     <div className="dashboard">
       {/* Progress bar */}
       <div className="refreshBar">
-        <div className="refreshBarFill" style={{ width: `${progress}%` }} />
+        <div ref={progressBarRef} className="refreshBarFill" style={{ width: '0%' }} />
       </div>
 
       {/* Header */}
@@ -1145,7 +1149,7 @@ export default function App() {
 
 /* ─── Sub-components ─── */
 
-function MetricCard({
+const MetricCard = memo(function MetricCard({
   label,
   value,
   tone,
@@ -1163,9 +1167,9 @@ function MetricCard({
       <span className="metricSub">{sub}</span>
     </div>
   );
-}
+})
 
-function DecisionCard({ pair }: { pair: ArbitragePair }) {
+const DecisionCard = memo(function DecisionCard({ pair }: { pair: ArbitragePair }) {
   const d = pair.decision;
   const actionClass = d
     ? d.indicator === "POSITIVE_SPREAD"
@@ -1207,7 +1211,7 @@ function DecisionCard({ pair }: { pair: ArbitragePair }) {
       )}
     </div>
   );
-}
+})
 
 function getSpreadDirectionText(direction: string): string {
   const raw = direction.trim().toLowerCase();

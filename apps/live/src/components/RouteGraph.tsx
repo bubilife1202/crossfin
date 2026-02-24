@@ -328,9 +328,23 @@ const CSS = `
 }
 `
 
+/* ── Inject CSS once ─────────────────────────────── */
+let cssInjected = false
+function injectRouteGraphCSS() {
+  if (cssInjected) return
+  cssInjected = true
+  const el = document.createElement('style')
+  el.setAttribute('data-rg-styles', '')
+  el.textContent = CSS
+  document.head.appendChild(el)
+}
+
 /* ── Component ───────────────────────────────────── */
 
 export default function RouteGraph() {
+  // Inject CSS into <head> once (avoids per-render reconciliation of 300-line <style>)
+  useEffect(() => { injectRouteGraphCSS() }, [])
+
   const [mode, setMode] = useState<'auto' | 'manual'>('auto')
 
   const [manualFrom, setManualFrom] = useState('bithumb')
@@ -768,7 +782,7 @@ export default function RouteGraph() {
 
   return (
     <div className="rg-wrap">
-      <style>{CSS}</style>
+      {/* CSS injected into <head> via useEffect — see injectRouteGraphCSS() */}
 
       {/* ── Header ───────────────────────────────── */}
       <div className="rg-header">

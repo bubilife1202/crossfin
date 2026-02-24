@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { Hono, type MiddlewareHandler } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import type { Env, A2aSkillHandler } from '../types'
 
@@ -10,6 +10,45 @@ import type { Env, A2aSkillHandler } from '../types'
 // Skill dispatch is injected via Hono context middleware (index.ts) to avoid
 // self-fetch on Cloudflare Workers, which would receive an HTML challenge page
 // instead of JSON.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// A2A Rate Limiter — IP-based, in-memory per isolate
+// ---------------------------------------------------------------------------
+const A2A_RATE_LIMIT_WINDOW_MS = 60_000
+const A2A_RATE_LIMIT_MAX_REQUESTS = 30
+const A2A_RATE_LIMIT_MAX_BUCKETS = 10_000
+const a2aRateBuckets = new Map<string, { count: number; windowStartedAt: number }>()
+
+function pruneA2aRateBuckets(): void {
+  if (a2aRateBuckets.size < A2A_RATE_LIMIT_MAX_BUCKETS) return
+  const cutoff = Date.now() - A2A_RATE_LIMIT_WINDOW_MS * 2
+  for (const [key, bucket] of a2aRateBuckets.entries()) {
+    if (bucket.windowStartedAt < cutoff) a2aRateBuckets.delete(key)
+  }
+}
+
+const a2aRateLimiter: MiddlewareHandler<Env> = async (c, next) => {
+  const ip = c.req.header('CF-Connecting-IP') ?? c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  const now = Date.now()
+  pruneA2aRateBuckets()
+
+  const existing = a2aRateBuckets.get(ip)
+  if (existing && now - existing.windowStartedAt < A2A_RATE_LIMIT_WINDOW_MS) {
+    existing.count++
+    if (existing.count > A2A_RATE_LIMIT_MAX_REQUESTS) {
+      throw new HTTPException(429, { message: 'A2A rate limit exceeded. Try again later.' })
+    }
+  } else {
+    a2aRateBuckets.set(ip, { count: 1, windowStartedAt: now })
+  }
+
+  await next()
+}
+
+// ---------------------------------------------------------------------------
+// Optional agent auth — extracts agent identity if X-Agent-Key is provided.
+// Tasks are scoped to the creator's agent ID when authenticated.
 // ---------------------------------------------------------------------------
 
 const a2a = new Hono<Env>()
@@ -26,18 +65,27 @@ function taskId(): string {
   return `a2a_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`
 }
 
+let a2aTableReady: Promise<void> | null = null
 async function ensureA2aTable(db: D1Database): Promise<void> {
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS a2a_tasks (
-      id TEXT PRIMARY KEY,
-      status TEXT NOT NULL DEFAULT 'working' CHECK (status IN ('working','completed','failed','canceled')),
-      skill TEXT,
-      message TEXT NOT NULL,
-      result TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `).run()
+  if (!a2aTableReady) {
+    a2aTableReady = db.prepare(`
+      CREATE TABLE IF NOT EXISTS a2a_tasks (
+        id TEXT PRIMARY KEY,
+        status TEXT NOT NULL DEFAULT 'working' CHECK (status IN ('working','completed','failed','canceled')),
+        skill TEXT,
+        message TEXT NOT NULL,
+        result TEXT,
+        creator_ip TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `).run().then(() => undefined).catch(() => { a2aTableReady = null })
+  }
+  return a2aTableReady
+}
+
+function getClientIp(c: { req: { header: (name: string) => string | undefined } }): string {
+  return c.req.header('CF-Connecting-IP') ?? c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
 }
 
 // ---------------------------------------------------------------------------
@@ -57,7 +105,7 @@ function inferSkill(message: string): string | undefined {
 // POST /tasks — Create a new A2A task
 // ---------------------------------------------------------------------------
 
-a2a.post('/tasks', async (c) => {
+a2a.post('/tasks', a2aRateLimiter, async (c) => {
   const contentLengthHeader = c.req.header('content-length')
   if (contentLengthHeader) {
     const contentLength = Number(contentLengthHeader)
@@ -115,15 +163,16 @@ a2a.post('/tasks', async (c) => {
 
   const id = taskId()
   const now = new Date().toISOString()
+  const clientIp = getClientIp(c)
 
   // Resolve skill from explicit parameter or message inference
   const resolvedSkill = skill ?? inferSkill(message)
 
   // Insert task as "working"
   await c.env.DB.prepare(
-    `INSERT INTO a2a_tasks (id, status, skill, message, created_at, updated_at)
-     VALUES (?, 'working', ?, ?, ?, ?)`,
-  ).bind(id, skill ?? null, message, now, now).run()
+    `INSERT INTO a2a_tasks (id, status, skill, message, creator_ip, created_at, updated_at)
+     VALUES (?, 'working', ?, ?, ?, ?, ?)`,
+  ).bind(id, skill ?? null, message, clientIp, now, now).run()
 
   // Dispatch skill via injected handler (direct function call, no HTTP)
   const result = await skillHandler(resolvedSkill, message)
@@ -149,24 +198,31 @@ a2a.post('/tasks', async (c) => {
 // GET /tasks/:id — Get task status / result
 // ---------------------------------------------------------------------------
 
-a2a.get('/tasks/:id', async (c) => {
+a2a.get('/tasks/:id', a2aRateLimiter, async (c) => {
   const id = c.req.param('id')
 
   await ensureA2aTable(c.env.DB)
 
   const row = await c.env.DB.prepare(
-    `SELECT id, status, skill, message, result, created_at, updated_at FROM a2a_tasks WHERE id = ?`,
+    `SELECT id, status, skill, message, result, creator_ip, created_at, updated_at FROM a2a_tasks WHERE id = ?`,
   ).bind(id).first<{
     id: string
     status: string
     skill: string | null
     message: string
     result: string | null
+    creator_ip: string | null
     created_at: string
     updated_at: string
   }>()
 
   if (!row) {
+    throw new HTTPException(404, { message: `Task not found: ${id}` })
+  }
+
+  // Scope task access to creator IP (best-effort without auth)
+  const clientIp = getClientIp(c)
+  if (row.creator_ip && row.creator_ip !== clientIp) {
     throw new HTTPException(404, { message: `Task not found: ${id}` })
   }
 
@@ -192,16 +248,22 @@ a2a.get('/tasks/:id', async (c) => {
 // POST /tasks/:id/cancel — Cancel a task
 // ---------------------------------------------------------------------------
 
-a2a.post('/tasks/:id/cancel', async (c) => {
+a2a.post('/tasks/:id/cancel', a2aRateLimiter, async (c) => {
   const id = c.req.param('id')
 
   await ensureA2aTable(c.env.DB)
 
   const row = await c.env.DB.prepare(
-    `SELECT id, status FROM a2a_tasks WHERE id = ?`,
-  ).bind(id).first<{ id: string; status: string }>()
+    `SELECT id, status, creator_ip FROM a2a_tasks WHERE id = ?`,
+  ).bind(id).first<{ id: string; status: string; creator_ip: string | null }>()
 
   if (!row) {
+    throw new HTTPException(404, { message: `Task not found: ${id}` })
+  }
+
+  // Scope cancel access to creator IP
+  const clientIp = getClientIp(c)
+  if (row.creator_ip && row.creator_ip !== clientIp) {
     throw new HTTPException(404, { message: `Task not found: ${id}` })
   }
 

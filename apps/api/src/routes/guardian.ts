@@ -2,6 +2,11 @@ import { Hono, type Context, type MiddlewareHandler } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import type { Env } from '../types'
 
+function safeJsonParse(value: unknown): Record<string, unknown> {
+  if (typeof value !== 'string') return {}
+  try { return JSON.parse(value) as Record<string, unknown> } catch { return {} }
+}
+
 type GuardianDeps = {
   agentAuth: MiddlewareHandler<Env>
   requireGuardianEnabled: (c: Context<Env>) => void
@@ -28,7 +33,7 @@ export function createGuardianRoutes(deps: GuardianDeps): Hono<Env> {
     return c.json({
       rules: (results ?? []).map((r: any) => ({
         ...r,
-        params: JSON.parse(r.params || '{}'),
+        params: safeJsonParse(r.params),
       })),
       at: new Date().toISOString(),
     })
@@ -98,7 +103,7 @@ export function createGuardianRoutes(deps: GuardianDeps): Hono<Env> {
           id: r.id,
           agentId: r.agent_id,
           type: r.type,
-          params: JSON.parse(r.params || '{}'),
+          params: safeJsonParse(r.params),
           createdAt: r.created_at,
         })),
         blockedToday: blockedCount?.cnt ?? 0,
@@ -115,7 +120,7 @@ export function createGuardianRoutes(deps: GuardianDeps): Hono<Env> {
         confidence: a.confidence,
         costUsd: a.cost_usd,
         ruleApplied: a.rule_applied,
-        details: JSON.parse(a.details || '{}'),
+        details: safeJsonParse(a.details),
         createdAt: a.created_at,
       })),
       at: new Date().toISOString(),

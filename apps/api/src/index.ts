@@ -8506,7 +8506,8 @@ async function evaluateGuardian(
   ).bind(agentId).first<{ id: string; params: string }>()
 
   if (spendCap) {
-    const params = JSON.parse(spendCap.params) as { dailyLimitUsd?: number; monthlyLimitUsd?: number }
+    let params: { dailyLimitUsd?: number; monthlyLimitUsd?: number }
+    try { params = JSON.parse(spendCap.params) } catch { params = {} }
     if (params.dailyLimitUsd) {
       const todaySpend = await db.prepare(
         "SELECT COALESCE(SUM(amount_usd), 0) as total FROM agent_spend WHERE agent_id = ? AND created_at >= datetime('now', '-1 day')"
@@ -8528,13 +8529,18 @@ async function evaluateGuardian(
   ).bind(agentId).first<{ id: string; params: string }>()
 
   if (failStreak) {
-    const params = JSON.parse(failStreak.params) as { maxConsecutiveFails?: number }
+    let params: { maxConsecutiveFails?: number }
+    try { params = JSON.parse(failStreak.params) } catch { params = {} }
     const maxFails = params.maxConsecutiveFails ?? 5
     const recentCalls = await db.prepare(
       'SELECT status FROM service_calls WHERE agent_id = ? ORDER BY created_at DESC LIMIT ?'
     ).bind(agentId, maxFails).all<{ status: string }>()
 
-    const consecutiveFails = recentCalls.results?.filter((r) => r.status === 'error').length ?? 0
+    let consecutiveFails = 0
+    for (const r of recentCalls.results ?? []) {
+      if (r.status === 'error') consecutiveFails++
+      else break
+    }
     if (consecutiveFails >= maxFails) {
       return {
         allowed: false,
@@ -8551,7 +8557,8 @@ async function evaluateGuardian(
     ).bind(agentId).first<{ id: string; params: string }>()
 
     if (circuitBreaker) {
-      const params = JSON.parse(circuitBreaker.params) as { failRatePct?: number; windowMinutes?: number }
+      let params: { failRatePct?: number; windowMinutes?: number }
+      try { params = JSON.parse(circuitBreaker.params) } catch { params = {} }
       const windowMin = params.windowMinutes ?? 60
       const threshold = params.failRatePct ?? 50
 

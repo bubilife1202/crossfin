@@ -2,6 +2,11 @@ import { Hono, type Context, type MiddlewareHandler } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import type { Env } from '../types'
 
+function safeJsonParse(value: unknown): Record<string, unknown> {
+  if (typeof value !== 'string') return {}
+  try { return JSON.parse(value) as Record<string, unknown> } catch { return {} }
+}
+
 type AgentsDeps = {
   agentAuth: MiddlewareHandler<Env>
   requireAdmin: (c: Context<Env>) => void
@@ -82,7 +87,7 @@ export function createAgentsRoutes(deps: AgentsDeps): Hono<Env> {
       agentId,
       actions: (results ?? []).map((a: any) => ({
         ...a,
-        details: JSON.parse(a.details || '{}'),
+        details: safeJsonParse(a.details),
       })),
       at: new Date().toISOString(),
     })
