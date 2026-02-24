@@ -1,6 +1,6 @@
 {
   "name": "@crossfin/sdk",
-  "version": "1.15.0",
+  "version": "1.16.0",
   "description": "TypeScript SDK for the CrossFin API — Korean crypto market data, routing, and x402 agent services",
   "type": "module",
   "main": "dist/index.js",

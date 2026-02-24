@@ -7106,7 +7106,7 @@ api.post('/transfers', async (c) => {
 
     if (budget.daily_limit_cents !== null && spentToday && (spentToday.total + amount) > budget.daily_limit_cents) {
       await audit(c.env.DB, agentId, 'transfer.blocked', 'transactions', null, 'blocked', `Daily budget exceeded: spent ${spentToday.total} + ${amount} > limit ${budget.daily_limit_cents}`)
-      throw new HTTPException(429, { message: `CIRCUIT_BREAKER: Daily budget exceeded. Spent: ${spentToday.total}, Limit: ${budget.daily_limit_cents}` })
+      throw new HTTPException(429, { message: 'Daily budget exceeded' })
     }
 
     if (budget.monthly_limit_cents !== null) {
@@ -7116,7 +7116,7 @@ api.post('/transfers', async (c) => {
 
       if (spentMonth && (spentMonth.total + amount) > budget.monthly_limit_cents) {
         await audit(c.env.DB, agentId, 'transfer.blocked', 'transactions', null, 'blocked', `Monthly budget exceeded: spent ${spentMonth.total} + ${amount} > limit ${budget.monthly_limit_cents}`)
-        throw new HTTPException(429, { message: `CIRCUIT_BREAKER: Monthly budget exceeded. Spent: ${spentMonth.total}, Limit: ${budget.monthly_limit_cents}` })
+        throw new HTTPException(429, { message: 'Monthly budget exceeded' })
       }
     }
   }
@@ -7133,12 +7133,19 @@ api.post('/transfers', async (c) => {
     throw new HTTPException(400, { message: 'Insufficient balance' })
   }
 
-  // Atomic batch: debit, credit, and transaction record all succeed or all fail.
-  // The debit WHERE clause (balance_cents >= ?) is a safety net against concurrent races.
-  const batchResults = await c.env.DB.batch([
-    c.env.DB.prepare(
-      'UPDATE wallets SET balance_cents = balance_cents - ?, updated_at = datetime("now") WHERE id = ? AND agent_id = ? AND balance_cents >= ?'
-    ).bind(amount, body.fromWalletId, agentId, amount),
+  // Step 1: Debit the source wallet first (WHERE balance_cents >= ? guards against races).
+  const debitResult = await c.env.DB.prepare(
+    'UPDATE wallets SET balance_cents = balance_cents - ?, updated_at = datetime("now") WHERE id = ? AND agent_id = ? AND balance_cents >= ?'
+  ).bind(amount, body.fromWalletId, agentId, amount).run()
+
+  if (Number(debitResult.meta.changes ?? 0) === 0) {
+    await audit(c.env.DB, agentId, 'transfer.blocked', 'transactions', null, 'blocked', 'Insufficient balance')
+    throw new HTTPException(400, { message: 'Insufficient balance' })
+  }
+
+  // Step 2: Debit succeeded — credit destination and insert tx record atomically.
+  // If this batch fails the debit is orphaned, but no phantom credit can occur.
+  await c.env.DB.batch([
     c.env.DB.prepare(
       'UPDATE wallets SET balance_cents = balance_cents + ?, updated_at = datetime("now") WHERE id = ?'
     ).bind(amount, body.toWalletId),
@@ -7146,20 +7153,6 @@ api.post('/transfers', async (c) => {
       "INSERT INTO transactions (id, from_wallet_id, to_wallet_id, amount_cents, rail, memo, status) VALUES (?, ?, ?, ?, ?, ?, 'completed')"
     ).bind(txId, body.fromWalletId, body.toWalletId, amount, rail, body.memo ?? ''),
   ])
-
-  const debitChanges = Number(batchResults[0]?.meta.changes ?? 0)
-  if (debitChanges === 0) {
-    // Debit WHERE clause didn't match (concurrent race drained balance).
-    // Reverse the credit and remove the transaction record atomically.
-    await c.env.DB.batch([
-      c.env.DB.prepare(
-        'UPDATE wallets SET balance_cents = balance_cents - ?, updated_at = datetime("now") WHERE id = ?'
-      ).bind(amount, body.toWalletId),
-      c.env.DB.prepare('DELETE FROM transactions WHERE id = ?').bind(txId),
-    ])
-    await audit(c.env.DB, agentId, 'transfer.blocked', 'transactions', null, 'blocked', 'Insufficient balance')
-    throw new HTTPException(400, { message: 'Insufficient balance' })
-  }
 
   await audit(c.env.DB, agentId, 'transfer.execute', 'transactions', txId, 'success')
 

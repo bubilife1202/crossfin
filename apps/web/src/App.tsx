@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 
 import './App.css'
 import {
@@ -592,23 +592,7 @@ function App() {
               ) : (
                 <div className="servicesGrid">
                   {services.data.items.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      className={`serviceCard ${selected?.id === s.id ? 'active' : ''}`}
-                      onClick={() => setSelected(s)}
-                    >
-                      <div className="serviceCardTop">
-                        <div className="serviceName">{s.name}</div>
-                        <div className={`servicePrice ${s.isCrossfin ? 'primary' : ''}`}>{s.price}</div>
-                      </div>
-                      <div className="serviceMeta">
-                        <span className="serviceProvider">{s.provider}</span>
-                        <span className="dot" aria-hidden>·</span>
-                        <span className="serviceCategory">{s.category}</span>
-                      </div>
-                      <div className="serviceEndpoint">{truncateMiddle(s.endpoint)}</div>
-                    </button>
+                    <ServiceCard key={s.id} service={s} isActive={selected?.id === s.id} onSelect={setSelected} />
                   ))}
                 </div>
               )}
@@ -1014,3 +998,34 @@ console.log(await res.json());`}</code></pre>
 }
 
 export default App
+
+/* ─── Memoized sub-components ─── */
+
+const ServiceCard = memo(function ServiceCard({
+  service,
+  isActive,
+  onSelect,
+}: {
+  service: RegistryService
+  isActive: boolean
+  onSelect: (s: RegistryService) => void
+}) {
+  return (
+    <button
+      type="button"
+      className={`serviceCard ${isActive ? 'active' : ''}`}
+      onClick={() => onSelect(service)}
+    >
+      <div className="serviceCardTop">
+        <div className="serviceName">{service.name}</div>
+        <div className={`servicePrice ${service.isCrossfin ? 'primary' : ''}`}>{service.price}</div>
+      </div>
+      <div className="serviceMeta">
+        <span className="serviceProvider">{service.provider}</span>
+        <span className="dot" aria-hidden>·</span>
+        <span className="serviceCategory">{service.category}</span>
+      </div>
+      <div className="serviceEndpoint">{truncateMiddle(service.endpoint)}</div>
+    </button>
+  )
+})

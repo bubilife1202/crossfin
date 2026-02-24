@@ -1,7 +1,7 @@
 {
   "name": "crossfin-mcp",
   "private": false,
-  "version": "1.15.0",
+  "version": "1.16.0",
   "mcpName": "io.github.bubilife1202/crossfin",
   "description": "CrossFin MCP server for service discovery and paid x402 API execution",
   "bin": {
