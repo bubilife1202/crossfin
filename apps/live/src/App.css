@@ -1,10 +1,10 @@
 :root {
-  --bg: #06060c;
-  --bg2: #0c0c16;
-  --card: #10111a;
-  --card-hover: #161825;
-  --border: rgba(255, 255, 255, 0.06);
-  --border-hover: rgba(255, 255, 255, 0.12);
+  --bg: #030308;
+  --bg2: rgba(12, 12, 22, 0.4);
+  --card: rgba(16, 17, 26, 0.35);
+  --card-hover: rgba(22, 24, 37, 0.45);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.15);
   --ink: #e8eaed;
   --muted: #8b8fa3;
   --muted2: #565a6e;
@@ -63,18 +63,21 @@
 
 .header {
   position: sticky;
-  top: 0;
+  top: 16px;
   z-index: 50;
-  border-bottom: 1px solid var(--border);
-  background: rgba(6, 6, 12, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  border-radius: 999px;
+  background: rgba(6, 6, 12, 0.65);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  margin: 0 auto 24px auto;
+  width: calc(100% - var(--space-page-x) * 2);
+  max-width: var(--content-max);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .headerInner {
-  max-width: var(--content-max);
-  margin: 0 auto;
-  padding: 12px var(--space-page-x);
+  padding: 12px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -171,18 +174,22 @@
 
 .metricCard {
   background: var(--card);
-  border: 1px solid var(--border);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
   padding: 20px 22px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  transition: border-color 200ms ease, box-shadow 200ms ease;
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
 .metricCard:hover {
-  border-color: var(--border-hover);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  border-color: rgba(0, 212, 255, 0.4);
+  box-shadow: 0 12px 32px rgba(0, 212, 255, 0.1);
+  transform: translateY(-2px);
 }
 
 .metricCard.positive { border-left: 3px solid var(--green); }
@@ -191,24 +198,24 @@
 
 .metricLabel {
   font-size: var(--text-xs);
-  font-weight: 650;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--muted);
 }
 
 .metricValue {
   font-family: var(--mono);
   font-size: var(--text-xl);
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
   transition: opacity 300ms ease;
 }
 
-.metricValue.positive { color: var(--green); }
-.metricValue.negative { color: var(--red); }
-.metricValue.neutral  { color: var(--ink); }
+.metricValue.positive { color: var(--green); text-shadow: 0 0 16px rgba(0, 255, 136, 0.5); }
+.metricValue.negative { color: var(--red); text-shadow: 0 0 16px rgba(255, 68, 102, 0.5); }
+.metricValue.neutral  { color: var(--ink); text-shadow: 0 0 16px rgba(255, 255, 255, 0.2); }
 
 .metricSub {
   font-size: var(--text-sm);
@@ -219,9 +226,12 @@
 
 .panel {
   background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px 22px;
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .panelHeader {
@@ -1767,13 +1777,34 @@
   font-weight: 600;
 }
 
+@keyframes borderGlow_rotate {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
 .chatBubble.agent {
+  position: relative;
   background: var(--bg2);
-  border: 1px solid var(--border);
+  border: none;
   color: var(--ink);
   align-self: flex-start;
   max-width: 90%;
   border-bottom-left-radius: 4px;
+  z-index: 1;
+}
+
+.chatBubble.agent::before {
+  content: "";
+  position: absolute;
+  top: -1px; right: -1px; bottom: -1px; left: -1px;
+  background: linear-gradient(60deg, rgba(0, 212, 255, 0.8), rgba(0, 255, 136, 0.8), rgba(12, 12, 22, 0.4), rgba(12, 12, 22, 0.4));
+  background-size: 300% 300%;
+  border-radius: 15px;
+  border-bottom-left-radius: 5px;
+  z-index: -1;
+  animation: borderGlow_rotate 3s ease infinite;
+  box-shadow: 0 4px 16px rgba(0, 255, 136, 0.15);
 }
 
 .chatToolCall {
@@ -1937,8 +1968,8 @@
 /* --- Asian Premium --- */
 .asianPremiumPanel { border-left: 3px solid var(--amber); }
 .asianPremiumGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
-.asianCountryCard { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 8px; transition: border-color 200ms ease; }
-.asianCountryCard:hover { border-color: var(--border-hover); }
+.asianCountryCard { background: var(--card); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 4px 24px rgba(0,0,0,0.2); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 8px; transition: border-color 200ms ease, transform 200ms ease; }
+.asianCountryCard:hover { border-color: rgba(255, 170, 0, 0.4); transform: translateY(-2px); box-shadow: 0 12px 32px rgba(255, 170, 0, 0.1); }
 .asianCountryHeader { display: flex; align-items: center; gap: 8px; }
 .asianCountryFlag { font-size: 1.2rem; }
 .asianCountryName { font-size: var(--text-sm); font-weight: 700; color: var(--ink); }
