@@ -68,24 +68,31 @@ function taskId(): string {
 let a2aTableReady: Promise<void> | null = null
 async function ensureA2aTable(db: D1Database): Promise<void> {
   if (!a2aTableReady) {
-    a2aTableReady = db.prepare(`
-      CREATE TABLE IF NOT EXISTS a2a_tasks (
-        id TEXT PRIMARY KEY,
-        status TEXT NOT NULL DEFAULT 'working' CHECK (status IN ('working','completed','failed','canceled')),
-        skill TEXT,
-        message TEXT NOT NULL,
-        result TEXT,
-        creator_ip TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-      )
-    `).run().then(() => undefined).catch(() => { a2aTableReady = null })
+    a2aTableReady = (async () => {
+      await db.prepare(`
+        CREATE TABLE IF NOT EXISTS a2a_tasks (
+          id TEXT PRIMARY KEY,
+          status TEXT NOT NULL DEFAULT 'working' CHECK (status IN ('working','completed','failed','canceled')),
+          skill TEXT,
+          message TEXT NOT NULL,
+          result TEXT,
+          creator_ip TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `).run()
+      // Migrate: add creator_ip column if table existed before this version
+      await db.prepare(`ALTER TABLE a2a_tasks ADD COLUMN creator_ip TEXT`).run().catch(() => {
+        // Column already exists — ignore
+      })
+    })().catch(() => { a2aTableReady = null })
   }
   return a2aTableReady
 }
 
+/** Trusted client IP — only CF-Connecting-IP is trusted for access-control scoping. */
 function getClientIp(c: { req: { header: (name: string) => string | undefined } }): string {
-  return c.req.header('CF-Connecting-IP') ?? c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  return c.req.header('CF-Connecting-IP') ?? 'unknown'
 }
 
 // ---------------------------------------------------------------------------

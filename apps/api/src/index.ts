@@ -7144,15 +7144,24 @@ api.post('/transfers', async (c) => {
   }
 
   // Step 2: Debit succeeded — credit destination and insert tx record atomically.
-  // If this batch fails the debit is orphaned, but no phantom credit can occur.
-  await c.env.DB.batch([
-    c.env.DB.prepare(
-      'UPDATE wallets SET balance_cents = balance_cents + ?, updated_at = datetime("now") WHERE id = ?'
-    ).bind(amount, body.toWalletId),
-    c.env.DB.prepare(
-      "INSERT INTO transactions (id, from_wallet_id, to_wallet_id, amount_cents, rail, memo, status) VALUES (?, ?, ?, ?, ?, ?, 'completed')"
-    ).bind(txId, body.fromWalletId, body.toWalletId, amount, rail, body.memo ?? ''),
-  ])
+  // On failure, reverse the debit to prevent orphaned withdrawals.
+  try {
+    await c.env.DB.batch([
+      c.env.DB.prepare(
+        'UPDATE wallets SET balance_cents = balance_cents + ?, updated_at = datetime("now") WHERE id = ?'
+      ).bind(amount, body.toWalletId),
+      c.env.DB.prepare(
+        "INSERT INTO transactions (id, from_wallet_id, to_wallet_id, amount_cents, rail, memo, status) VALUES (?, ?, ?, ?, ?, ?, 'completed')"
+      ).bind(txId, body.fromWalletId, body.toWalletId, amount, rail, body.memo ?? ''),
+    ])
+  } catch (batchErr) {
+    // Reverse the debit so funds are not lost
+    await c.env.DB.prepare(
+      'UPDATE wallets SET balance_cents = balance_cents + ?, updated_at = datetime("now") WHERE id = ? AND agent_id = ?'
+    ).bind(amount, body.fromWalletId, agentId).run()
+    await audit(c.env.DB, agentId, 'transfer.rollback', 'transactions', null, 'error', 'Credit batch failed — debit reversed')
+    throw new HTTPException(500, { message: 'Transfer failed' })
+  }
 
   await audit(c.env.DB, agentId, 'transfer.execute', 'transactions', txId, 'success')
 
