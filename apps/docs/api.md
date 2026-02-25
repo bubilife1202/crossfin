@@ -49,7 +49,7 @@ Base URL: `https://crossfin.dev` — 14 exchanges: Bithumb, Upbit, Coinone, GoPa
 
 ---
 
-## 4. Asian Premium Index (v1.13.0)
+## 4. Asian Premium Index (v1.18.0)
 
 Real-time crypto premium analysis across 4 Asian countries. Compares local exchange prices vs Binance global prices.
 

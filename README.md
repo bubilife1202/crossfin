@@ -107,7 +107,7 @@ Supports bidirectional routing: Korea → Global and Global → Korea.
 
 ---
 
-## Asian Premium Index (v1.13.0)
+## Asian Premium Index (v1.18.0)
 
 Real-time crypto premium analysis across 4 Asian countries. All free, no API key needed.
 
