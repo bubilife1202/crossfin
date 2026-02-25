@@ -72,6 +72,7 @@ import {
   calcPremiums,
   fetchWithTimeout,
   CROSSFIN_UA,
+  syncBithumbWithdrawalFees,
 } from './lib/fetchers'
 import {
   getTransferTime,
@@ -4292,6 +4293,15 @@ interface Route {
     time: string
     route: string
     recommendation: 'GOOD_DEAL' | 'PROCEED' | 'EXPENSIVE' | 'VERY_EXPENSIVE'
+    costBreakdown?: {
+      buyTradingFeePct: number
+      sellTradingFeePct: number
+      buySlippagePct: number
+      sellSlippagePct: number
+      withdrawalFeeAbsolute: number
+      withdrawalFeeCoin: string
+    }
+    excludedCosts?: string[]
   }
 }
 
@@ -4313,6 +4323,8 @@ interface RouteMeta {
   }
   feesSource: 'd1' | 'hardcoded-fallback'
   dataFreshness: 'live' | 'cached' | 'stale' | 'fallback'
+  includedCosts: string[]
+  excludedCosts: string[]
   warnings?: string[]
 }
 
@@ -4320,6 +4332,7 @@ type RegionalExchangePriceQuote = {
   priceLocal: number
   quoteCurrency: string
   asks: Array<{ price: string; quantity: string }>
+  bids: Array<{ price: string; quantity: string }>
 }
 
 // Fetch price for a coin on a regional fiat exchange (KRW/JPY/INR).
@@ -4338,18 +4351,20 @@ async function fetchRegionalExchangePrice(
       const entry = data[coinUpper]
       if (!entry?.closing_price) return null
       let asks: Array<{ price: string; quantity: string }> = []
+      let bids: Array<{ price: string; quantity: string }> = []
       if (!skipOrderbook) {
         try {
           const obRes = await fetchWithTimeout(`https://api.bithumb.com/public/orderbook/${coinUpper}_KRW?count=30`)
           if (obRes.ok) {
-            const obData = await obRes.json() as { data?: { asks?: Array<{ price: string; quantity: string }> } }
+            const obData = await obRes.json() as { data?: { asks?: Array<{ price: string; quantity: string }>; bids?: Array<{ price: string; quantity: string }> } }
             asks = obData?.data?.asks ?? []
+            bids = obData?.data?.bids ?? []
           } else {
             await obRes.body?.cancel()
           }
         } catch { /* ignore */ }
       }
-      return { priceLocal: parseFloat(entry.closing_price), quoteCurrency: 'KRW', asks }
+      return { priceLocal: parseFloat(entry.closing_price), quoteCurrency: 'KRW', asks, bids }
     }
 
     if (exchange === 'upbit') {
@@ -4358,17 +4373,24 @@ async function fetchRegionalExchangePrice(
       const tradePrice = ticker?.trade_price
       if (typeof tradePrice !== 'number' || !Number.isFinite(tradePrice)) return null
       let asks: Array<{ price: string; quantity: string }> = []
-      try {
-        const ob = await fetchUpbitOrderbook(market)
-        const units = ob?.orderbook_units
-        if (Array.isArray(units)) {
-          asks = units.map((u: unknown) => {
-            const rec = u as Record<string, unknown>
-            return { price: String(rec.ask_price ?? 0), quantity: String(rec.ask_size ?? 0) }
-          })
-        }
-      } catch { /* ignore */ }
-      return { priceLocal: tradePrice, quoteCurrency: 'KRW', asks }
+      let bids: Array<{ price: string; quantity: string }> = []
+      if (!skipOrderbook) {
+        try {
+          const ob = await fetchUpbitOrderbook(market)
+          const units = ob?.orderbook_units
+          if (Array.isArray(units)) {
+            asks = units.map((u: unknown) => {
+              const rec = u as Record<string, unknown>
+              return { price: String(rec.ask_price ?? 0), quantity: String(rec.ask_size ?? 0) }
+            })
+            bids = units.map((u: unknown) => {
+              const rec = u as Record<string, unknown>
+              return { price: String(rec.bid_price ?? 0), quantity: String(rec.bid_size ?? 0) }
+            })
+          }
+        } catch { /* ignore */ }
+      }
+      return { priceLocal: tradePrice, quoteCurrency: 'KRW', asks, bids }
     }
 
     if (exchange === 'coinone') {
@@ -4376,7 +4398,21 @@ async function fetchRegionalExchangePrice(
       const lastPrice = ticker?.last
       const parsed = typeof lastPrice === 'string' ? Number(lastPrice) : NaN
       if (!Number.isFinite(parsed) || parsed <= 0) return null
-      return { priceLocal: parsed, quoteCurrency: 'KRW', asks: [] }
+      let asks: Array<{ price: string; quantity: string }> = []
+      let bids: Array<{ price: string; quantity: string }> = []
+      if (!skipOrderbook) {
+        try {
+          const obRes = await fetchWithTimeout(`https://api.coinone.co.kr/public/v2/orderbook/KRW/${coinUpper}`)
+          if (obRes.ok) {
+            const obData = await obRes.json() as { result?: string; asks?: Array<{ price: string; qty: string }>; bids?: Array<{ price: string; qty: string }> }
+            if (obData.result === 'success') {
+              asks = (obData.asks ?? []).map((r) => ({ price: r.price, quantity: r.qty }))
+              bids = (obData.bids ?? []).map((r) => ({ price: r.price, quantity: r.qty }))
+            }
+          } else { await obRes.body?.cancel() }
+        } catch { /* ignore */ }
+      }
+      return { priceLocal: parsed, quoteCurrency: 'KRW', asks, bids }
     }
 
     if (exchange === 'gopax') {
@@ -4386,7 +4422,19 @@ async function fetchRegionalExchangePrice(
         const data = await res.json() as { price?: number; close?: number }
         const gopaxPrice = data.price ?? data.close
         if (!Number.isFinite(gopaxPrice) || Number(gopaxPrice) <= 0) return null
-        return { priceLocal: Number(gopaxPrice), quoteCurrency: 'KRW', asks: [] }
+        let asks: Array<{ price: string; quantity: string }> = []
+        let bids: Array<{ price: string; quantity: string }> = []
+        if (!skipOrderbook) {
+          try {
+            const obRes = await fetchWithTimeout(`https://api.gopax.co.kr/trading-pairs/${coinUpper}-KRW/book?level=2`)
+            if (obRes.ok) {
+              const obData = await obRes.json() as { ask?: Array<[number, number, number]>; bid?: Array<[number, number, number]> }
+              asks = (obData.ask ?? []).map((r) => ({ price: String(r[1] ?? 0), quantity: String(r[2] ?? 0) }))
+              bids = (obData.bid ?? []).map((r) => ({ price: String(r[1] ?? 0), quantity: String(r[2] ?? 0) }))
+            } else { await obRes.body?.cancel() }
+          } catch { /* ignore */ }
+        }
+        return { priceLocal: Number(gopaxPrice), quoteCurrency: 'KRW', asks, bids }
       } catch { return null }
     }
 
@@ -4400,20 +4448,24 @@ async function fetchRegionalExchangePrice(
       if (!Number.isFinite(bitflyerPrice) || bitflyerPrice <= 0) return null
 
       let asks: Array<{ price: string; quantity: string }> = []
+      let bids: Array<{ price: string; quantity: string }> = []
       if (!skipOrderbook) {
         try {
           const obRes = await fetchWithTimeout(`https://api.bitflyer.com/v1/getboard?product_code=${productCode}`)
           if (obRes.ok) {
-            const obData = await obRes.json() as { asks?: Array<{ price?: number; size?: number }> }
+            const obData = await obRes.json() as { asks?: Array<{ price?: number; size?: number }>; bids?: Array<{ price?: number; size?: number }> }
             asks = Array.isArray(obData.asks)
               ? obData.asks.map((row) => ({ price: String(row.price ?? 0), quantity: String(row.size ?? 0) }))
+              : []
+            bids = Array.isArray(obData.bids)
+              ? obData.bids.map((row) => ({ price: String(row.price ?? 0), quantity: String(row.size ?? 0) }))
               : []
           } else {
             await obRes.body?.cancel()
           }
         } catch { /* ignore */ }
       }
-      return { priceLocal: bitflyerPrice, quoteCurrency: 'JPY', asks }
+      return { priceLocal: bitflyerPrice, quoteCurrency: 'JPY', asks, bids }
     }
 
     if (exchange === 'wazirx') {
@@ -4435,20 +4487,24 @@ async function fetchRegionalExchangePrice(
       if (!Number.isFinite(wazirxPrice) || wazirxPrice <= 0) return null
 
       let asks: Array<{ price: string; quantity: string }> = []
+      let bids: Array<{ price: string; quantity: string }> = []
       if (!skipOrderbook) {
         try {
           const obRes = await fetchWithTimeout(`https://api.wazirx.com/api/v2/depth?market=${market}&limit=30`)
           if (obRes.ok) {
-            const obData = await obRes.json() as { asks?: Array<[string, string]> }
+            const obData = await obRes.json() as { asks?: Array<[string, string]>; bids?: Array<[string, string]> }
             asks = Array.isArray(obData.asks)
               ? obData.asks.map((row) => ({ price: String(row[0] ?? 0), quantity: String(row[1] ?? 0) }))
+              : []
+            bids = Array.isArray(obData.bids)
+              ? obData.bids.map((row) => ({ price: String(row[0] ?? 0), quantity: String(row[1] ?? 0) }))
               : []
           } else {
             await obRes.body?.cancel()
           }
         } catch { /* ignore */ }
       }
-      return { priceLocal: wazirxPrice, quoteCurrency: 'INR', asks }
+      return { priceLocal: wazirxPrice, quoteCurrency: 'INR', asks, bids }
     }
 
     if (exchange === 'bitbank') {
@@ -4459,20 +4515,24 @@ async function fetchRegionalExchangePrice(
       if (!Number.isFinite(last) || last <= 0) return null
 
       let asks: Array<{ price: string; quantity: string }> = []
+      let bids: Array<{ price: string; quantity: string }> = []
       if (!skipOrderbook) {
         try {
           const obRes = await fetchWithTimeout(`https://public.bitbank.cc/${coinLower}_jpy/depth`)
           if (obRes.ok) {
-            const obData = await obRes.json() as { data?: { asks?: Array<[string, string]> } }
+            const obData = await obRes.json() as { data?: { asks?: Array<[string, string]>; bids?: Array<[string, string]> } }
             asks = Array.isArray(obData?.data?.asks)
               ? obData.data.asks.map((row) => ({ price: String(row[0] ?? 0), quantity: String(row[1] ?? 0) }))
+              : []
+            bids = Array.isArray(obData?.data?.bids)
+              ? obData.data.bids.map((row) => ({ price: String(row[0] ?? 0), quantity: String(row[1] ?? 0) }))
               : []
           } else {
             await obRes.body?.cancel()
           }
         } catch { /* ignore */ }
       }
-      return { priceLocal: last, quoteCurrency: 'JPY', asks }
+      return { priceLocal: last, quoteCurrency: 'JPY', asks, bids }
     }
 
     if (exchange === 'bitkub') {
@@ -4483,20 +4543,24 @@ async function fetchRegionalExchangePrice(
       if (!Number.isFinite(last) || last <= 0) return null
 
       let asks: Array<{ price: string; quantity: string }> = []
+      let bids: Array<{ price: string; quantity: string }> = []
       if (!skipOrderbook) {
         try {
           const obRes = await fetchWithTimeout(`https://api.bitkub.com/api/market/depth?sym=THB_${coinUpper}&lmt=30`)
           if (obRes.ok) {
-            const obData = await obRes.json() as { asks?: Array<[number, number, number]> }
+            const obData = await obRes.json() as { asks?: Array<[number, number, number]>; bids?: Array<[number, number, number]> }
             asks = Array.isArray(obData.asks)
               ? obData.asks.map((row) => ({ price: String(row[1] ?? 0), quantity: String(row[0] ?? 0) }))
+              : []
+            bids = Array.isArray(obData.bids)
+              ? obData.bids.map((row) => ({ price: String(row[1] ?? 0), quantity: String(row[0] ?? 0) }))
               : []
           } else {
             await obRes.body?.cancel()
           }
         } catch { /* ignore */ }
       }
-      return { priceLocal: last, quoteCurrency: 'THB', asks }
+      return { priceLocal: last, quoteCurrency: 'THB', asks, bids }
     }
 
     if (exchange === 'indodax') {
@@ -4507,6 +4571,7 @@ async function fetchRegionalExchangePrice(
       if (!Number.isFinite(last) || last <= 0) return null
 
       let asks: Array<{ price: string; quantity: string }> = []
+      let bids: Array<{ price: string; quantity: string }> = []
       if (!skipOrderbook) {
         try {
           const obRes = await fetchWithTimeout(`https://indodax.com/api/depth/${coinLower}idr`)
@@ -4515,12 +4580,15 @@ async function fetchRegionalExchangePrice(
             asks = Array.isArray(obData.sell)
               ? obData.sell.map((row) => ({ price: String(row[0] ?? 0), quantity: String(row[1] ?? 0) }))
               : []
+            bids = Array.isArray(obData.buy)
+              ? obData.buy.map((row) => ({ price: String(row[0] ?? 0), quantity: String(row[1] ?? 0) }))
+              : []
           } else {
             await obRes.body?.cancel()
           }
         } catch { /* ignore */ }
       }
-      return { priceLocal: last, quoteCurrency: 'IDR', asks }
+      return { priceLocal: last, quoteCurrency: 'IDR', asks, bids }
     }
 
     return null
@@ -4617,6 +4685,7 @@ async function findOptimalRoute(
       priceLocal: usd * jpy * 1.002,
       quoteCurrency: 'JPY',
       asks: [],
+      bids: [],
     }
   }
 
@@ -4686,6 +4755,7 @@ async function findOptimalRoute(
     try {
       let buyFeePct: number
       let buySlippagePct: number
+      let sellSlippagePct: number
       let buyPriceUsed: number
       let coinsBought: number
       let coinsAfterWithdraw: number
@@ -4717,13 +4787,18 @@ async function findOptimalRoute(
           toCur,
           bridgeCoin,
           await fetchRegionalExchangePrice(
-            toEx, bridgeCoin, toEx === 'bithumb' ? bithumbAll : undefined, true,
+            toEx, bridgeCoin, toEx === 'bithumb' ? bithumbAll : undefined, false,
           ),
         )
         if (!destPrice || destPrice.quoteCurrency !== toCur || destPrice.priceLocal <= 0) continue
 
         sellPriceUsed = destPrice.priceLocal
-        finalOutput = coinsAfterWithdraw * destPrice.priceLocal * (1 - toFeePct / 100)
+        // Estimate sell-side slippage from destination orderbook bids
+        sellSlippagePct = destPrice.bids.length > 0
+          ? estimateSlippage(destPrice.bids, coinsAfterWithdraw * destPrice.priceLocal)
+          : 0.15
+        const effectiveSellPrice = destPrice.priceLocal * (1 - sellSlippagePct / 100)
+        finalOutput = coinsAfterWithdraw * effectiveSellPrice * (1 - toFeePct / 100)
         const outputUsd = toUsdAmount(finalOutput, toCur)
         if (!outputUsd) continue
         outputValueUsdForCost = outputUsd
@@ -4738,7 +4813,7 @@ async function findOptimalRoute(
           fromCur,
           bridgeCoin,
           await fetchRegionalExchangePrice(
-            fromEx, bridgeCoin, fromEx === 'bithumb' ? bithumbAll : undefined, true,
+            fromEx, bridgeCoin, fromEx === 'bithumb' ? bithumbAll : undefined, false,
           ),
         )
         if (!sourcePrice || sourcePrice.quoteCurrency !== fromCur || sourcePrice.priceLocal <= 0) continue
@@ -4760,17 +4835,25 @@ async function findOptimalRoute(
           const targetGlobalPrice = getGlobalPriceUsd(toEx, bridgeCoin)
           if (!targetGlobalPrice) continue
           sellPriceUsed = targetGlobalPrice
-          finalOutput = coinsAfterWithdraw * targetGlobalPrice * (1 - toFeePct / 100)
+          // Hardcoded sell slippage for global exchanges (matching buy-side estimate)
+          sellSlippagePct = 0.10
+          const effectiveSellPrice = targetGlobalPrice * (1 - sellSlippagePct / 100)
+          finalOutput = coinsAfterWithdraw * effectiveSellPrice * (1 - toFeePct / 100)
         } else {
           const destPrice = getRegionalPriceWithFallback(
             toEx,
             toCur,
             bridgeCoin,
-            await fetchRegionalExchangePrice(toEx, bridgeCoin, toEx === 'bithumb' ? bithumbAll : undefined, true),
+            await fetchRegionalExchangePrice(toEx, bridgeCoin, toEx === 'bithumb' ? bithumbAll : undefined, false),
           )
           if (!destPrice || destPrice.quoteCurrency !== toCur || destPrice.priceLocal <= 0) continue
           sellPriceUsed = destPrice.priceLocal
-          finalOutput = coinsAfterWithdraw * destPrice.priceLocal * (1 - toFeePct / 100)
+          // Estimate sell-side slippage from destination orderbook bids
+          sellSlippagePct = destPrice.bids.length > 0
+            ? estimateSlippage(destPrice.bids, coinsAfterWithdraw * destPrice.priceLocal)
+            : 0.15
+          const effectiveSellPrice = destPrice.priceLocal * (1 - sellSlippagePct / 100)
+          finalOutput = coinsAfterWithdraw * effectiveSellPrice * (1 - toFeePct / 100)
         }
 
         const outputUsd = toUsdAmount(finalOutput, toCur)
@@ -4801,7 +4884,9 @@ async function findOptimalRoute(
         const targetGlobalPrice = getGlobalPriceUsd(toEx, bridgeCoin)
         if (!targetGlobalPrice) continue
         sellPriceUsed = targetGlobalPrice
-        finalOutput = coinsAfterWithdraw * targetGlobalPrice * (1 - toFeePct / 100)
+        sellSlippagePct = 0.10
+        const effectiveSellPrice = targetGlobalPrice * (1 - sellSlippagePct / 100)
+        finalOutput = coinsAfterWithdraw * effectiveSellPrice * (1 - toFeePct / 100)
 
         const outputUsd = toUsdAmount(finalOutput, toCur)
         if (!outputUsd) continue
@@ -4820,7 +4905,7 @@ async function findOptimalRoute(
 
       const { indicator, signalStrength, reason } = computeRouteAction(
         totalCostPct,
-        buySlippagePct,
+        buySlippagePct + sellSlippagePct,
         transferTime,
       )
 
@@ -4872,6 +4957,20 @@ async function findOptimalRoute(
           time: `~${totalTimeMinutesRounded} minutes`,
           route: `Buy ${bridgeCoin} on ${capitalizeExchange(fromEx)} → Transfer to ${capitalizeExchange(toEx)} → Sell for ${toCur}`,
           recommendation,
+          costBreakdown: {
+            buyTradingFeePct: round2(buyFeePct),
+            sellTradingFeePct: round2(toFeePct),
+            buySlippagePct: round2(buySlippagePct),
+            sellSlippagePct: round2(sellSlippagePct),
+            withdrawalFeeAbsolute: withdrawFee,
+            withdrawalFeeCoin: bridgeCoin,
+          },
+          excludedCosts: [
+            'Bank deposit/withdrawal fees (~1,000 KRW per transfer)',
+            'Fiat conversion spread (~0.5-1%)',
+            'Price movement during transfer time',
+            'Korea crypto tax: 22% on gains above 2.5M KRW/year',
+          ],
         },
         steps: [
           {
@@ -4895,7 +4994,7 @@ async function findOptimalRoute(
             type: 'sell',
             from: { exchange: toEx, currency: bridgeCoin },
             to: { exchange: toEx, currency: toCur },
-            estimatedCost: { feePct: toFeePct, feeAbsolute: 0, slippagePct: 0, timeMinutes: 0.5 },
+            estimatedCost: { feePct: toFeePct, feeAbsolute: 0, slippagePct: round2(sellSlippagePct), timeMinutes: 0.5 },
             priceUsed: sellPriceUsed,
             amountIn: coinsAfterWithdraw,
             amountOut: finalOutput,
@@ -4963,6 +5062,17 @@ async function findOptimalRoute(
       dataFreshness: fxMeta.isFallback
         ? 'fallback'
         : (globalPricesSource.ageMs < GLOBAL_PRICES_SUCCESS_TTL_MS ? (globalPricesSource.ageMs < 5000 ? 'live' : 'cached') : 'stale'),
+      includedCosts: [
+        'Exchange trading fees (buy + sell)',
+        'Blockchain withdrawal/network fee',
+        'Estimated orderbook slippage (buy + sell)',
+      ],
+      excludedCosts: [
+        'Bank deposit/withdrawal fees (~1,000 KRW)',
+        'Fiat conversion spread (~0.5-1%)',
+        'Price movement during transfer time',
+        'Korea crypto tax: 22% on gains above 2.5M KRW/year',
+      ],
       warnings: fxMeta.warnings.length > 0 ? fxMeta.warnings : undefined,
     },
   }
@@ -5304,72 +5414,156 @@ app.get('/api/premium/arbitrage/kimchi/history', async (c) => {
 // === Arbitrage Opportunities (paid $0.10) ===
 
 app.get('/api/premium/arbitrage/opportunities', async (c) => {
-  const [bithumbData, priceMeta, fxMeta] = await Promise.all([
+  // Phase 4: Multi-exchange arbitrage — optional ?korean= and ?global= params
+  const koreanExchange = (c.req.query('korean') ?? 'bithumb').toLowerCase()
+  const globalExchange = (c.req.query('global') ?? 'binance').toLowerCase()
+
+  if (!isKoreanRoutingExchange(koreanExchange)) {
+    return c.json({ error: `Unsupported korean exchange: ${koreanExchange}. Valid: bithumb, upbit, coinone, gopax` }, 400)
+  }
+  if (!isGlobalRoutingExchange(globalExchange)) {
+    return c.json({ error: `Unsupported global exchange: ${globalExchange}. Valid: binance, okx, bybit, kucoin, coinbase` }, 400)
+  }
+
+  const [bithumbData, priceMeta, fxMeta, tradingFeesDb, suspensions] = await Promise.all([
     fetchBithumbAll(),
     fetchGlobalPricesWithMeta(c.env.DB),
     fetchFxRatesWithMeta(),
-  ])
-
-  const krwRate = fxMeta.rates.KRW
-  const premiums = calcPremiums(bithumbData, priceMeta.prices, krwRate)
-  const tradingFeesPct = BITHUMB_FEES_PCT + BINANCE_FEES_PCT
-
-  // Fetch orderbooks, premium trends, and withdrawal suspensions in parallel
-  const orderbookPromises = premiums.map((p) =>
-    fetchBithumbOrderbook(p.coin).catch(() => ({ bids: [], asks: [] })),
-  )
-  const trendPromises = premiums.map((p) =>
-    getPremiumTrend(c.env.DB, p.coin, 6),
-  )
-  const [orderbooks, trends, suspensions] = await Promise.all([
-    Promise.all(orderbookPromises),
-    Promise.all(trendPromises),
+    getExchangeTradingFees(c.env.DB).catch(() => cloneDefaultTradingFees()),
     getWithdrawalSuspensions(c.env.DB),
   ])
 
+  const krwRate = fxMeta.rates.KRW
+
+  // Dynamic trading fees from DB (fallback to constants)
+  const koreanFeePct = tradingFeesDb[koreanExchange] ?? EXCHANGE_FEES[koreanExchange] ?? 0.25
+  const globalFeePct = tradingFeesDb[globalExchange] ?? EXCHANGE_FEES[globalExchange] ?? 0.10
+  const tradingFeesPct = koreanFeePct + globalFeePct
+
+  // Build per-coin premium data
+  type ArbitrageCoinData = {
+    coin: string; koreanKrw: number; globalUsd: number; premiumPct: number;
+    volume24hUsd: number; ob: { bids: unknown[]; asks: unknown[] }
+  }
+  const coinDataArr: ArbitrageCoinData[] = []
+
+  if (koreanExchange === 'bithumb') {
+    // Fast path: use existing calcPremiums + fetchBithumbOrderbook
+    const premiums = calcPremiums(bithumbData, priceMeta.prices, krwRate)
+    const orderbookPromises = premiums.map((p) =>
+      fetchBithumbOrderbook(p.coin).catch(() => ({ bids: [] as unknown[], asks: [] as unknown[] })),
+    )
+    const orderbooks = await Promise.all(orderbookPromises)
+
+    for (let i = 0; i < premiums.length; i++) {
+      const p = premiums[i]!
+      const globalSymbol = TRACKED_PAIRS[p.coin]
+      const globalUsd = globalSymbol
+        ? (getExchangePrice(globalExchange, globalSymbol) ?? p.binanceUsd)
+        : p.binanceUsd
+
+      // Recalculate premium using selected global exchange price
+      const koreanUsd = p.bithumbKrw / krwRate
+      const premiumPct = globalUsd > 0 ? round2(((koreanUsd - globalUsd) / globalUsd) * 100) : p.premiumPct
+
+      coinDataArr.push({
+        coin: p.coin,
+        koreanKrw: p.bithumbKrw,
+        globalUsd,
+        premiumPct,
+        volume24hUsd: p.volume24hUsd,
+        ob: orderbooks[i] ?? { bids: [], asks: [] },
+      })
+    }
+  } else {
+    // Generic path: use fetchRegionalExchangePrice per coin
+    const coins = Object.keys(TRACKED_PAIRS)
+    const quotePromises = coins.map((coin) =>
+      fetchRegionalExchangePrice(koreanExchange, coin, undefined, false).catch(() => null),
+    )
+    const quotes = await Promise.all(quotePromises)
+
+    for (let i = 0; i < coins.length; i++) {
+      const coin = coins[i]!
+      const quote = quotes[i]
+      if (!quote || quote.priceLocal <= 0) continue
+
+      const globalSymbol = TRACKED_PAIRS[coin]
+      const globalUsd = globalSymbol
+        ? (getExchangePrice(globalExchange, globalSymbol) ?? priceMeta.prices[globalSymbol])
+        : undefined
+      if (!globalUsd || globalUsd <= 0) continue
+
+      const koreanUsd = quote.priceLocal / krwRate
+      const premiumPct = round2(((koreanUsd - globalUsd) / globalUsd) * 100)
+
+      // Estimate volume from Bithumb data as proxy (other exchanges don't expose unified volume easily)
+      const bithumb = bithumbData[coin]
+      const volume24hKrw = bithumb ? parseFloat(bithumb.acc_trade_value_24H || '0') : 0
+      const volume24hUsd = Math.round(volume24hKrw / krwRate)
+
+      coinDataArr.push({
+        coin,
+        koreanKrw: quote.priceLocal,
+        globalUsd,
+        premiumPct,
+        volume24hUsd,
+        ob: { bids: quote.bids ?? [], asks: quote.asks ?? [] },
+      })
+    }
+  }
+
+  // Fetch premium trends in parallel
+  const trendPromises = coinDataArr.map((d) =>
+    getPremiumTrend(c.env.DB, d.coin, 6),
+  )
+  const trends = await Promise.all(trendPromises)
+
   const TRADE_SIZE_KRW = 15_000_000 // ~$10,000 reference trade
 
-  const opportunities = premiums
-    .map((p, i) => {
-      const absPremiumPct = Math.abs(p.premiumPct)
-      const direction = p.premiumPct > 0 ? 'buy-global-sell-korea' : 'buy-korea-sell-global'
-      const marketSideLabel = p.premiumPct >= 0 ? 'Korea premium setup (buy global -> sell Korea)' : 'Korea discount setup (buy Korea -> sell global)'
-      const riskScore = p.volume24hUsd < 100000 ? 'high' : p.volume24hUsd < 1000000 ? 'medium' : 'low'
+  const opportunities = coinDataArr
+    .map((d, i) => {
+      const absPremiumPct = Math.abs(d.premiumPct)
+      const direction = d.premiumPct > 0 ? 'buy-global-sell-korea' : 'buy-korea-sell-global'
+      const koreanLabel = EXCHANGE_DISPLAY_NAME[koreanExchange as RoutingExchange] ?? koreanExchange
+      const globalLabel = EXCHANGE_DISPLAY_NAME[globalExchange as RoutingExchange] ?? globalExchange
+      const marketSideLabel = d.premiumPct >= 0
+        ? `${koreanLabel} premium setup (buy ${globalLabel} -> sell ${koreanLabel})`
+        : `${koreanLabel} discount setup (buy ${koreanLabel} -> sell ${globalLabel})`
+      const riskScore = d.volume24hUsd < 100000 ? 'high' : d.volume24hUsd < 1000000 ? 'medium' : 'low'
 
-      // Fix 1: Include withdrawal fee as percentage of trade size
-      const sourceExchange = direction === 'buy-global-sell-korea' ? 'binance' : 'bithumb'
-      const withdrawalFeeCoins = getWithdrawalFee(sourceExchange, p.coin)
-      const coinPriceKrw = p.bithumbKrw
+      // Dynamic source exchange based on direction
+      const sourceExchange = direction === 'buy-global-sell-korea' ? globalExchange : koreanExchange
+      const withdrawalFeeCoins = getWithdrawalFee(sourceExchange, d.coin)
+      const coinPriceKrw = d.koreanKrw
       const withdrawalFeePct = coinPriceKrw > 0 ? (withdrawalFeeCoins * coinPriceKrw) / TRADE_SIZE_KRW * 100 : 0
       const totalFeesPct = tradingFeesPct + withdrawalFeePct
 
       const netProfitPct = absPremiumPct - totalFeesPct
       const profitPer10kUsd = Math.round(netProfitPct * 100) // cents per $10,000 traded
 
-      // Fix 3: Check withdrawal suspension
-      const withdrawalSuspended = !!(suspensions[sourceExchange]?.has(p.coin))
+      // Withdrawal suspension check
+      const withdrawalSuspended = !!(suspensions[sourceExchange]?.has(d.coin))
 
-      // Fix 2: Use correct orderbook side for slippage estimation
-      const ob = orderbooks[i] ?? { bids: [], asks: [] }
+      // Orderbook slippage
+      const ob = d.ob
       const orderbookSide = direction === 'buy-korea-sell-global'
         ? (ob.asks as Array<{ price: string; quantity: string }>).slice(0, 10)
         : (ob.bids as Array<{ price: string; quantity: string }>).slice(0, 10)
       const slippageEstimatePct = estimateSlippage(orderbookSide, TRADE_SIZE_KRW)
-      const transferTimeMin = getTransferTime(p.coin)
+      const transferTimeMin = getTransferTime(d.coin)
       const trendData = trends[i] ?? { trend: 'stable' as const, volatilityPct: 0 }
       const { trend: premiumTrend, volatilityPct } = trendData
 
-      // Fix 5: Feed riskScore into computeAction — high volume risk multiplies premiumRisk
       const adjustedVolatility = riskScore === 'high' ? volatilityPct * 1.5 : volatilityPct
 
-      // Fix 3 continued: If withdrawals suspended, force NEGATIVE_SPREAD
       let indicator: 'POSITIVE_SPREAD' | 'NEUTRAL' | 'NEGATIVE_SPREAD'
       let signalStrength: number
       let baseReason: string
       if (withdrawalSuspended) {
         indicator = 'NEGATIVE_SPREAD'
         signalStrength = 0.1
-        baseReason = `Withdrawals suspended on ${sourceExchange} for ${p.coin} — transfer not possible`
+        baseReason = `Withdrawals suspended on ${sourceExchange} for ${d.coin} — transfer not possible`
       } else {
         const result = computeAction(netProfitPct, slippageEstimatePct, transferTimeMin, adjustedVolatility)
         indicator = result.indicator
@@ -5379,20 +5573,22 @@ app.get('/api/premium/arbitrage/opportunities', async (c) => {
       const reason = `${baseReason}. ${marketSideLabel}; gross edge ${round2(absPremiumPct)}% before fees (trading ${round2(tradingFeesPct)}% + withdrawal ${round2(withdrawalFeePct)}%).`
 
       return {
-        coin: p.coin,
+        coin: d.coin,
         direction,
-        grossPremiumPct: p.premiumPct,
+        grossPremiumPct: d.premiumPct,
         estimatedFeesPct: round2(totalFeesPct),
         tradingFeesPct: round2(tradingFeesPct),
         withdrawalFeePct: round2(withdrawalFeePct),
         withdrawalSuspended,
         netProfitPct: Math.round(netProfitPct * 100) / 100,
         profitPer10kUsd,
-        volume24hUsd: p.volume24hUsd,
+        volume24hUsd: d.volume24hUsd,
         riskScore,
         profitable: netProfitPct > 0,
-        bithumbKrw: p.bithumbKrw,
-        binanceUsd: p.binanceUsd,
+        koreanPrice: d.koreanKrw,
+        globalPriceUsd: d.globalUsd,
+        koreanExchange,
+        globalExchange,
         // Decision layer fields
         slippageEstimatePct: round2(slippageEstimatePct),
         transferTimeMin,
@@ -5412,12 +5608,14 @@ app.get('/api/premium/arbitrage/opportunities', async (c) => {
   return c.json({
     paid: true,
     service: 'crossfin-arbitrage-opportunities',
+    koreanExchange,
+    globalExchange,
     krwUsdRate: krwRate,
     totalOpportunities: opportunities.length,
     profitableCount: profitable.length,
     positiveSpreadCount,
     marketCondition,
-    estimatedFeesNote: `Trading ${round2(tradingFeesPct)}% + per-coin withdrawal fees included`,
+    estimatedFeesNote: `Trading ${round2(tradingFeesPct)}% (${koreanExchange} ${round2(koreanFeePct)}% + ${globalExchange} ${round2(globalFeePct)}%) + per-coin withdrawal fees included`,
     bestOpportunity: profitable[0] ?? null,
     opportunities,
     _dataMeta: buildDataMeta(priceMeta, fxMeta),
@@ -8028,6 +8226,8 @@ app.post('/api/telegram/webhook', async (c) => {
           `Indicator: ${optimal.indicator} (${Math.round(optimal.signalStrength * 100)}% signal strength)`,
           `${optimal.reason}`,
           `Alternatives evaluated: ${altCount}`,
+          '',
+          `⚠️ 은행 수수료, 환전 스프레드, 세금은 미포함. 실제 슬리피지는 다를 수 있습니다.`,
         ].join('\n')
 
         await telegramSendMessage(botToken, chatId, reply)
@@ -8635,6 +8835,11 @@ export default {
     if (statements.length > 0) {
       await env.DB.batch(statements)
     }
+
+    // 1b. Sync Bithumb withdrawal fees (piggyback on same cron cycle)
+    try {
+      await syncBithumbWithdrawalFees(env.DB)
+    } catch { /* non-critical — fallback to hardcoded constants */ }
 
     if (isEnabledFlag(env.CROSSFIN_GUARDIAN_ENABLED)) {
       // 2. Autonomous arbitrage scan — uses same computeAction as the API endpoint

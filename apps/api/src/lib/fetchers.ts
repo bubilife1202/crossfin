@@ -19,7 +19,7 @@ import type {
 // Fetch with timeout utility
 // ============================================================
 
-export const CROSSFIN_UA = 'CrossFin-API/1.16.0'
+export const CROSSFIN_UA = 'CrossFin-API/1.17.0'
 
 export async function fetchWithTimeout(
   url: string,
@@ -220,6 +220,48 @@ export async function syncBithumbWithdrawalSuspensions(db: D1Database): Promise<
 
     if (updates.length === 0) return false
     await db.batch(updates)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Sync Bithumb withdrawal fee AMOUNTS from their public API.
+ * Bithumb `/public/assetsstatus/ALL` returns `withdrawal_fee` per coin.
+ * Updates D1 `exchange_withdrawal_fees` rows only when fees have changed.
+ */
+export async function syncBithumbWithdrawalFees(db: D1Database): Promise<boolean> {
+  try {
+    await ensureFeeTables(db)
+    const res = await fetchWithTimeout('https://api.bithumb.com/public/assetsstatus/ALL')
+    if (!res.ok) { await res.body?.cancel(); return false }
+    const data: unknown = await res.json()
+    if (!isRecord(data) || data.status !== '0000' || !isRecord(data.data)) return false
+
+    const updates: D1PreparedStatement[] = []
+    for (const [coinRaw, row] of Object.entries(data.data as Record<string, unknown>)) {
+      if (!isRecord(row)) continue
+      const coin = coinRaw.trim().toUpperCase()
+      if (!coin) continue
+
+      const withdrawalFee = Number(row.withdrawal_fee)
+      if (!Number.isFinite(withdrawalFee) || withdrawalFee < 0) continue
+
+      // Upsert fee — only writes when value differs
+      updates.push(
+        db.prepare(
+          `INSERT INTO exchange_withdrawal_fees (exchange, coin, fee, updated_at)
+           VALUES ('bithumb', ?, ?, datetime('now'))
+           ON CONFLICT (exchange, coin) DO UPDATE SET fee = excluded.fee, updated_at = excluded.updated_at
+           WHERE fee != excluded.fee`
+        ).bind(coin, withdrawalFee)
+      )
+    }
+
+    if (updates.length === 0) return false
+    await db.batch(updates)
+    invalidateFeeCaches()
     return true
   } catch {
     return false
