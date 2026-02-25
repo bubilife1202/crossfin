@@ -206,6 +206,42 @@ async function runCopyDriftCheck() {
   console.log(`[ok] copy drift scan (${fileSet.size} files)`)
 }
 
+async function runVersionConsistencyCheck() {
+  const apiPkg = JSON.parse(await readFile(repoPath('apps/api/package.json'), 'utf8'))
+  const ver = apiPkg.version
+  assert(typeof ver === 'string' && /^\d+\.\d+\.\d+$/.test(ver), `api version must be semver, got: ${ver}`)
+
+  const checks = [
+    { file: 'apps/web/package.json', pattern: `"version": "${ver}"` },
+    { file: 'apps/live/package.json', pattern: `"version": "${ver}"` },
+    { file: 'apps/mcp-server/package.json', pattern: `"version": "${ver}"` },
+    { file: 'packages/sdk/package.json', pattern: `"version": "${ver}"` },
+    { file: 'apps/mcp-server/server.json', pattern: `"version": "${ver}"` },
+    { file: 'apps/web/public/.well-known/crossfin.json', pattern: `"version": "${ver}"` },
+    { file: 'catalog/crossfin-catalog.json', pattern: `"apiVersion": "${ver}"` },
+    { file: 'smithery.yaml', pattern: `crossfin-mcp@${ver}` },
+    { file: 'examples/gpt-actions-schema.yaml', pattern: `version: "${ver}"` },
+    { file: 'apps/api/src/lib/fetchers.ts', pattern: `CrossFin-API/${ver}` },
+    { file: 'packages/sdk/src/types.ts', pattern: `v${ver}` },
+    { file: 'README.md', pattern: `(v${ver})` },
+    { file: 'apps/docs/api.md', pattern: `(v${ver})` },
+  ]
+
+  const mismatches = []
+  for (const { file, pattern } of checks) {
+    const content = await readFile(repoPath(file), 'utf8')
+    if (!content.includes(pattern)) {
+      mismatches.push(`  ${file} — expected "${pattern}"`)
+    }
+  }
+
+  if (mismatches.length > 0) {
+    throw new Error(`Version consistency check failed (expected ${ver}):\n${mismatches.join('\n')}\nRun: node scripts/bump-version.mjs ${ver}`)
+  }
+
+  console.log(`[ok] version consistency (${checks.length + 1} files @ ${ver})`)
+}
+
 async function runEndpointChecks(baseUrl, docsUrl, liveUrl) {
   await Promise.all([
     checkJson({
@@ -336,6 +372,7 @@ async function main() {
 
   await Promise.all([
     runCopyDriftCheck(),
+    runVersionConsistencyCheck(),
     runEndpointChecks(baseUrl, docsUrl, liveUrl),
   ])
 
