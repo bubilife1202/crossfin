@@ -144,7 +144,7 @@ export default function RouteGraph() {
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<RoutingResponse | null>(null)
 
-  const loadRoute = useCallback(async () => {
+  const loadRoute = useCallback(async (signal?: AbortSignal) => {
     setLoading(true)
     setError(null)
 
@@ -157,7 +157,7 @@ export default function RouteGraph() {
 
     try {
       const params = new URLSearchParams({ from, to, amount: String(amount), strategy })
-      const res = await fetch(`${API_BASE}/api/routing/optimal?${params.toString()}`)
+      const res = await fetch(`${API_BASE}/api/routing/optimal?${params.toString()}`, { signal })
       if (!res.ok) {
         const text = await res.text()
         throw new Error(`routing_fetch_failed:${res.status} ${text.slice(0, 120)}`)
@@ -165,6 +165,7 @@ export default function RouteGraph() {
       const json = await res.json() as RoutingResponse
       setData(json)
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return
       setError(e instanceof Error ? e.message : 'Failed to fetch route data')
       setData(null)
     } finally {
@@ -172,8 +173,11 @@ export default function RouteGraph() {
     }
   }, [amountInput, from, strategy, to])
 
+  // P-05: debounce fetch — wait 400ms after last input change before firing
   useEffect(() => {
-    void loadRoute()
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => { void loadRoute(ctrl.signal) }, 400)
+    return () => { clearTimeout(timer); ctrl.abort() }
   }, [loadRoute])
 
   const graph = useMemo(() => {

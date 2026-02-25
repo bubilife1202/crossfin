@@ -361,8 +361,7 @@ export async function getWithdrawalSuspensions(db: D1Database): Promise<Record<s
   const now = Date.now()
   const cached = globalAny.__crossfinWithdrawalSuspensionsCache
   if (cached && now < cached.expiresAt) {
-    const changed = await syncBithumbWithdrawalSuspensions(db)
-    if (!changed) return cached.value
+    return cached.value // B-04: respect cache TTL — sync runs in cron, not per request
   }
   if (globalAny.__crossfinWithdrawalSuspensionsInFlight) return globalAny.__crossfinWithdrawalSuspensionsInFlight
 
@@ -1486,6 +1485,7 @@ export function calcAsianPremium(
 }> {
   void currencyCode
   void exchangeName
+  if (!Number.isFinite(fxRate) || fxRate <= 0) return [] // B-01: guard divide-by-zero
   const premiums: Array<{
     coin: string
     localPrice: number
@@ -1530,6 +1530,7 @@ export function calcPremiums(
   binancePrices: Record<string, number>,
   krwRate: number,
 ) {
+  if (!Number.isFinite(krwRate) || krwRate <= 0) return [] // B-02: guard divide-by-zero
   const premiums = []
   for (const [coin, binanceSymbol] of Object.entries(TRACKED_PAIRS)) {
     const bithumb = bithumbData[coin]

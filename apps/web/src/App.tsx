@@ -105,7 +105,7 @@ function App() {
     const t0 = performance.now()
 
     try {
-      const res = await fetch(url)
+      const res = await fetch(url, { signal: AbortSignal.timeout(15_000) })
       const elapsed = Math.round(performance.now() - t0)
       let body: string
       const ct = res.headers.get('content-type') ?? ''
@@ -221,7 +221,7 @@ function App() {
   async function verifyMcpSetup() {
     setMcpVerify({ status: 'loading' })
     try {
-      const res = await fetch(`${apiBase}/api/health`)
+      const res = await fetch(`${apiBase}/api/health`, { signal: AbortSignal.timeout(10_000) })
       if (!res.ok) throw new Error(`health_failed:${res.status}`)
       const data = await res.json() as { version?: string }
       const version = String(data?.version ?? '')

@@ -987,20 +987,23 @@ const endpointTelemetry: MiddlewareHandler<Env> = async (c, next) => {
 app.use('/api/*', endpointTelemetry)
 
 // Global disclaimer + legal injection middleware
+// P-01: use streaming text manipulation instead of re-parsing every JSON body
+const DISCLAIMER_SUFFIX = `,"_disclaimer":${JSON.stringify(CROSSFIN_DISCLAIMER)},"_legal":${JSON.stringify(CROSSFIN_LEGAL)}}`
 app.use('*', async (c, next) => {
   await next()
   const ct = c.res.headers.get('content-type')
   if (!ct?.includes('application/json')) return
   try {
-    const body = await c.res.clone().json()
-    if (typeof body === 'object' && body !== null && !Array.isArray(body)) {
-      const enhanced: Record<string, unknown> = { ...body }
-      if (!('_disclaimer' in enhanced)) enhanced._disclaimer = CROSSFIN_DISCLAIMER
-      if (!('_legal' in enhanced)) enhanced._legal = CROSSFIN_LEGAL
-      c.res = Response.json(enhanced, {
+    const text = await c.res.text()
+    // Only inject into JSON object responses (starts with '{') that don't already have _disclaimer
+    if (text.charCodeAt(0) === 123 /* '{' */ && !text.includes('"_disclaimer"')) {
+      // Replace trailing '}' with suffix containing disclaimer + legal
+      const injected = text.slice(0, -1) + DISCLAIMER_SUFFIX
+      c.res = new Response(injected, {
         status: c.res.status,
         headers: c.res.headers,
       })
+      c.res.headers.set('content-type', 'application/json; charset=UTF-8')
     }
   } catch {
     // keep original response on parse failure
@@ -7647,7 +7650,7 @@ function toAcpRouteSnapshot(route: Route): AcpRouteSnapshot {
 
 function normalizeAcpStepDurationMs(step: RouteStep): number {
   const fromEstimate = Number.isFinite(step.estimatedCost.timeMinutes)
-    ? Math.round(step.estimatedCost.timeMinutes * 1000)
+    ? Math.round(step.estimatedCost.timeMinutes * 60_000)
     : 0
   const minDurationMs = step.type === 'transfer' ? 4_000 : 2_000
   const maxDurationMs = step.type === 'transfer' ? 30_000 : 10_000

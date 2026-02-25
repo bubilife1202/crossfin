@@ -261,6 +261,7 @@ const ROUTE_EXCHANGES = [
   { value: "okx", label: "OKX", region: "global", fiat: "USDC" },
   { value: "bybit", label: "Bybit", region: "global", fiat: "USDC" },
   { value: "kucoin", label: "KuCoin", region: "global", fiat: "USDC" },
+  { value: "coinbase", label: "Coinbase", region: "global", fiat: "USDC" },
 ] as const;
 
 function getExchangeMeta(ex: string) {
@@ -426,17 +427,20 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    refresh();
+    const controller = new AbortController();
+    void (async () => {
+      if (!controller.signal.aborted) await refresh();
+    })();
     const id = window.setInterval(() => {
-      if (document.visibilityState === 'visible') refresh();
+      if (document.visibilityState === 'visible') void refresh();
     }, REFRESH_INTERVAL);
-    return () => window.clearInterval(id);
+    return () => { controller.abort(); window.clearInterval(id); };
   }, [refresh]);
 
   useEffect(() => {
     const bar = progressBarRef.current;
     if (!bar) return;
-    let start = performance.now();
+    const start = performance.now();
     let raf: number;
     const animate = (now: number) => {
       const pct = Math.min(100, ((now - start) / REFRESH_INTERVAL) * 100);
