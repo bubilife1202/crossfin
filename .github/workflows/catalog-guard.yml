@@ -26,11 +26,11 @@ jobs:
         working-directory: apps/api
 
       - name: Install web deps
-        run: npm ci
+        run: npm install
         working-directory: apps/web
 
       - name: Install live deps
-        run: npm ci
+        run: npm install
         working-directory: apps/live
 
       - name: Typecheck API
