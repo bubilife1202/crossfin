@@ -12,13 +12,29 @@ const mcp = new Hono<Env>()
 mcp.all('/', async (c) => {
   const requestOrigin = (c.req.header('origin') ?? '').trim()
   const allowedOrigin = CORS_ALLOWED_ORIGINS.has(requestOrigin) ? requestOrigin : ''
+  const corsHeaders = {
+    ...(allowedOrigin ? { 'Access-Control-Allow-Origin': allowedOrigin } : {}),
+    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Accept, mcp-session-id, Last-Event-ID, mcp-protocol-version',
+    'Access-Control-Expose-Headers': 'mcp-session-id, mcp-protocol-version',
+  }
   if (c.req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: {
-      ...(allowedOrigin ? { 'Access-Control-Allow-Origin': allowedOrigin } : {}),
-      'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Accept, mcp-session-id, Last-Event-ID, mcp-protocol-version',
-      'Access-Control-Expose-Headers': 'mcp-session-id, mcp-protocol-version',
-    }})
+    return new Response(null, { status: 204, headers: corsHeaders })
+  }
+
+  // Health check: plain GET without SSE Accept header → return server info
+  // This prevents 406 from the MCP transport for crawlers/monitors (e.g. Glama)
+  if (c.req.method === 'GET') {
+    const accept = (c.req.header('accept') ?? '').toLowerCase()
+    if (!accept.includes('text/event-stream')) {
+      return c.json({
+        name: 'crossfin',
+        version: CROSSFIN_API_VERSION,
+        status: 'ok',
+        protocol: 'mcp-streamable-http',
+        tools: 14,
+      })
+    }
   }
 
   const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true })
