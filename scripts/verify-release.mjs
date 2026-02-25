@@ -10,6 +10,7 @@ dns.setDefaultResultOrder('ipv4first')
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const TIMEOUT_MS = Number.parseInt(process.env.VERIFY_TIMEOUT_MS ?? '20000', 10)
+const FETCH_RETRIES = Number.parseInt(process.env.VERIFY_FETCH_RETRIES ?? '4', 10)
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
@@ -64,7 +65,7 @@ async function runCommand({ label, cwd, command, args }) {
 
 async function fetchWithTimeout(url, init = {}) {
   let lastErr
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
+  for (let attempt = 1; attempt <= FETCH_RETRIES; attempt += 1) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
     try {
@@ -74,8 +75,8 @@ async function fetchWithTimeout(url, init = {}) {
       return await fetch(url, { ...init, headers, signal: controller.signal })
     } catch (err) {
       lastErr = err
-      if (attempt === 2) break
-      await new Promise((resolve) => setTimeout(resolve, 150))
+      if (attempt === FETCH_RETRIES) break
+      await new Promise((resolve) => setTimeout(resolve, 200 * attempt))
     } finally {
       clearTimeout(timeout)
     }
@@ -272,7 +273,7 @@ async function runEndpointChecks(baseUrl, docsUrl, liveUrl) {
       url: `${baseUrl}/api/route/exchanges`,
       validate: (json) => {
         assert(Array.isArray(json.exchanges), 'route exchanges: exchanges must be array')
-        assert(json.exchanges.length >= 13, 'route exchanges: expected at least 13 exchanges')
+        assert(json.exchanges.length >= 14, 'route exchanges: expected at least 14 exchanges')
       },
     }),
     checkJson({
@@ -349,12 +350,13 @@ async function runEndpointChecks(baseUrl, docsUrl, liveUrl) {
     checkText({ name: 'main page', url: `${baseUrl}` }),
     checkText({ name: 'live page', url: `${liveUrl}` }),
     checkText({ name: 'docs home', url: `${docsUrl}` }),
-    checkText({ name: 'docs api page', url: `${docsUrl}/api`, contains: '13 exchanges' }),
+    checkText({ name: 'docs api page', url: `${docsUrl}/api`, contains: '14 exchanges' }),
   ])
 }
 
 async function main() {
   assert(Number.isFinite(TIMEOUT_MS) && TIMEOUT_MS >= 1000, 'VERIFY_TIMEOUT_MS must be a number >= 1000')
+  assert(Number.isFinite(FETCH_RETRIES) && FETCH_RETRIES >= 1, 'VERIFY_FETCH_RETRIES must be a number >= 1')
 
   const baseUrl = resolveUrl(process.env.VERIFY_BASE_URL ?? 'https://crossfin.dev', 'VERIFY_BASE_URL')
   const docsUrl = resolveUrl(process.env.VERIFY_DOCS_URL ?? 'https://docs.crossfin.dev', 'VERIFY_DOCS_URL')

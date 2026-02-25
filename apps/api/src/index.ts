@@ -994,7 +994,8 @@ app.use('*', async (c, next) => {
   const ct = c.res.headers.get('content-type')
   if (!ct?.includes('application/json')) return
   try {
-    const text = await c.res.text()
+    // Use a cloned response to avoid consuming the original stream.
+    const text = await c.res.clone().text()
     // Only inject into JSON object responses (starts with '{') that don't already have _disclaimer
     if (text.charCodeAt(0) === 123 /* '{' */ && !text.includes('"_disclaimer"')) {
       // Replace trailing '}' with suffix containing disclaimer + legal

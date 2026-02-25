@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SEMVER_RE = /^\d+\.\d+\.\d+$/
+const TODAY_UTC = `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`
 
 function repoPath(...parts) {
   return path.join(ROOT, ...parts)
@@ -74,9 +75,19 @@ function targets(oldVer, newVer) {
       replacement: `"version": "${newVer}"`,
     },
     {
+      file: 'apps/web/public/.well-known/crossfin.json',
+      pattern: /"updatedAt":\s*"[^"]+"/,
+      replacement: `"updatedAt": "${TODAY_UTC}"`,
+    },
+    {
       file: 'catalog/crossfin-catalog.json',
       pattern: `"apiVersion": "${oldVer}"`,
       replacement: `"apiVersion": "${newVer}"`,
+    },
+    {
+      file: 'apps/api/scripts/catalog-guard.mjs',
+      pattern: /updatedAt:\s*'[^']+'/,
+      replacement: `updatedAt: '${TODAY_UTC}'`,
     },
 
     // YAML files
@@ -101,6 +112,11 @@ function targets(oldVer, newVer) {
       file: 'packages/sdk/src/types.ts',
       pattern: `v${oldVer}`,
       replacement: `v${newVer}`,
+    },
+    {
+      file: 'packages/sdk/README.md',
+      pattern: /version: '\d+\.\d+\.\d+'/,
+      replacement: `version: '${newVer}'`,
     },
 
     // Markdown docs
@@ -164,7 +180,7 @@ async function main() {
   }
 
   // 3. Sync package-lock.json files
-  const lockDirs = ['apps/api', 'apps/web']
+  const lockDirs = ['apps/api', 'apps/web', 'apps/mcp-server', 'packages/sdk']
   for (const dir of lockDirs) {
     try {
       execSync('npm install --package-lock-only --ignore-scripts 2>/dev/null', {

@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.18.0] - 2026-02-25
+
+### Added
+- Centralized version management scripts:
+  - `scripts/bump-version.mjs` for one-shot version bumping across release files
+  - `scripts/verify-release.mjs` for pre-release verification (API/web/docs build + contract/catalog guards)
+- API unit test suite with 86 tests (`constants`, `types`, `engine`, `fetchers`) using Vitest
+
+### Fixed
+- Critical routing/fetcher behavior issues in API path calculations and data handling
+
+### Changed
+- Version synchronized to `1.18.0` across API, MCP server, SDK, discovery metadata, and release manifests
+- Web/live React performance tuning in dashboard and route graph flows
+
 ## [1.15.0] - 2026-02-24
 
 ### Added
