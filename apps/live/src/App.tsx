@@ -12,9 +12,11 @@ export default function App() {
   const [connected, setConnected] = useState(true)
   const [autoMode, setAutoMode] = useState(true)
   const requestSeqRef = useRef(0)
+  const lastSearchRef = useRef<{ scenario: RouteScenario; strategy: RoutingStrategy } | null>(null)
 
   const handleSearch = useCallback(async (scenario: RouteScenario, strategy: RoutingStrategy) => {
     const seq = ++requestSeqRef.current
+    lastSearchRef.current = { scenario, strategy }
 
     const amount = Number(scenario.amount)
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -82,7 +84,7 @@ export default function App() {
       {/* Body */}
       <div className="sandboxBody">
         <SearchPanel onSearch={handleSearch} loading={loading} onModeChange={(m) => setAutoMode(m === 'auto')} />
-        <ResultsSandbox data={data} loading={loading} error={error} autoMode={autoMode} />
+        <ResultsSandbox data={data} loading={loading} error={error} autoMode={autoMode} onRetry={() => { if (lastSearchRef.current) handleSearch(lastSearchRef.current.scenario, lastSearchRef.current.strategy) }} />
       </div>
     </div>
   )

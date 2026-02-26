@@ -8,6 +8,7 @@ type ResultsSandboxProps = {
   loading: boolean
   error: string | null
   autoMode?: boolean
+  onRetry?: () => void
 }
 
 function actionColor(action: string): string {
@@ -18,7 +19,7 @@ function actionLabel(action: string): string {
   return action === 'EXECUTE' ? 'ROUTE NOW' : action === 'WAIT' ? 'MONITOR' : 'TOO EXPENSIVE'
 }
 
-export default function ResultsSandbox({ data, loading, error, autoMode }: ResultsSandboxProps) {
+export default function ResultsSandbox({ data, loading, error, autoMode, onRetry }: ResultsSandboxProps) {
   const [selectedBridge, setSelectedBridge] = useState('auto')
   const [jsonExpanded, setJsonExpanded] = useState(false)
 
@@ -84,7 +85,10 @@ export default function ResultsSandbox({ data, loading, error, autoMode }: Resul
       {error && (
         <div className="rs-error">
           <span className="rs-errorIcon">⚠</span>
-          {error}
+          <span className="rs-errorMsg">{error}</span>
+          {onRetry && (
+            <button type="button" className="rs-retryBtn" onClick={onRetry}>Retry</button>
+          )}
         </div>
       )}
 
