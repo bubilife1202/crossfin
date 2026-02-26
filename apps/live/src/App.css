@@ -543,6 +543,20 @@
   pointer-events: none;
 }
 
+.sp-input-error {
+  border-color: var(--red) !important;
+  box-shadow: 0 0 0 3px rgba(255, 68, 102, 0.08);
+}
+
+.sp-fieldError {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--red);
+  letter-spacing: 0.02em;
+}
+
 /* Swap */
 .sp-swapRow {
   display: flex;

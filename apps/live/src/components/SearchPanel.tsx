@@ -101,9 +101,15 @@ export default function SearchPanel({ onSearch, loading, onModeChange }: SearchP
     setManualAmount(defaultAmountForExchange(nextFrom))
   }
 
+  const [amountError, setAmountError] = useState<string | null>(null)
+
   const handleFindRoute = useCallback(() => {
     const amount = parseAmountStr(manualAmount)
-    if (!Number.isFinite(amount) || amount <= 0) return
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setAmountError('Enter a valid amount')
+      return
+    }
+    setAmountError(null)
     onSearch({
       from: `${manualFrom}:${manualFromCur}`,
       to: `${manualTo}:${manualToCur}`,
@@ -230,19 +236,20 @@ export default function SearchPanel({ onSearch, loading, onModeChange }: SearchP
           </div>
 
           {/* Amount */}
-          <div className="sp-field">
+          <div className={`sp-field ${amountError ? 'sp-field-error' : ''}`}>
             <label className="sp-label">Amount</label>
             <div className="sp-inputWrap">
               <input
-                className="sp-input"
+                className={`sp-input ${amountError ? 'sp-input-error' : ''}`}
                 type="text"
                 value={manualAmount}
-                onChange={e => setManualAmount(formatAmountInput(e.target.value))}
+                onChange={e => { setManualAmount(formatAmountInput(e.target.value)); setAmountError(null) }}
                 onKeyDown={e => { if (e.key === 'Enter') handleFindRoute() }}
                 placeholder={defaultAmountForExchange(manualFrom)}
               />
               <span className="sp-inputTag">{manualFromCur}</span>
             </div>
+            {amountError && <span className="sp-fieldError">{amountError}</span>}
           </div>
 
           {/* Strategy */}
