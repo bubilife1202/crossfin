@@ -188,14 +188,25 @@ async function postFunnelEvent(baseUrl, timeoutMs, runId) {
 }
 
 async function checkLiveSite(liveUrl, timeoutMs) {
-  let res
-  try {
-    res = await fetchWithTimeout(liveUrl, { method: 'GET', redirect: 'manual' }, timeoutMs)
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    throw new Error(`fetch failed for ${liveUrl}: ${msg}`)
+  // Live site is on Cloudflare Pages — allow extra time for edge propagation after deploys.
+  const liveTimeoutMs = Math.max(timeoutMs, 30_000)
+  const maxAttempts = 3
+  let lastErr
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const res = await fetchWithTimeout(liveUrl, { method: 'GET', redirect: 'manual' }, liveTimeoutMs)
+      assert(res.status >= 200 && res.status < 400, `Live site expected 2xx/3xx but got ${res.status}`)
+      return
+    } catch (err) {
+      lastErr = err
+      if (attempt < maxAttempts) {
+        await delay(2_000 * attempt) // 2s, 4s backoff
+        continue
+      }
+    }
   }
-  assert(res.status >= 200 && res.status < 400, `Live site expected 2xx/3xx but got ${res.status}`)
+  const msg = lastErr instanceof Error ? lastErr.message : String(lastErr)
+  throw new Error(`fetch failed for ${liveUrl} after ${maxAttempts} attempts: ${msg}`)
 }
 
 async function runOnce(baseUrl, liveUrl, timeoutMs, runId) {
