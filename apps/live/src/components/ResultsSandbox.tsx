@@ -258,19 +258,28 @@ export default function ResultsSandbox({ data, loading, error, autoMode, onRetry
                 <tr>
                   <th>Bridge</th>
                   <th>Cost</th>
+                  <th>vs Optimal</th>
                   <th>Time</th>
                   <th>Signal</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.alternatives.slice(0, 6).map((alt, i) => (
-                  <tr key={`${alt.bridgeCoin}-${i}`}>
-                    <td className="rs-mono rs-bold">{alt.bridgeCoin.toUpperCase()}</td>
-                    <td className="rs-mono">{alt.totalCostPct.toFixed(2)}%</td>
-                    <td className="rs-mono">~{alt.totalTimeMinutes}m</td>
-                    <td style={{ color: actionColor(alt.action), fontWeight: 600 }}>{actionLabel(alt.action)}</td>
-                  </tr>
-                ))}
+                {filtered.alternatives.slice(0, 6).map((alt, i) => {
+                  const gap = rawOptimal ? alt.totalCostPct - rawOptimal.totalCostPct : 0
+                  return (
+                    <tr
+                      key={`${alt.bridgeCoin}-${i}`}
+                      className="rs-altRow"
+                      onClick={() => setSelectedBridge(alt.bridgeCoin.toUpperCase())}
+                    >
+                      <td className="rs-mono rs-bold">{alt.bridgeCoin.toUpperCase()}</td>
+                      <td className="rs-mono">{alt.totalCostPct.toFixed(2)}%</td>
+                      <td className="rs-mono rs-altGap">{gap >= 0 ? '+' : ''}{gap.toFixed(2)}%p</td>
+                      <td className="rs-mono">~{alt.totalTimeMinutes}m</td>
+                      <td style={{ color: actionColor(alt.action), fontWeight: 600 }}>{actionLabel(alt.action)}</td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

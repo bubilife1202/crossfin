@@ -1120,8 +1120,10 @@
   transition: background 0.1s ease;
 }
 
-.rs-altsTable tbody tr:hover {
-  background: rgba(255, 255, 255, 0.015);
+.rs-altsTable tbody tr:hover,
+.rs-altRow:hover {
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
 }
 
 .rs-mono {
@@ -1132,6 +1134,12 @@
 .rs-bold {
   font-weight: 700;
   color: var(--ink);
+}
+
+.rs-altRow { cursor: pointer; }
+.rs-altGap {
+  color: var(--amber);
+  font-size: var(--text-xs);
 }
 
 /* ── JSON Viewer ── */
