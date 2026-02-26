@@ -263,7 +263,11 @@ export default function SearchPanel({ onSearch, loading, onModeChange }: SearchP
                   className={`sp-stratBtn ${manualStrategy === s ? 'active' : ''}`}
                   onClick={() => setManualStrategy(s)}
                 >
-                  {s === 'cheapest' ? '💲' : s === 'fastest' ? '⚡' : '⚖️'} {s}
+                  <span className="sp-stratIcon">{s === 'cheapest' ? '💲' : s === 'fastest' ? '⚡' : '⚖️'}</span>
+                  <span className="sp-stratLabel">{s}</span>
+                  <span className="sp-stratSub">
+                    {s === 'cheapest' ? 'Lowest total fee' : s === 'fastest' ? 'Fewest hops' : 'Best of both'}
+                  </span>
                 </button>
               ))}
             </div>
