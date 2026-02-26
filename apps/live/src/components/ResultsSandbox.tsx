@@ -305,11 +305,17 @@ export default function ResultsSandbox({ data, loading, error, autoMode }: Resul
         </div>
       )}
 
-      {/* Loading overlay */}
+      {/* Skeleton Loading */}
       {loading && !data && (
-        <div className="rs-loading">
-          <div className="rs-spinner" />
-          <span className="rs-loadingText">Analyzing routes…</span>
+        <div className="rs-skeletons">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="rs-skeleton">
+              <div className="rs-skelLine rs-skelLine--title" />
+              <div className="rs-skelLine rs-skelLine--body" />
+              <div className="rs-skelLine rs-skelLine--body rs-skelLine--short" />
+            </div>
+          ))}
+          <span className="rs-skelText">Analyzing routes…</span>
         </div>
       )}
     </main>

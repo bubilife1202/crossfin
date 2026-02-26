@@ -1228,31 +1228,48 @@
   line-height: 1.6;
 }
 
-/* ── Loading State ── */
+/* ── Skeleton Loading ── */
 
-.rs-loading {
-  flex: 1;
+.rs-skeletons {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding: 60px 20px;
+  gap: 12px;
+  padding: 24px 0;
 }
 
-.rs-spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid var(--border);
-  border-top-color: var(--cyan);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
+.rs-skeleton {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.rs-loadingText {
-  font-size: var(--text-sm);
-  color: var(--muted);
+.rs-skelLine {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--bg-elevated) 25%, var(--bg-surface) 50%, var(--bg-elevated) 75%);
+  background-size: 200% 100%;
+  animation: skelShimmer 1.5s ease-in-out infinite;
+}
+
+.rs-skelLine--title { width: 40%; height: 14px; }
+.rs-skelLine--body  { width: 80%; }
+.rs-skelLine--short { width: 55%; }
+
+@keyframes skelShimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.rs-skelText {
+  text-align: center;
+  font-size: var(--text-xs);
+  color: var(--muted2);
   font-weight: 600;
+  margin-top: 4px;
 }
 
 /* ═══════════════════════════════════════════════════
