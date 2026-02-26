@@ -71,6 +71,19 @@ export default function ResultsSandbox({ data, loading, error, autoMode, onRetry
     const rank = 1 + allCosts.filter(c => c < optimal.totalCostPct - 1e-9).length
     return { delta, rank, total: allCosts.length, isBest: rank === 1, baseline: avg }
   }, [optimal, filtered.alternatives])
+
+  /* ── Result tag badges ── */
+  const tags = useMemo(() => {
+    if (!optimal) return []
+    const t: { label: string; icon: string; color: string }[] = []
+    const allRoutes = [optimal, ...filtered.alternatives]
+    const isCheapest = allRoutes.every(r => optimal.totalCostPct <= r.totalCostPct + 1e-9)
+    const isFastest = allRoutes.every(r => optimal.totalTimeMinutes <= r.totalTimeMinutes)
+    if (isCheapest) t.push({ label: 'CHEAPEST', icon: '🏷️', color: 'var(--green)' })
+    if (isFastest) t.push({ label: `${optimal.totalTimeMinutes} MIN`, icon: '⚡', color: 'var(--amber)' })
+    if (optimal.action === 'EXECUTE') t.push({ label: 'GO NOW', icon: '✅', color: 'var(--green)' })
+    return t
+  }, [optimal, filtered.alternatives])
   /* ── Data freshness ── */
   const freshness = useMemo(() => {
     if (!data?.meta) return null
@@ -147,6 +160,17 @@ export default function ResultsSandbox({ data, loading, error, autoMode, onRetry
               {optimal.action}
             </span>
           </div>
+
+          {/* Tag badges */}
+          {tags.length > 0 && (
+            <div className="rs-tags">
+              {tags.map(t => (
+                <span key={t.label} className="rs-tag" style={{ color: t.color, borderColor: t.color }}>
+                  {t.icon} {t.label}
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Flow visualization */}
           <div className="rs-flow">

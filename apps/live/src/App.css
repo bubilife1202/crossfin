@@ -851,6 +851,25 @@
   text-transform: uppercase;
 }
 
+.rs-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 4px 0 0;
+}
+
+.rs-tag {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: transparent;
+}
+
 /* Flow visualization */
 .rs-flow {
   display: flex;
