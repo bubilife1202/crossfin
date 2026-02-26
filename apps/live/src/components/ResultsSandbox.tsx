@@ -297,7 +297,11 @@ export default function ResultsSandbox({ data, loading, error, autoMode }: Resul
             <div className="rs-emptyPulse" />
           </div>
           <h3 className="rs-emptyTitle">Route Explorer</h3>
-          <p className="rs-emptyText">Select a route or enable auto-mode to begin real-time analysis across 13 exchanges and 11 bridge coins.</p>
+          <p className="rs-emptyText">
+            {autoMode
+              ? 'Starting real-time analysis across 13 exchanges and 11 bridge coins.'
+              : 'Pick exchanges above and hit Find Optimal Route to analyze cross-border paths in real time.'}
+          </p>
         </div>
       )}
 
