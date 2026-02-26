@@ -81,12 +81,17 @@ export default function ResultsSandbox({ data, loading, error, autoMode, onRetry
       else if (ageMs < 60_000) ageLabel = `${Math.round(ageMs / 1000)}s ago`
       else ageLabel = `${Math.round(ageMs / 60_000)}m ago`
     }
+    /* green < 30s, yellow < 2m, red >= 2m */
+    const dotColor = ageMs == null ? 'var(--muted2)' : ageMs < 30_000 ? 'var(--green)' : ageMs < 120_000 ? 'var(--amber)' : 'var(--red)'
+    const stale = ageMs != null && ageMs >= 120_000
     return {
       routesEvaluated: data.meta.routesEvaluated,
       bridgeCoins: data.meta.bridgeCoinsTotal,
       priceSource: data.meta.priceAge?.globalPrices?.source ?? 'n/a',
       priceAge: ageLabel,
       status: data.meta.dataFreshness ?? 'n/a',
+      dotColor,
+      stale,
     }
   }, [data])
 
@@ -254,6 +259,7 @@ export default function ResultsSandbox({ data, loading, error, autoMode, onRetry
       {freshness && (
         <section className="rs-freshness">
           <div className="rs-freshnessRow">
+            <span className="rs-freshnessDot" style={{ background: freshness.dotColor }} />
             <span className="rs-freshnessItem"><span className="rs-freshnessKey">Routes</span> {freshness.routesEvaluated}</span>
             <span className="rs-freshnessDivider">·</span>
             <span className="rs-freshnessItem"><span className="rs-freshnessKey">Coins</span> {freshness.bridgeCoins}</span>
@@ -261,6 +267,7 @@ export default function ResultsSandbox({ data, loading, error, autoMode, onRetry
             <span className="rs-freshnessItem"><span className="rs-freshnessKey">Prices</span> {freshness.priceAge}</span>
             <span className="rs-freshnessDivider">·</span>
             <span className="rs-freshnessItem"><span className="rs-freshnessKey">Status</span> {freshness.status}</span>
+            {freshness.stale && <span className="rs-freshnessStale">⚠ Stale</span>}
           </div>
         </section>
       )}
