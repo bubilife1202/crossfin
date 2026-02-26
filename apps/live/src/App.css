@@ -794,6 +794,14 @@
   background: var(--cyan-dim);
 }
 
+.rs-chipCost {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  opacity: 0.6;
+  margin-left: 3px;
+}
+.rs-chip.active .rs-chipCost { opacity: 0.8; }
+
 /* Note */
 .rs-note {
   padding: 8px 14px;

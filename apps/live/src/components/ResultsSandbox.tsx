@@ -25,6 +25,17 @@ export default function ResultsSandbox({ data, loading, error, autoMode, onRetry
 
   const rawOptimal = data?.optimal ?? null
 
+  /* Map bridge coin → totalCostPct for chip previews */
+  const coinCostMap = useMemo(() => {
+    const m = new Map<string, number>()
+    if (rawOptimal) m.set(rawOptimal.bridgeCoin.toUpperCase(), rawOptimal.totalCostPct)
+    for (const alt of data?.alternatives ?? []) {
+      const key = alt.bridgeCoin.toUpperCase()
+      if (!m.has(key)) m.set(key, alt.totalCostPct)
+    }
+    return m
+  }, [rawOptimal, data?.alternatives])
+
   const filtered = useMemo(() => {
     const alts = data?.alternatives ?? []
     if (!rawOptimal) {
@@ -103,9 +114,15 @@ export default function ResultsSandbox({ data, loading, error, autoMode, onRetry
           <span className="rs-bridgeLabel">Bridge Coin</span>
           <div className="rs-bridgeChips">
             <button type="button" className={`rs-chip ${selectedBridge === 'auto' ? 'active' : ''}`} onClick={() => setSelectedBridge('auto')}>Auto</button>
-            {BRIDGE_COINS.map(coin => (
-              <button type="button" key={coin} className={`rs-chip ${selectedBridge === coin ? 'active' : ''}`} onClick={() => setSelectedBridge(coin)}>{coin}</button>
-            ))}
+            {BRIDGE_COINS.map(coin => {
+              const cost = coinCostMap.get(coin)
+              return (
+                <button type="button" key={coin} className={`rs-chip ${selectedBridge === coin ? 'active' : ''}`} onClick={() => setSelectedBridge(coin)}>
+                  {coin}
+                  {cost != null && <span className="rs-chipCost">{cost.toFixed(1)}%</span>}
+                </button>
+              )
+            })}
           </div>
         </div>
       )}
