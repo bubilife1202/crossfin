@@ -231,7 +231,7 @@ export default function ResultsSandbox({ data, loading, error, autoMode, onRetry
                   : '98%'}
               </span>
             </div>
-            <div className="rs-metric rs-metric--tip" title={`Signal: ${optimal.action === 'EXECUTE' ? 'Conditions are favorable — route now for best price.' : optimal.action === 'WAIT' ? 'Market is volatile — monitor and retry shortly.' : 'Spread too wide — this route is not cost-effective right now.'}`}>
+            <div className="rs-metric rs-metric--tip" title={`Signal: ${(optimal.action || 'EXECUTE') === 'EXECUTE' ? 'Conditions are favorable \u2014 route now for best price.' : (optimal.action || 'EXECUTE') === 'WAIT' ? 'Market is volatile \u2014 monitor and retry shortly.' : 'Spread too wide \u2014 this route is not cost-effective right now.'}`}>
               <span className="rs-metricLabel">Signal <span className="rs-tipIcon">ⓘ</span></span>
               <span className="rs-metricValue" style={{ color: actionColor(optimal.action || 'EXECUTE') }}>
                 {optimal.action || 'EXECUTE'}
