@@ -925,6 +925,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+.rs-metric--tip { cursor: help; }
+.rs-tipIcon {
+  font-size: 0.6rem;
+  opacity: 0.5;
+  vertical-align: super;
+  margin-left: 2px;
+}
+
 .rs-costBreakdown {
   display: flex;
   flex-direction: column;

@@ -173,16 +173,16 @@ export default function ResultsSandbox({ data, loading, error, autoMode }: Resul
               <span className="rs-metricLabel">Time</span>
               <span className="rs-metricValue">~{optimal.totalTimeMinutes}m</span>
             </div>
-            <div className="rs-metric">
-              <span className="rs-metricLabel">Confidence</span>
+            <div className="rs-metric rs-metric--tip" title="How likely this route executes at the quoted cost. Based on spread stability, volume, and historical fill rates.">
+              <span className="rs-metricLabel">Confidence <span className="rs-tipIcon">ⓘ</span></span>
               <span className="rs-metricValue">
                 {optimal.confidence != null && !Number.isNaN(optimal.confidence) 
                   ? `${(optimal.confidence * 100).toFixed(0)}%` 
                   : '98%'}
               </span>
             </div>
-            <div className="rs-metric">
-              <span className="rs-metricLabel">Signal</span>
+            <div className="rs-metric rs-metric--tip" title={`Signal: ${optimal.action === 'EXECUTE' ? 'Conditions are favorable — route now for best price.' : optimal.action === 'WAIT' ? 'Market is volatile — monitor and retry shortly.' : 'Spread too wide — this route is not cost-effective right now.'}`}>
+              <span className="rs-metricLabel">Signal <span className="rs-tipIcon">ⓘ</span></span>
               <span className="rs-metricValue" style={{ color: actionColor(optimal.action || 'EXECUTE') }}>
                 {optimal.action || 'EXECUTE'}
               </span>
