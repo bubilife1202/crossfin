@@ -54,6 +54,59 @@ export type RoutingResponse = {
   at: string
 }
 
+/* ── API Response Normalization ── */
+
+/**
+ * The free API endpoint (/api/routing/optimal) returns a different shape
+ * than what the UI expects. This function normalizes the raw API response:
+ *   - indicator (POSITIVE_SPREAD/NEUTRAL/NEGATIVE_SPREAD) → action (EXECUTE/WAIT/SKIP)
+ *   - signalStrength → confidence
+ *   - Synthesizes `meta` from top-level fields when missing
+ *   - Defaults `alternatives` to [] when only alternativesCount is present
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeRoute(raw: any): Route | null {
+  if (!raw || typeof raw !== 'object') return null
+  const indicator = String(raw.indicator ?? '')
+  const action: Route['action'] =
+    indicator === 'POSITIVE_SPREAD' ? 'EXECUTE'
+    : indicator === 'NEGATIVE_SPREAD' ? 'SKIP'
+    : raw.action === 'EXECUTE' || raw.action === 'WAIT' || raw.action === 'SKIP' ? raw.action
+    : 'WAIT'
+  return {
+    bridgeCoin: String(raw.bridgeCoin ?? ''),
+    steps: Array.isArray(raw.steps) ? raw.steps : [],
+    totalCostPct: Number(raw.totalCostPct) || 0,
+    totalTimeMinutes: Number(raw.totalTimeMinutes) || 0,
+    estimatedInput: Number(raw.estimatedInput) || 0,
+    estimatedOutput: Number(raw.estimatedOutput) || 0,
+    action,
+    confidence: Number.isFinite(raw.confidence) ? raw.confidence
+      : Number.isFinite(raw.signalStrength) ? raw.signalStrength
+      : 0.95,
+    reason: String(raw.reason ?? ''),
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeApiResponse(raw: any): RoutingResponse {
+  const optimal = normalizeRoute(raw.optimal)
+  const rawAlts = Array.isArray(raw.alternatives) ? raw.alternatives : []
+  const alternatives = (rawAlts as unknown[]).map(normalizeRoute).filter((r): r is Route => r !== null)
+  const meta: RouteMeta = raw.meta ?? {
+    routesEvaluated: Number(raw.alternativesCount ?? alternatives.length) + (optimal ? 1 : 0),
+    bridgeCoinsTotal: 11,
+    dataFreshness: raw.dataFreshness ?? 'live',
+  }
+  return {
+    request: raw.request ?? { from: '', to: '', amount: 0, strategy: 'cheapest' as RoutingStrategy },
+    optimal,
+    alternatives,
+    meta,
+    at: raw.at ?? new Date().toISOString(),
+  }
+}
+
 export type RouteScenario = {
   from: string
   to: string
@@ -208,7 +261,7 @@ export async function fetchRoute(
         const text = await res.text()
         throw new Error(`${res.status}: ${text.slice(0, 120)}`)
       }
-      const json = (await res.json()) as RoutingResponse
+      const json = normalizeApiResponse(await res.json())
       routeCache.set(cacheKey(scenario, strategy), {
         data: json,
         timestamp: Date.now(),
