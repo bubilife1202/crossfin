@@ -308,3 +308,8 @@ This command runs API contract/catalog verification, builds API/web/docs in para
 ## Built with AI
 
 CrossFin was built entirely through AI collaboration by a non-developer in 1 week. Zero prior coding experience. This project is proof that AI agents can build production software — and CrossFin is the infrastructure for that future.
+
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/bubilife1202-crossfin).
+
